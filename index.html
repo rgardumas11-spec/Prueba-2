@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Almacén San Bernardo</title>
+<meta name="description" content="Existencias de muebles y material del taller Muebles San Bernardo.">
+<meta name="theme-color" content="#7A2B29">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Almacén">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icono.svg">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+<!-- ── Entrada (solo cuando hay base compartida y no se ha iniciado sesión) ── -->
+<div id="entrada" class="entrada" hidden>
+  <form class="entrada-caja" id="formEntrada">
+    <div class="marca grande"><span class="caja">MUEBLES</span><span class="script">San Bernardo</span><small>Almacén</small></div>
+    <label class="campo"><span>Correo</span><input id="entMail" type="email" autocomplete="username" required placeholder="tu@correo.com"></label>
+    <label class="campo"><span>Contraseña</span><input id="entPass" type="password" autocomplete="current-password" required></label>
+    <button class="btn vino grande" type="submit">Entrar</button>
+    <p class="guia" id="entMsg">Solo entra quien tenga cuenta del taller.</p>
+  </form>
+</div>
+
+<div class="app" id="app">
+  <!-- ── Barra lateral (computadora) ── -->
+  <aside class="lateral">
+    <div class="marca"><span class="caja">MUEBLES</span><span class="script">San Bernardo</span><small id="versionLat">Almacén</small></div>
+    <nav class="nav">
+      <a href="#muebles" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles<span class="n" id="nMue" hidden></span></a>
+      <a href="#material" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/><path d="M9 12v5M15 12v5"/></svg>Material<span class="n" id="nMat" hidden></span></a>
+      <a href="#recados" data-vista="recados"><svg viewBox="0 0 24 24"><path d="M20.5 14.5a2 2 0 0 1-2 2H8l-4.5 4v-15a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>Recados<span class="n" id="nRec" hidden></span></a>
+      <a href="#bitacora" data-vista="bitacora"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.3l3.3 2"/></svg>Bitácora</a>
+      <div class="sep"></div>
+      <a href="#apodos" data-vista="apodos"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M12.5 7.5l4 4"/></svg>Apodos y litros</a>
+      <a href="#ajustes" data-vista="ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>Ajustes</a>
+    </nav>
+    <button class="pie yo" id="yoLat"><span class="av" id="yoIniLat">?</span><span><b id="yoNomLat">¿Quién eres?</b><small id="yoEstadoLat">—</small></span></button>
+  </aside>
+
+  <!-- ── Cabecera (celular) ── -->
+  <header class="cabeza">
+    <span class="caja">MUEBLES</span><span class="script">San Bernardo</span>
+    <button class="yo-chip" id="yoCel" aria-label="Cambiar de persona"><span class="av" id="yoIniCel">?</span><b id="yoNomCel">¿Quién?</b></button>
+  </header>
+
+  <div class="pulso" id="pulso"><span class="punto"></span><span id="pulsoTxt">Conectando…</span></div>
+  <div class="practica-banda" id="practicaBanda" hidden>MODO PRÁCTICA — nada de lo que hagas aquí toca el inventario real. <button id="salirPractica">Salir</button></div>
+
+  <main id="principal">
+    <!-- Muebles y Material comparten la misma pantalla; cambia el tipo -->
+    <section class="vista" id="v-muebles" data-tipo="mueble">
+      <div class="arriba"><h1>Muebles <em id="resumenMueble"></em></h1>
+        <div class="der solo-escritorio"><button class="btn" data-exporta="mueble">Exportar a Excel</button><button class="btn" data-imprime="mueble">Hoja de conteo</button><button class="btn vino" data-nuevo="mueble">＋ Artículo</button></div>
+      </div>
+      <div class="tablero" id="tableroMueble"></div>
+      <div class="buscador" id="buscadorMueble"></div>
+      <div class="lista" id="listaMueble"></div>
+      <div class="solo-celular acciones-abajo"><button class="btn grande" data-nuevo="mueble">＋ Agregar artículo</button></div>
+    </section>
+
+    <section class="vista" id="v-material" data-tipo="material">
+      <div class="arriba"><h1>Material <em id="resumenMaterial"></em></h1>
+        <div class="der solo-escritorio"><button class="btn" data-exporta="material">Exportar a Excel</button><button class="btn" data-imprime="material">Hoja de conteo</button><button class="btn vino" data-nuevo="material">＋ Producto</button></div>
+      </div>
+      <div class="tablero" id="tableroMaterial"></div>
+      <div class="buscador" id="buscadorMaterial"></div>
+      <div class="lista" id="listaMaterial"></div>
+      <div class="solo-celular acciones-abajo"><button class="btn grande" data-nuevo="material">＋ Agregar producto</button></div>
+    </section>
+
+    <section class="vista" id="v-recados">
+      <div class="arriba"><h1>Recados <em id="resumenRecados"></em></h1></div>
+      <div class="fila-recado"><input id="recTexto" placeholder="Escribe un recado para el equipo…" autocomplete="off"><button class="btn vino" id="btnRecado">Poner</button></div>
+      <div id="listaRecados"></div>
+    </section>
+
+    <section class="vista" id="v-bitacora">
+      <div class="arriba"><h1>Bitácora <em>quién hizo qué</em></h1></div>
+      <div id="listaBitacora"></div>
+    </section>
+
+    <section class="vista" id="v-apodos">
+      <div class="arriba"><h1>Apodos y litros <em>solo se edita esto</em></h1>
+        <div class="der"><button class="btn" id="deshacerApodos" hidden>Deshacer</button><button class="btn vino" id="guardarApodos" disabled>Guardar cambios</button></div>
+      </div>
+      <div class="candado"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Aquí solo se cambian los <b>apodos (hasta 3)</b> y los <b>litros por envase</b>. Nombre, código, cantidades y mínimos no se tocan desde esta pantalla.</span></div>
+      <div class="buscador simple"><label class="campo-busca"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="buscaApodos" placeholder="Buscar producto…" autocomplete="off"></label></div>
+      <div id="listaApodos"></div>
+    </section>
+
+    <section class="vista" id="v-ajustes">
+      <div class="arriba"><h1>Ajustes</h1></div>
+      <div id="ajustes"></div>
+    </section>
+  </main>
+
+  <!-- ── Panel de detalle (computadora) ── -->
+  <aside class="detalle" id="detalle"><div class="detalle-vacio">Escoge un renglón para ver su detalle</div></aside>
+
+  <!-- ── Barra inferior (celular) ── -->
+  <nav class="barra">
+    <button class="dest" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles</button>
+    <button class="dest" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/></svg>Material</button>
+    <button class="fab" id="fabLupa" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+    <button class="dest" data-vista="recados"><svg viewBox="0 0 24 24"><path d="M20.5 14.5a2 2 0 0 1-2 2H8l-4.5 4v-15a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>Recados<span class="globo" id="globoRec" hidden></span></button>
+    <button class="dest" data-vista="mas" id="destMas"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</button>
+  </nav>
+</div>
+
+<div class="grito" id="grito"></div>
+<div class="actualiza" id="actualiza" hidden>Hay una versión nueva. <button id="btnActualiza">Actualizar</button></div>
+<div class="telon" id="telon"><div class="panel" id="panel"></div></div>
+
+<!-- Hoja de conteo para imprimir -->
+<div id="impresion" class="impresion" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
+<script src="config.js"></script>
+<script src="datos/catalogo.js"></script>
+<script src="datos/almacen.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

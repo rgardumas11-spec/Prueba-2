@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Almacén San Bernardo — vista previa</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --vino:#7A2B29; --vino-osc:#5C1F1E; --vino-tinte:#F6EAE8; --vino-medio:#A0453F;
+  --crema:#FAF6F1; --hoja:#FFFFFF; --hoja2:#F5EFEA;
+  --linea:#E8DCD6; --linea2:#D4C3BC;
+  --tinta:#2A1D1C; --tinta2:#6F5F5C; --tinta3:#9C8C88;
+  --ambar:#B8740A; --ambar-t:#FBF0DA; --verde:#2E7D4F; --verde-t:#E4F1E9; --rojo:#B3261E; --rojo-t:#FBE5E3;
+  --mono:"IBM Plex Mono",Menlo,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif; --script:"Caveat",cursive;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--crema);color:var(--tinta);font:15px/1.45 var(--sans)}
+button,input{font:inherit;color:inherit}
+
+/* ───────── Escritorio ───────── */
+.escritorio{display:grid;grid-template-columns:232px 1fr 340px;min-height:100vh}
+.lateral{background:var(--vino);color:#fff;display:flex;flex-direction:column;padding:18px 14px}
+.marca{display:flex;flex-direction:column;gap:2px;padding:6px 8px 18px;border-bottom:1px solid rgba(255,255,255,.18);margin-bottom:14px}
+.marca .caja{display:inline-block;background:#fff;color:var(--vino);font:600 10px/1 var(--sans);letter-spacing:.22em;padding:4px 8px;border-radius:2px;align-self:flex-start}
+.marca .script{font:700 34px/1 var(--script);letter-spacing:-.01em;margin-top:2px}
+.marca small{font:500 10.5px var(--mono);letter-spacing:.12em;opacity:.7;text-transform:uppercase;margin-top:6px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;color:rgba(255,255,255,.82);text-decoration:none;font-weight:500}
+.nav a svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.nav a.on{background:#fff;color:var(--vino);font-weight:600}
+.nav a .n{margin-left:auto;font:600 11px var(--mono);background:rgba(255,255,255,.18);padding:2px 7px;border-radius:999px}
+.nav a.on .n{background:var(--vino-tinte)}
+.nav .sep{height:1px;background:rgba(255,255,255,.18);margin:10px 8px}
+.lateral .pie{margin-top:auto;padding:10px 8px 0;display:flex;align-items:center;gap:9px;font-size:13px}
+.lateral .pie .av{width:30px;height:30px;border-radius:999px;background:#fff;color:var(--vino);display:grid;place-items:center;font:600 12px var(--mono)}
+.lateral .pie small{display:block;font:500 10px var(--mono);opacity:.65;letter-spacing:.06em}
+
+.principal{padding:22px 28px 40px;min-width:0}
+.arriba{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.arriba h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em}
+.arriba h1 em{font:500 12px var(--mono);color:var(--tinta3);font-style:normal;margin-left:10px}
+.arriba .der{margin-left:auto;display:flex;gap:8px}
+.btn{border:1px solid var(--linea2);background:var(--hoja);border-radius:8px;padding:8px 14px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.btn.vino{background:var(--vino);color:#fff;border-color:var(--vino);font-weight:600}
+.btn.suave{background:var(--vino-tinte);color:var(--vino);border-color:transparent}
+
+.tablero{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.tile{background:var(--hoja);border:1px solid var(--linea);border-radius:10px;padding:13px 15px}
+.tile small{display:block;font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--tinta3);margin-bottom:5px}
+.tile b{font:600 26px/1 var(--mono);font-variant-numeric:tabular-nums}
+.tile span{display:block;font-size:12.5px;color:var(--tinta2);margin-top:5px}
+.tile.amb b{color:var(--ambar)} .tile.roj b{color:var(--rojo)} .tile.ver b{color:var(--verde)}
+
+/* buscador guiado */
+.buscador{background:var(--hoja);border:1px solid var(--linea);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+.pasos{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.paso{display:flex;align-items:center;gap:8px}
+.paso .num{width:22px;height:22px;border-radius:999px;background:var(--vino);color:#fff;font:600 11px var(--mono);display:grid;place-items:center}
+.paso .num.g{background:var(--linea2);color:var(--tinta2)}
+.lupa{width:42px;height:42px;border-radius:10px;border:1.5px solid var(--vino);background:var(--vino-tinte);color:var(--vino);display:grid;place-items:center;cursor:pointer}
+.lupa svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.lupa.g{border-color:var(--linea2);background:var(--hoja2);color:var(--tinta3)}
+.cats{display:flex;gap:7px;flex-wrap:wrap}
+.cat{border:1px solid var(--linea2);background:var(--hoja);border-radius:999px;padding:7px 13px;font-size:13.5px;cursor:pointer;font-weight:500}
+.cat.on{background:var(--vino);color:#fff;border-color:var(--vino);font-weight:600}
+.campo{flex:1;min-width:260px;display:flex;align-items:center;gap:8px;border:1.5px solid var(--vino);border-radius:10px;padding:0 12px;height:42px;background:var(--hoja)}
+.campo.g{border-color:var(--linea2)}
+.campo input{border:0;outline:0;flex:1;font-size:15.5px;background:none}
+.campo svg{width:17px;height:17px;stroke:var(--tinta3);fill:none;stroke-width:1.8}
+.pista{font-size:12.5px;color:var(--tinta2);margin:10px 0 0;display:flex;align-items:center;gap:6px}
+.pista kbd{font:500 11px var(--mono);border:1px solid var(--linea2);border-bottom-width:2px;border-radius:4px;padding:1px 5px;background:var(--hoja2)}
+
+/* tabla */
+.tabla{background:var(--hoja);border:1px solid var(--linea);border-radius:12px;overflow-x:auto}
+td:last-child{white-space:nowrap}
+td .etq{display:block;font:500 11px var(--mono);color:var(--tinta3);letter-spacing:.02em;margin-top:2px}
+table{width:100%;border-collapse:collapse}
+th{font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--tinta3);text-align:left;padding:10px 12px;border-bottom:1px solid var(--linea);background:var(--hoja2);white-space:nowrap}
+th.d,td.d{text-align:right}
+th .ord{color:var(--vino)}
+td{padding:9px 12px;border-bottom:1px solid var(--linea);vertical-align:middle;font-size:14px}
+tr:last-child td{border-bottom:0}
+tr.sel td{background:var(--vino-tinte)}
+tr.bajo td:first-child{box-shadow:inset 4px 0 0 var(--ambar)}
+tr.cero td:first-child{box-shadow:inset 4px 0 0 var(--rojo)}
+td .nom{font-weight:600;display:block}
+td .sub{font-size:12px;color:var(--tinta2)}
+.apodos{display:flex;gap:4px;flex-wrap:wrap;min-width:0}
+.chip{font-size:12px;background:var(--hoja2);border:1px solid var(--linea);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.chip.edit{background:var(--vino-tinte);border-color:var(--vino-medio);color:var(--vino)}
+.chip.mas{border-style:dashed;color:var(--tinta3);cursor:pointer}
+td.cod{font:500 12.5px var(--mono);color:var(--tinta2)}
+td.num{font:600 20px var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+td.num.pend{color:var(--vino)}
+td .stepper{display:inline-flex;align-items:center;gap:2px}
+.tecla{width:34px;height:34px;border-radius:8px;border:1px solid var(--linea2);background:var(--hoja2);font-size:19px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.tecla.on{background:var(--vino);color:#fff;border-color:var(--vino)}
+.sello{font:600 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px}
+.sello.amb{background:var(--ambar-t);color:var(--ambar)} .sello.roj{background:var(--rojo-t);color:var(--rojo)}
+td.quien{font-size:12.5px;color:var(--tinta2);white-space:nowrap}
+td.quien b{display:block;color:var(--tinta);font-weight:500}
+td.bloq{color:var(--tinta3)}
+td.bloq svg{width:12px;height:12px;stroke:var(--tinta3);fill:none;stroke-width:2;vertical-align:-1px;margin-right:4px}
+td input.lit{width:74px;font:600 15px var(--mono);text-align:right;border:1.5px solid var(--vino-medio);border-radius:7px;padding:5px 8px;background:var(--vino-tinte);color:var(--vino)}
+td .ltxt{font:500 12px var(--mono);color:var(--tinta2);margin-left:4px}
+.grupo th{background:var(--vino-tinte);color:var(--vino);letter-spacing:.14em}
+.pie-tabla{display:flex;align-items:center;gap:12px;padding:10px 14px;font-size:12.5px;color:var(--tinta2);background:var(--hoja2);border-top:1px solid var(--linea)}
+.pie-tabla .der{margin-left:auto;display:flex;gap:8px}
+
+/* panel detalle */
+.detalle{background:var(--hoja);border-left:1px solid var(--linea);padding:22px 20px;min-width:0;overflow:hidden}
+.detalle h2{margin:0 0 2px;font-size:19px;font-weight:700;letter-spacing:-.01em}
+.detalle .sub{color:var(--tinta2);font-size:13px;margin-bottom:14px}
+.grande{display:flex;align-items:center;gap:10px;background:var(--vino-tinte);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.grande b{font:600 40px/1 var(--mono);color:var(--vino)}
+.grande span{font-size:13px;color:var(--tinta2);line-height:1.3}
+.grande .stepper{margin-left:auto}
+.grande .tecla{width:40px;height:40px;font-size:22px}
+.ficha{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;margin-bottom:16px}
+.ficha dt{color:var(--tinta3);font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding-top:3px}
+.ficha dd{margin:0;min-width:0}
+.detalle h3{font:600 10.5px var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--tinta3);margin:0 0 6px}
+.mov{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--linea);font-size:13px}
+.mov .h{font:500 12px var(--mono);color:var(--tinta3);flex-shrink:0;padding-top:1px}
+.mov .d{font:600 13px var(--mono);min-width:3ch;text-align:right;flex-shrink:0}
+.mov .d.mas{color:var(--verde)} .mov .d.menos{color:var(--rojo)}
+.mov .t small{display:block;color:var(--tinta3);font-size:11.5px}
+
+.candado{display:flex;align-items:center;gap:9px;background:var(--ambar-t);color:var(--ambar);border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:13.5px;font-weight:500}
+.candado svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
+
+/* ───────── Celular ───────── */
+.cel{display:none;max-width:430px;margin:0 auto;min-height:100vh;background:var(--crema)}
+.cel .cab{background:var(--vino);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px}
+.cel .cab .script{font:700 26px/1 var(--script)}
+.cel .cab .caja{background:#fff;color:var(--vino);font:600 9px/1 var(--sans);letter-spacing:.2em;padding:3px 6px;border-radius:2px}
+.cel .cab .av{margin-left:auto;width:30px;height:30px;border-radius:999px;background:#fff;color:var(--vino);display:grid;place-items:center;font:600 12px var(--mono)}
+.cel main{padding:14px 14px 110px}
+.cel .buscador{padding:12px}
+.cel .pasos{flex-direction:column;align-items:stretch;gap:10px}
+.cel .campo{min-width:0}
+.cel .renglon{display:flex;align-items:center;gap:10px;background:var(--hoja);border:1px solid var(--linea);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+.cel .renglon.bajo{box-shadow:inset 4px 0 0 var(--ambar)}
+.cel .renglon .q{flex:1;min-width:0}
+.cel .renglon .q b{display:block;font-weight:600;font-size:15px}
+.cel .renglon .q small{color:var(--tinta2);font-size:12.5px}
+.cel .renglon .num{font:600 24px var(--mono);min-width:2.5ch;text-align:center}
+.cel .tecla{width:42px;height:42px;font-size:22px}
+.cel .barra{position:fixed;bottom:0;left:0;right:0;background:var(--hoja);border-top:1px solid var(--linea);display:flex;justify-content:center}
+.cel .barra .in{width:100%;max-width:430px;display:grid;grid-template-columns:repeat(5,1fr)}
+.cel .dest{border:0;background:none;padding:9px 2px 11px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--tinta3);font:600 10px var(--mono);letter-spacing:.04em;text-transform:uppercase}
+.cel .dest svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.cel .dest.on{color:var(--vino)}
+.cel .fab{align-self:center;margin-top:-22px;width:58px;height:58px;border-radius:999px;background:var(--vino);color:#fff;border:3px solid var(--hoja);display:grid;place-items:center;box-shadow:0 4px 14px rgba(92,31,30,.3)}
+.cel .fab svg{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
+
+body.modo-cel .escritorio{display:none} body.modo-cel .cel{display:block}
+.oculto{display:none !important}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ ESCRITORIO ═══════════════ -->
+<div class="escritorio">
+  <aside class="lateral">
+    <div class="marca">
+      <span class="caja">MUEBLES</span>
+      <span class="script">San Bernardo</span>
+      <small>Almacén · v1.0</small>
+    </div>
+    <nav class="nav">
+      <a href="#material" id="nMue"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles</a>
+      <a href="#material" id="nMat" class="on"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/><path d="M9 12v5M15 12v5"/></svg>Material <span class="n">2</span></a>
+      <a href="#" id="nRec"><svg viewBox="0 0 24 24"><path d="M20.5 14.5a2 2 0 0 1-2 2H8l-4.5 4v-15a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>Recados <span class="n">3</span></a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.3l3.3 2"/></svg>Bitácora</a>
+      <div class="sep"></div>
+      <a href="#apodos" id="nApo"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M12.5 7.5l4 4"/></svg>Apodos y litros</a>
+      <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Ajustes</a>
+    </nav>
+    <div class="pie"><span class="av">R</span><div>Rafael<small>OFICINA · EN LÍNEA</small></div></div>
+  </aside>
+
+  <main class="principal">
+    <!-- ── MATERIAL ── -->
+    <section id="vMaterial">
+      <div class="arriba">
+        <h1>Material <em>7 productos · 21 envases</em></h1>
+        <div class="der">
+          <button class="btn"><svg viewBox="0 0 24 24"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>Exportar a Excel</button>
+          <button class="btn"><svg viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/></svg>Hoja de conteo</button>
+          <button class="btn vino">＋ Producto</button>
+        </div>
+      </div>
+
+      <div class="tablero">
+        <div class="tile amb"><small>Por acabarse</small><b>2</b><span>catalizador · barniz blanco</span></div>
+        <div class="tile roj"><small>Sin envases</small><b>1</b><span>laca amarilla</span></div>
+        <div class="tile ver"><small>Movimientos hoy</small><b>9</b><span>último: Silvia, 11:42</span></div>
+        <div class="tile"><small>Litros en almacén</small><b>399</b><span>en 21 envases</span></div>
+      </div>
+
+      <div class="buscador">
+        <div class="pasos">
+          <div class="paso"><span class="num">1</span><button class="lupa"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></div>
+          <div class="paso"><span class="num">2</span>
+            <div class="cats" id="catsMat">
+              <button class="cat on">Todo el material</button><button class="cat">Lacas</button><button class="cat">Barnices</button><button class="cat">Fondos</button><button class="cat">Catalizador</button><button class="cat">Thinner</button><button class="cat">Pintura</button>
+            </div>
+          </div>
+          <div class="paso" style="flex:1"><span class="num">3</span>
+            <label class="campo g"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg><input placeholder="Escribe el nombre o el apodo…"></label>
+          </div>
+        </div>
+        <p class="pista">Escribe y aparece. <kbd>+</kbd> suma · <kbd>−</kbd> resta · <kbd>Enter</kbd> abre el detalle · <kbd>Esc</kbd> limpia</p>
+      </div>
+
+      <div class="tabla">
+        <table>
+          <thead><tr>
+            <th>Producto <span class="ord">▲</span></th><th>Otros apodos</th><th>Presentación</th><th class="d">Hay</th><th class="d">Mín</th><th>Último movimiento</th><th></th>
+          </tr></thead>
+          <tbody>
+            <tr class="bajo"><td><span class="nom">Catalizador</span><span class="etq">CF-6040 CATALIZADOR · HiCoat · 521160406</span></td><td><div class="apodos"><span class="chip">el 6040</span></div></td><td>Cubeta 19 L</td><td class="num">2 <span class="sello amb">pocos</span></td><td class="d">3</td><td class="quien"><b>Silvia · hoy 11:42</b>−1 · mezcla para barniz</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla">＋</button></div></td></tr>
+            <tr class="sel"><td><span class="nom">Fondo transparente</span><span class="etq">HICEL FONDO TRANSPARENTE DELICIAS · 514470606</span></td><td><div class="apodos"><span class="chip">el fondo</span><span class="chip">del pochehat</span></div></td><td>Cubeta 19 L</td><td class="num pend">4</td><td class="d">2</td><td class="quien"><b>Rafael · hoy 09:15</b>+6 · llegó pedido</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla on">＋</button></div></td></tr>
+            <tr class="bajo"><td><span class="nom">Barniz blanco</span><span class="etq">BARNIZ PU BLANCO ESTABLE ALTO BRILLO · E-68131</span></td><td><div class="apodos"><span class="chip">el PU</span></div></td><td>Cubeta <b>16 L</b></td><td class="num">1 <span class="sello amb">pocos</span></td><td class="d">2</td><td class="quien"><b>Antelmo · ayer</b>−2 · Monarca Midas blanco</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla">＋</button></div></td></tr>
+            <tr class="cero"><td><span class="nom">Laca amarilla</span><span class="etq">LACA INDUSTRIAL NITRO AMARILLO OXIDO · 13261</span></td><td><div class="apodos"><span class="chip mas">＋ apodo</span></div></td><td>Cubeta 19 L</td><td class="num">0 <span class="sello roj">se acabó</span></td><td class="d">1</td><td class="quien"><b>Ángel · lun 28</b>−1 · parches Monarca</td><td><div class="stepper"><button class="tecla" disabled>−</button><button class="tecla">＋</button></div></td></tr>
+            <tr><td><span class="nom">Thinner</span><span class="etq">MEZCLA DIM-500 · Diluyentes y Mezclas</span></td><td><div class="apodos"><span class="chip">el DIM</span></div></td><td>Tambo 200 L</td><td class="num">2</td><td class="d">1</td><td class="quien"><b>Silvia · hoy 08:30</b>+1 · llegó de proveedor</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla">＋</button></div></td></tr>
+            <tr><td><span class="nom">Pintura negra</span><span class="etq">DIM NEGRO · <i style="color:var(--ambar)">falta foto</i></span></td><td><div class="apodos"><span class="chip mas">＋ apodo</span></div></td><td>Cubeta ? L</td><td class="num">8</td><td class="d">3</td><td class="quien"><b>Jorge · hoy 10:05</b>−2 · Ropero Deysi</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla">＋</button></div></td></tr>
+            <tr><td><span class="nom">Sellador</span><span class="etq">SELLADOR NITRO · por confirmar</span></td><td><div class="apodos"><span class="chip mas">＋ apodo</span></div></td><td>Cubeta 19 L</td><td class="num">4</td><td class="d">2</td><td class="quien"><b>Brandom · ayer</b>−1 · cajones</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla">＋</button></div></td></tr>
+          </tbody>
+        </table>
+        <div class="pie-tabla">7 productos · ordenado por nombre <div class="der"><span>Seleccionado: <b>Fondo transparente</b></span></div></div>
+      </div>
+    </section>
+
+    <!-- ── BUSCAR (flujo guiado) ── -->
+    <section id="vBuscar" class="oculto">
+      <div class="arriba">
+        <h1>Muebles <em>124 artículos · 611 piezas</em></h1>
+        <div class="der">
+          <button class="btn"><svg viewBox="0 0 24 24"><path d="M12 4v12M6 10l6 6 6-6M4 20h16"/></svg>Exportar a Excel</button>
+          <button class="btn vino">＋ Artículo</button>
+        </div>
+      </div>
+      <div class="tablero">
+        <div class="tile amb"><small>Por acabarse</small><b>6</b><span>3 puertas · 2 guacales · 1 cajón</span></div>
+        <div class="tile roj"><small>Sin piezas</small><b>2</b><span>Ropero Deysi blanco · Vitrina Angelita</span></div>
+        <div class="tile ver"><small>Movimientos hoy</small><b>31</b><span>último: Giovanni, 12:08</span></div>
+        <div class="tile"><small>Pedidos por surtir</small><b>4</b><span>Orozco · La Principal · Ramos</span></div>
+      </div>
+
+      <div class="buscador">
+        <div class="pasos">
+          <div class="paso"><span class="num">1</span><button class="lupa"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></div>
+          <div class="paso"><span class="num">2</span>
+            <div class="cats">
+              <button class="cat">Mueble terminado</button><button class="cat">Guacal</button><button class="cat">Puertas</button><button class="cat on">Puertas pintadas</button><button class="cat">Cajones</button><button class="cat">Cajones pintados</button><button class="cat">Respaldo</button><button class="cat">MDF</button>
+            </div>
+          </div>
+          <div class="paso" style="flex:1"><span class="num">3</span>
+            <label class="campo"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg><input value="monarca mid" autofocus></label>
+          </div>
+        </div>
+        <p class="pista">3 resultados en <b>Puertas pintadas</b>. <kbd>+</kbd> suma · <kbd>−</kbd> resta · <kbd>↑</kbd><kbd>↓</kbd> cambia de renglón</p>
+      </div>
+
+      <div class="tabla">
+        <table>
+          <thead><tr><th>Puertas pintadas</th><th>Color</th><th class="d">Hay</th><th class="d">Mín</th><th>Último movimiento</th><th></th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><span class="nom">Monarca Midas</span><span class="sub">5 puertas por mueble</span></td><td><span class="chip">Negro completo</span></td><td class="num pend">23</td><td class="d">10</td><td class="quien"><b>Ángel · hoy 12:01</b>+10 · salieron de pintura</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla on">＋</button></div></td></tr>
+            <tr class="bajo"><td><span class="nom">Monarca Midas</span><span class="sub">5 puertas por mueble</span></td><td><span class="chip">Negro puertas cafés</span></td><td class="num">8 <span class="sello amb">pocos</span></td><td class="d">10</td><td class="quien"><b>Ángel · ayer</b>−5 · armado</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla">＋</button></div></td></tr>
+            <tr><td><span class="nom">Monarca Midas Con lámpara</span><span class="sub">5 puertas por mueble</span></td><td><span class="chip">Café completo</span></td><td class="num">15</td><td class="d">5</td><td class="quien"><b>Ángel · lun 28</b>+15 · pintura</td><td><div class="stepper"><button class="tecla">−</button><button class="tecla">＋</button></div></td></tr>
+          </tbody>
+        </table>
+        <div class="pie-tabla">Mostrando solo <b>Puertas pintadas</b> que coinciden con "monarca mid" <div class="der"><button class="btn suave">Ver todo Puertas pintadas</button></div></div>
+      </div>
+    </section>
+
+    <!-- ── APODOS Y LITROS ── -->
+    <section id="vApodos" class="oculto">
+      <div class="arriba">
+        <h1>Apodos y litros <em>solo se edita esto · lo demás está bloqueado</em></h1>
+        <div class="der"><button class="btn vino">Guardar cambios</button></div>
+      </div>
+      <div class="candado"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Aquí solo se cambian los <b>&nbsp;apodos (hasta 3)&nbsp;</b> y los <b>&nbsp;litros&nbsp;</b>. Nombre, código, cantidades y mínimos no se tocan desde esta pantalla.</div>
+      <div class="buscador">
+        <div class="pasos">
+          <div class="paso"><span class="num g">1</span><button class="lupa g"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></div>
+          <div class="paso" style="flex:1"><span class="num g">2</span><label class="campo g"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg><input placeholder="Buscar producto…"></label></div>
+        </div>
+      </div>
+      <div class="tabla">
+        <table>
+          <thead><tr><th>Producto</th><th>Apodos · máximo 3</th><th>Litros por envase</th><th>Presentación</th><th class="d">Hay</th></tr></thead>
+          <tbody>
+            <tr class="grupo"><th colspan="5">Material</th></tr>
+            <tr><td class="bloq"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>CF-6040 CATALIZADOR</td><td><div class="apodos"><span class="chip edit">catalizador ×</span><span class="chip edit">el 6040 ×</span><span class="chip mas">＋ apodo</span></div></td><td><input class="lit" value="19"><span class="ltxt">L</span></td><td class="bloq">Cubeta</td><td class="num bloq" style="font-size:15px">2</td></tr>
+            <tr><td class="bloq"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>HICEL FONDO TRANSPARENTE DELICIAS</td><td><div class="apodos"><span class="chip edit">fondo transparente ×</span><span class="chip edit">el fondo ×</span><span class="chip edit">del pochehat ×</span></div><span class="sub" style="color:var(--tinta3);font-size:11px">ya tiene 3 — quita uno para poner otro</span></td><td><input class="lit" value="19"><span class="ltxt">L</span></td><td class="bloq">Cubeta</td><td class="num bloq" style="font-size:15px">4</td></tr>
+            <tr><td class="bloq"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>BARNIZ PU BLANCO ESTABLE ALTO BRILLO</td><td><div class="apodos"><span class="chip edit">barniz blanco ×</span><span class="chip edit">el PU ×</span><span class="chip mas">＋ apodo</span></div></td><td><input class="lit" value="16"><span class="ltxt">L</span></td><td class="bloq">Cubeta</td><td class="num bloq" style="font-size:15px">1</td></tr>
+            <tr><td class="bloq"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>MEZCLA DIM-500</td><td><div class="apodos"><span class="chip edit">thinner ×</span><span class="chip edit">el DIM ×</span><span class="chip mas">＋ apodo</span></div></td><td><input class="lit" value="200"><span class="ltxt">L</span></td><td class="bloq">Tambo</td><td class="num bloq" style="font-size:15px">2</td></tr>
+            <tr><td class="bloq"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>DIM NEGRO</td><td><div class="apodos"><span class="chip edit">pintura negra ×</span><span class="chip mas">＋ apodo</span></div></td><td><input class="lit" value="" placeholder="?"><span class="ltxt">L</span></td><td class="bloq">Cubeta</td><td class="num bloq" style="font-size:15px">8</td></tr>
+            <tr class="grupo"><th colspan="5">Muebles · apodos nada más (aquí no hay litros)</th></tr>
+            <tr><td class="bloq"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Monarca Midas</td><td><div class="apodos"><span class="chip edit">midas ×</span><span class="chip edit">el monarca ×</span><span class="chip mas">＋ apodo</span></div></td><td class="bloq">—</td><td class="bloq">Mueble</td><td class="num bloq" style="font-size:15px">6</td></tr>
+            <tr><td class="bloq"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Ropero Deysi Infantil niña</td><td><div class="apodos"><span class="chip edit">deysi niña ×</span><span class="chip mas">＋ apodo</span></div></td><td class="bloq">—</td><td class="bloq">Mueble</td><td class="num bloq" style="font-size:15px">2</td></tr>
+          </tbody>
+        </table>
+        <div class="pie-tabla">2 cambios sin guardar <div class="der"><button class="btn">Deshacer</button><button class="btn vino">Guardar cambios</button></div></div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="detalle" id="panel">
+    <h2>Fondo transparente</h2>
+    <div class="sub">HICEL FONDO TRANSPARENTE DELICIAS · HiCel</div>
+    <div class="grande"><b>4</b><span>cubetas<br>de 19 L<br><b style="font-size:13px;color:var(--tinta2)">76 L</b></span><div class="stepper"><button class="tecla">−</button><button class="tecla on">＋</button></div></div>
+    <dl class="ficha">
+      <dt>Apodos</dt><dd><div class="apodos"><span class="chip">fondo transparente</span><span class="chip">el fondo</span><span class="chip">del pochehat</span></div></dd>
+      <dt>Código</dt><dd style="font-family:var(--mono);font-size:13px">SKU 514470606</dd>
+      <dt>Barras</dt><dd style="font-family:var(--mono);font-size:13px">7501456620420</dd>
+      <dt>Mínimo</dt><dd>2 cubetas · avisa al llegar</dd>
+      <dt>Lote</dt><dd>0000194061 · prod. 18/07/2026</dd>
+    </dl>
+    <h3>Últimos movimientos</h3>
+    <div class="mov"><span class="h">09:15</span><span class="d mas">+6</span><span class="t">Rafael<small>llegó pedido · quedan 4… antes 0</small></span></div>
+    <div class="mov"><span class="h">ayer</span><span class="d menos">−2</span><span class="t">Antelmo<small>Monarca México café · quedan 0</small></span></div>
+    <div class="mov"><span class="h">lun 28</span><span class="d menos">−1</span><span class="t">Jorge<small>Ropero Deysi blanco · quedan 2</small></span></div>
+    <div class="mov"><span class="h">vie 25</span><span class="d mas">+3</span><span class="t">Silvia<small>llegó de proveedor · quedan 3</small></span></div>
+    <h3 style="margin-top:16px">Recado ligado</h3>
+    <div class="mov" style="border:0"><span class="t" style="font-size:13px">"Pedir 2 cubetas más antes del jueves" <small>Silvia · hoy 11:40 · visto: Rafael</small></span></div>
+  </aside>
+</div>
+
+<!-- ═══════════════ CELULAR ═══════════════ -->
+<div class="cel">
+  <header class="cab"><span class="caja">MUEBLES</span><span class="script">San Bernardo</span><span class="av">R</span></header>
+  <main>
+    <div class="buscador">
+      <div class="pasos">
+        <div class="paso"><span class="num">1</span><button class="lupa"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><span style="font-size:13px;color:var(--tinta2)">¿Qué quieres ver?</span></div>
+        <div class="paso"><span class="num">2</span><div class="cats"><button class="cat">Mueble</button><button class="cat">Guacal</button><button class="cat">Puertas</button><button class="cat on">Puertas pintadas</button><button class="cat">Cajones</button><button class="cat">Material</button></div></div>
+        <div class="paso"><span class="num">3</span><label class="campo"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg><input value="monarca mid"></label></div>
+      </div>
+    </div>
+    <div class="renglon"><div class="q"><b>Monarca Midas</b><small>Negro completo · puertas pintadas</small></div><button class="tecla">−</button><span class="num" style="color:var(--vino)">23</span><button class="tecla on">＋</button></div>
+    <div class="renglon bajo"><div class="q"><b>Monarca Midas</b><small>Negro puertas cafés · <span class="sello amb">pocos</span></small></div><button class="tecla">−</button><span class="num">8</span><button class="tecla">＋</button></div>
+    <div class="renglon"><div class="q"><b>Monarca Midas Con lámpara</b><small>Café completo</small></div><button class="tecla">−</button><span class="num">15</span><button class="tecla">＋</button></div>
+    <p style="text-align:center;color:var(--tinta3);font-size:12.5px;margin-top:14px">3 resultados · toca el nombre para ver el detalle</p>
+  </main>
+  <nav class="barra"><div class="in">
+    <button class="dest on"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles</button>
+    <button class="dest"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/></svg>Material</button>
+    <button class="fab"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+    <button class="dest"><svg viewBox="0 0 24 24"><path d="M20.5 14.5a2 2 0 0 1-2 2H8l-4.5 4v-15a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>Recados</button>
+    <button class="dest"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M12.5 7.5l4 4"/></svg>Apodos</button>
+  </div></nav>
+</div>
+
+<script>
+(function(){
+  const h = location.hash.replace('#','') || 'material';
+  const cel = new URLSearchParams(location.search).get('cel') === '1';
+  if (cel) document.body.classList.add('modo-cel');
+  const v = {material:'vMaterial', buscar:'vBuscar', apodos:'vApodos'}[h] || 'vMaterial';
+  ['vMaterial','vBuscar','vApodos'].forEach(id => document.getElementById(id).classList.toggle('oculto', id !== v));
+  document.querySelectorAll('.nav a').forEach(a => a.classList.remove('on'));
+  ({material:'nMat', buscar:'nMue', apodos:'nApo'})[h] && document.getElementById(({material:'nMat', buscar:'nMue', apodos:'nApo'})[h]).classList.add('on');
+  if (h === 'apodos') document.getElementById('panel').style.display = 'none', document.querySelector('.escritorio').style.gridTemplateColumns = '232px 1fr';
+})();
+</script>
+</body>
+</html>
