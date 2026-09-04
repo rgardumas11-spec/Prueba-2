@@ -36,6 +36,7 @@
     <nav class="nav">
       <a href="#muebles" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles<span class="n" id="nMue" hidden></span></a>
       <a href="#material" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/><path d="M9 12v5M15 12v5"/></svg>Material<span class="n" id="nMat" hidden></span></a>
+      <a href="#pedidos" data-vista="pedidos"><svg viewBox="0 0 24 24"><path d="M5 3.5h14v17l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16h4"/></svg>Pedidos<span class="n" id="nPed" hidden></span></a>
       <a href="#recados" data-vista="recados"><svg viewBox="0 0 24 24"><path d="M20.5 14.5a2 2 0 0 1-2 2H8l-4.5 4v-15a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>Recados<span class="n" id="nRec" hidden></span></a>
       <a href="#bitacora" data-vista="bitacora"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.3l3.3 2"/></svg>Bitácora</a>
       <div class="sep"></div>
@@ -76,6 +77,11 @@
       <div class="solo-celular acciones-abajo"><button class="btn grande" data-nuevo="material">＋ Agregar producto</button></div>
     </section>
 
+    <section class="vista" id="v-pedidos">
+      <div class="arriba"><h1>Pedidos <em id="resumenPedidos"></em></h1><div class="der"><button class="btn vino" data-nuevo-pedido>＋ Pedido</button></div></div>
+      <div id="listaPedidos"></div>
+    </section>
+
     <section class="vista" id="v-recados">
       <div class="arriba"><h1>Recados <em id="resumenRecados"></em></h1></div>
       <div class="fila-recado"><input id="recTexto" placeholder="Escribe un recado para el equipo…" autocomplete="off"><button class="btn vino" id="btnRecado">Poner</button></div>
@@ -110,8 +116,8 @@
     <button class="dest" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles</button>
     <button class="dest" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/></svg>Material</button>
     <button class="fab" id="fabLupa" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
-    <button class="dest" data-vista="recados"><svg viewBox="0 0 24 24"><path d="M20.5 14.5a2 2 0 0 1-2 2H8l-4.5 4v-15a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>Recados<span class="globo" id="globoRec" hidden></span></button>
-    <button class="dest" data-vista="mas" id="destMas"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más</button>
+    <button class="dest" data-vista="pedidos"><svg viewBox="0 0 24 24"><path d="M5 3.5h14v17l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16h4"/></svg>Pedidos</button>
+    <button class="dest" data-vista="mas" id="destMas"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más<span class="globo" id="globoRec" hidden></span></button>
   </nav>
 </div>
 

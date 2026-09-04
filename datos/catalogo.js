@@ -1,6 +1,6 @@
-// Catálogo del taller. Copia de BASE_DATOS_V3 (14/08/2026). Es una lista de
-// arranque: todo se puede corregir desde la app. No hay ninguna conexión con
-// el programa de producción.
+// Catálogo del taller. Modelos y colores copiados de BASE_DATOS_V3 (14/08/2026);
+// secciones y nombres dictados por el taller. Todo se puede corregir desde la app.
+// No hay ninguna conexión con el programa de producción.
 window.CATALOGO = {
  "modelos": [
   "Mariana Abanico",
@@ -169,26 +169,87 @@ window.CATALOGO = {
   }
  ],
  "categoriasMueble": [
-  "Mueble terminado",
-  "Guacal",
-  "Guacal pintado",
-  "Puertas",
+  "Stock de mueble",
+  "Mueble maquilado",
+  "Mueble armado",
+  "Mueble pintado",
+  "Puertas pre lijadas",
+  "Puertas lijadas",
   "Puertas pintadas",
-  "Cajones",
   "Cajones pintados",
-  "Respaldo",
-  "MDF"
+  "Mueble de MDF",
+  "Mueble de MDF pintado"
  ],
  "categoriasMaterial": [
-  "Laca",
-  "Barniz",
-  "Fondo",
-  "Sellador",
-  "Catalizador",
-  "Thinner",
-  "Pintura",
-  "Otro"
+  "Cubetas",
+  "Tambos"
  ],
+ "quienHizo": {
+  "Puertas pintadas": {
+   "opciones": [
+    "Brandon",
+    "Juan",
+    "Antelmo",
+    "Raúl",
+    "Ángel",
+    "Daniel",
+    "Jorge"
+   ],
+   "max": 1
+  },
+  "Cajones pintados": {
+   "opciones": [
+    "Brandon",
+    "Juan",
+    "Antelmo",
+    "Raúl",
+    "Ángel",
+    "Daniel",
+    "Jorge"
+   ],
+   "max": 1
+  },
+  "Mueble pintado": {
+   "opciones": [
+    "Brandon",
+    "Juan",
+    "Antelmo",
+    "Raúl",
+    "Ángel",
+    "Daniel",
+    "Jorge"
+   ],
+   "max": 2
+  },
+  "Mueble armado": {
+   "opciones": [
+    "Giovanni",
+    "Rafael"
+   ],
+   "max": 1
+  },
+  "Mueble maquilado": {
+   "opciones": [
+    "Miguel",
+    "Luis",
+    "Daniel"
+   ],
+   "max": 1
+  },
+  "Mueble de MDF": {
+   "opciones": [
+    "Fernando"
+   ],
+   "max": 1
+  },
+  "Mueble de MDF pintado": {
+   "opciones": [
+    "Juan",
+    "Raúl"
+   ],
+   "max": 1
+  }
+ },
  "presentaciones": [
   {
    "n": "Cubeta",
@@ -254,22 +315,22 @@ window.CATALOGO = {
   "Sr. Gildardo"
  ],
  "gente": [
+  "Brandon",
+  "Juan",
+  "Antelmo",
+  "Raúl",
+  "Ángel",
+  "Daniel",
+  "Jorge",
+  "Giovanni",
+  "Rafael",
+  "Miguel",
+  "Luis",
+  "Fernando",
   "Hector",
   "Silvia",
   "Antonio",
   "Marisol",
-  "Ángel",
-  "Antelmo",
-  "Jorge",
-  "Raúl",
-  "Brandom",
-  "Luis",
-  "Daniel",
-  "Miguel",
-  "Rafael",
-  "Giovanni",
-  "Fernando",
-  "Juan",
   "Uriel"
  ],
  "arranqueMaterial": [
@@ -278,7 +339,7 @@ window.CATALOGO = {
    "apodos": [
     "laca amarilla"
    ],
-   "categoria": "Laca",
+   "categoria": "Cubetas",
    "codigo": "13261",
    "barras": "7506180720880",
    "presentacion": "Cubeta",
@@ -289,7 +350,7 @@ window.CATALOGO = {
    "apodos": [
     "catalizador"
    ],
-   "categoria": "Catalizador",
+   "categoria": "Cubetas",
    "marca": "HiCoat",
    "codigo": "521160406",
    "barras": "7501456603560",
@@ -301,7 +362,7 @@ window.CATALOGO = {
    "apodos": [
     "fondo transparente"
    ],
-   "categoria": "Fondo",
+   "categoria": "Cubetas",
    "marca": "HiCel",
    "codigo": "514470606",
    "barras": "7501456620420",
@@ -313,7 +374,7 @@ window.CATALOGO = {
    "apodos": [
     "barniz blanco"
    ],
-   "categoria": "Barniz",
+   "categoria": "Cubetas",
    "codigo": "E-68131",
    "barras": "7506180720521",
    "presentacion": "Cubeta",
@@ -324,7 +385,7 @@ window.CATALOGO = {
    "apodos": [
     "thinner"
    ],
-   "categoria": "Thinner",
+   "categoria": "Tambos",
    "marca": "Diluyentes y Mezclas",
    "codigo": "",
    "barras": "",
@@ -336,7 +397,7 @@ window.CATALOGO = {
    "apodos": [
     "pintura negra"
    ],
-   "categoria": "Pintura",
+   "categoria": "Cubetas",
    "marca": "Diluyentes y Mezclas",
    "codigo": "",
    "barras": "",
