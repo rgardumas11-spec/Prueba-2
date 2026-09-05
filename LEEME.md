@@ -47,12 +47,12 @@ sumas o restas. En computadora, con la tecla **+** o **−** se ajusta el primer
 index.html          la página
 estilos.css         colores del logo, celular y computadora
 app.js              la pantalla
-config.js           ← el único que se toca: llaves de Supabase y versión
+config.js           ← el único que se toca: llaves de Firebase y versión
 sw.js               abre sin señal y avisa de versiones nuevas
 manifest.json       para instalarse como app
 datos/catalogo.js   modelos, colores agrupados, secciones, quién hace qué
 datos/almacen.js    capa de datos: nube o local, misma cara
-datos/esquema.sql   la base (se pega una vez en Supabase)
+datos/reglas-firestore.txt  reglas de la base (se pegan una vez en Firebase)
 diseno/             vista previa aprobada
 ```
 

@@ -1,7 +1,7 @@
 /* Service worker: guarda la app en el aparato para que abra al instante y
    sirva sin señal, y avisa cuando hay versión nueva.
    Al publicar una versión nueva SE CAMBIA ESTE NÚMERO. */
-const VERSION = 'almacen-2026-09-04-1';
+const VERSION = 'almacen-2026-09-04-2';
 const ARCHIVOS = [
   './', './index.html', './estilos.css', './app.js', './config.js',
   './datos/catalogo.js', './datos/almacen.js', './manifest.json',

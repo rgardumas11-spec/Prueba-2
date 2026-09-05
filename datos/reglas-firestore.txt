@@ -1,0 +1,58 @@
+═══════════════════════════════════════════════════════════════════════════
+REGLAS DE LA BASE — Almacén San Bernardo (Firebase / Firestore)
+
+Esto es lo que protege los datos: dice que SOLO puede leer y escribir
+quien haya entrado con una de las cuentas del taller. Sin esto, cualquiera
+con la dirección podría meterse.
+
+Se pegan UNA vez:
+  console.firebase.google.com → tu proyecto → Firestore Database →
+  pestaña "Rules" (Reglas) → borrar lo que haya → pegar esto → Publish.
+═══════════════════════════════════════════════════════════════════════════
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Solo entra quien inició sesión con una cuenta del taller.
+    function delTaller() {
+      return request.auth != null;
+    }
+
+    match /producto/{id}   { allow read, write: if delTaller(); }
+    match /movimiento/{id} { allow read, write: if delTaller(); }
+    match /recado/{id}     { allow read, write: if delTaller(); }
+    match /pedido/{id}     { allow read, write: if delTaller(); }
+    match /persona/{id}    { allow read, write: if delTaller(); }
+
+    // Todo lo demás, cerrado.
+    match /{document=**}   { allow read, write: if false; }
+  }
+}
+
+═══════════════════════════════════════════════════════════════════════════
+QUÉ GUARDA CADA COSA (Firestore crea las colecciones solo; no hay que
+crear nada a mano)
+
+producto     id, tipo ('mueble' | 'material'), nombre, apodos[] (máx 3),
+             categoria (la sección: Puertas pintadas, Mueble armado,
+             Cubetas, Tambos…), color, marca, codigo, barras,
+             presentacion, litros, cantidad, minimo, activo,
+             creado, tocado, por_quien
+
+movimiento   id, producto_id, nombre, color, tipo (entrada | salida |
+             conteo | alta | baja), delta, resultado, persona,
+             motivo, origen, hecho_por (quién pintó, armó, maquiló),
+             creado
+
+recado       id, texto, de, para, hecho, urgente, vistos{}, creado
+
+pedido       id, cliente, fecha, lineas[] ({modelo, color, cantidad}),
+             notas, estado (pendiente | entregado), de, creado
+
+persona      nombre (es el propio id), creado
+
+Las sumas y restas usan `increment`, que Firestore aplica de su lado: si
+dos personas le pican a lo mismo en el mismo segundo, se suman las dos en
+vez de perderse una. Sin señal, Firestore guarda lo hecho en el aparato y
+lo sube solo al volver la conexión.

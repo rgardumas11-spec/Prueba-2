@@ -91,7 +91,7 @@ function pintaPulso(){
   else if (Almacen.modo === "nube" && Almacen.enLinea){ t.textContent = "Compartido en vivo con el taller" + (Almacen.pendientes ? " · subiendo " + Almacen.pendientes + " pendientes" : ""); }
   else if (Almacen.modo === "nube"){ p.classList.add("sin"); t.textContent = "Sin señal: lo que hagas se guarda aquí y se sube al volver"; }
   else if (Almacen.hayNube){ p.classList.add("local"); t.textContent = "Sin sesión: guardando solo en este aparato"; }
-  else { p.classList.add("local"); t.textContent = "Guardando solo en este aparato (falta conectar la base)"; }
+  else { p.classList.add("local"); t.textContent = "Guardando solo en este aparato (falta conectar Firebase)"; }
   $("#practicaBanda").hidden = !Almacen.practica;
   $("#yoEstadoLat").textContent = Almacen.practica ? "PRÁCTICA" : (Almacen.modo === "nube" ? "EN LÍNEA" : "LOCAL");
   $("#entrada").hidden = !Almacen.necesitaEntrar();
@@ -627,7 +627,7 @@ function pintaAjustes(){
     '<div class="ajuste"><h4>Revisar este aparato</h4><p>Prueba una por una las cosas que la app necesita y te dice cómo arreglar lo que falle.</p><div class="acciones"><button class="btn" id="ajDiag">Revisar ahora</button></div><div class="diag" id="diag" style="margin-top:10px"></div></div>' +
     '<div class="ajuste"><h4>Exportar e imprimir</h4><p>Todo lo que hay, a Excel; o una hoja para hacer el conteo físico caminando el almacén.</p><div class="acciones"><button class="btn" data-exporta="mueble">Muebles a Excel</button><button class="btn" data-exporta="material">Material a Excel</button><button class="btn" data-imprime="mueble">Hoja de conteo muebles</button><button class="btn" data-imprime="material">Hoja de conteo material</button></div></div>' +
     '<div class="ajuste"><h4>Instalar en el celular</h4><p>' + (esApple ? "En iPhone: botón <b>Compartir</b> (el cuadrito con la flecha) → <b>Agregar a pantalla de inicio</b>." : "En Android: menú <b>⋮</b> → <b>Agregar a pantalla principal</b> o <b>Instalar app</b>.") + ' Queda con su icono y abre en un segundo.</p></div>' +
-    '<div class="ajuste"><h4>Versión</h4><p><b>' + esc(C.VERSION || "?") + '</b> · ' + (Almacen.hayNube ? "base compartida conectada" : "sin base compartida (faltan llaves en config.js)") + '</p><div class="acciones"><button class="btn" id="ajActualiza">Buscar actualización</button><button class="btn fantasma" id="ajTema">Claro / oscuro</button></div></div>';
+    '<div class="ajuste"><h4>Versión</h4><p><b>' + esc(C.VERSION || "?") + '</b> · ' + (Almacen.hayNube ? "base compartida conectada (Firebase)" : "sin base compartida (faltan las llaves de Firebase en config.js)") + '</p><div class="acciones"><button class="btn" id="ajActualiza">Buscar actualización</button><button class="btn fantasma" id="ajTema">Claro / oscuro</button></div></div>';
   $("#ajYo").onclick = hojaQuienSoy;
   const s = $("#ajSalir"); if (s) s.onclick = async () => { await Almacen.sale(); pintaPulso(); pintaTodo(); };
   $("#ajPractica").onchange = async e => { await Almacen.setPractica(e.target.checked); pintaPulso(); pintaTodo(); grita(e.target.checked ? "Modo práctica encendido" : "De vuelta a lo real"); };
