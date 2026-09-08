@@ -13,13 +13,13 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 window.CONFIG = {
   FIREBASE: {
-    apiKey: "",
-    authDomain: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: ""
+    apiKey: "AIzaSyD6OfbCi7PAxxuXyMuLOG0u0bdV3cluHCw",
+    authDomain: "almacen-san-bernardo.firebaseapp.com",
+    projectId: "almacen-san-bernardo",
+    storageBucket: "almacen-san-bernardo.firebasestorage.app",
+    messagingSenderId: "395213548379",
+    appId: "1:395213548379:web:a3dacad90292462154487e"
   },
-  VERSION: "1.1 · 2026-09-04",
+  VERSION: "1.2 · 2026-09-07",
   TALLER: "Muebles San Bernardo"
 };
