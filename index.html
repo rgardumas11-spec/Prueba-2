@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Almacén San Bernardo</title>
-<meta name="description" content="Existencias de muebles y material del taller Muebles San Bernardo.">
+<meta name="description" content="Existencias de muebles, piezas y material del taller Muebles San Bernardo.">
 <meta name="theme-color" content="#7A2B29">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -34,12 +34,16 @@
   <aside class="lateral">
     <div class="marca"><span class="caja">MUEBLES</span><span class="script">San Bernardo</span><small id="versionLat">Almacén</small></div>
     <nav class="nav">
-      <a href="#muebles" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles<span class="n" id="nMue" hidden></span></a>
-      <a href="#material" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/><path d="M9 12v5M15 12v5"/></svg>Material<span class="n" id="nMat" hidden></span></a>
+      <a href="#muebles" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles</a>
+      <a href="#piezas" data-vista="piezas"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="7" height="17" rx="1"/><rect x="13" y="3.5" width="7" height="17" rx="1"/><path d="M9 12h.01M15 12h.01"/></svg>Piezas</a>
+      <a href="#listos" data-vista="listos"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg>Listos para preparar<span class="n" id="nListos" hidden></span></a>
       <a href="#pedidos" data-vista="pedidos"><svg viewBox="0 0 24 24"><path d="M5 3.5h14v17l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16h4"/></svg>Pedidos<span class="n" id="nPed" hidden></span></a>
+      <a href="#resumen" data-vista="resumen"><svg viewBox="0 0 24 24"><path d="M4 19h16M6 16V9M11 16V5M16 16v-6"/></svg>Resumen</a>
+      <a href="#material" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/><path d="M9 12v5M15 12v5"/></svg>Material<span class="n" id="nMat" hidden></span></a>
+      <div class="sep"></div>
       <a href="#recados" data-vista="recados"><svg viewBox="0 0 24 24"><path d="M20.5 14.5a2 2 0 0 1-2 2H8l-4.5 4v-15a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>Recados<span class="n" id="nRec" hidden></span></a>
       <a href="#bitacora" data-vista="bitacora"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.3l3.3 2"/></svg>Bitácora</a>
-      <div class="sep"></div>
+      <a href="#catalogo" data-vista="catalogo"><svg viewBox="0 0 24 24"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3z"/><path d="M5 4v16M9 8h5M9 12h5"/></svg>Catálogo</a>
       <a href="#apodos" data-vista="apodos"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M12.5 7.5l4 4"/></svg>Apodos y litros</a>
       <a href="#ajustes" data-vista="ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>Ajustes</a>
     </nav>
@@ -56,30 +60,55 @@
   <div class="practica-banda" id="practicaBanda" hidden>MODO PRÁCTICA — nada de lo que hagas aquí toca el inventario real. <button id="salirPractica">Salir</button></div>
 
   <main id="principal">
-    <!-- Muebles y Material comparten la misma pantalla; cambia el tipo -->
-    <section class="vista" id="v-muebles" data-tipo="mueble">
+    <section class="vista" id="v-muebles">
       <div class="arriba"><h1>Muebles <em id="resumenMueble"></em></h1>
-        <div class="der solo-escritorio"><button class="btn" data-exporta="mueble">Exportar a Excel</button><button class="btn" data-imprime="mueble">Hoja de conteo</button><button class="btn vino" data-nuevo="mueble">＋ Artículo</button></div>
+        <div class="der"><button class="lupa-btn" data-lupa="muebles" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><button class="btn vino" data-registrar="mueble">＋ Registrar</button></div>
       </div>
-      <div class="tablero" id="tableroMueble"></div>
-      <div class="buscador" id="buscadorMueble"></div>
-      <div class="lista" id="listaMueble"></div>
-      <div class="solo-celular acciones-abajo"><button class="btn grande" data-nuevo="mueble">＋ Agregar artículo</button></div>
+      <div class="busca-caja" id="busca-muebles" hidden></div>
+      <div class="pestanas" id="etapasMueble"></div>
+      <div class="lista v2" id="listaMueble"></div>
     </section>
 
-    <section class="vista" id="v-material" data-tipo="material">
-      <div class="arriba"><h1>Material <em id="resumenMaterial"></em></h1>
-        <div class="der solo-escritorio"><button class="btn" data-exporta="material">Exportar a Excel</button><button class="btn" data-imprime="material">Hoja de conteo</button><button class="btn vino" data-nuevo="material">＋ Producto</button></div>
+    <section class="vista" id="v-piezas">
+      <div class="arriba"><h1>Piezas <em id="resumenPieza"></em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="piezas" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><button class="btn vino" data-registrar="pieza">＋ Registrar</button></div>
       </div>
-      <div class="tablero" id="tableroMaterial"></div>
-      <div class="buscador" id="buscadorMaterial"></div>
-      <div class="lista" id="listaMaterial"></div>
-      <div class="solo-celular acciones-abajo"><button class="btn grande" data-nuevo="material">＋ Agregar producto</button></div>
+      <div class="busca-caja" id="busca-piezas" hidden></div>
+      <div class="pestanas" id="etapasPieza"></div>
+      <div class="lista v2" id="listaPieza"></div>
+    </section>
+
+    <section class="vista" id="v-listos">
+      <div class="arriba"><h1>Listos para preparar <em id="resumenListos"></em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="listos" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></div>
+      </div>
+      <div class="busca-caja" id="busca-listos" hidden></div>
+      <div class="lista v2" id="listaListos"></div>
     </section>
 
     <section class="vista" id="v-pedidos">
-      <div class="arriba"><h1>Pedidos <em id="resumenPedidos"></em></h1><div class="der"><button class="btn vino" data-nuevo-pedido>＋ Pedido</button></div></div>
+      <div class="arriba"><h1>Pedidos <em id="resumenPedidos"></em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="pedidos" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><button class="btn" id="ordenPedidos" title="Cambiar el orden">Más nuevos primero</button><button class="btn vino" data-nuevo-pedido>＋ Pedido</button></div>
+      </div>
+      <div class="busca-caja" id="busca-pedidos" hidden></div>
       <div id="listaPedidos"></div>
+    </section>
+
+    <section class="vista" id="v-resumen">
+      <div class="arriba"><h1>Resumen <em id="resumenResumen"></em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="resumen" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></div>
+      </div>
+      <div class="busca-caja" id="busca-resumen" hidden></div>
+      <div class="lista" id="listaResumen"></div>
+    </section>
+
+    <section class="vista" id="v-material">
+      <div class="arriba"><h1>Material <em id="resumenMaterial"></em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="material" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><button class="btn" data-barras title="Leer código de barras"><svg viewBox="0 0 24 24"><path d="M4 5v14M8 5v14M11 5v14M15 5v14M20 5v14M18 5v14" stroke-width="1.4"/></svg></button><button class="btn vino" data-nuevo="material">＋ Producto</button></div>
+      </div>
+      <div class="busca-caja" id="busca-material" hidden></div>
+      <div class="pestanas" id="catsMaterial"></div>
+      <div class="lista" id="listaMaterial"></div>
     </section>
 
     <section class="vista" id="v-recados">
@@ -89,16 +118,27 @@
     </section>
 
     <section class="vista" id="v-bitacora">
-      <div class="arriba"><h1>Bitácora <em>quién hizo qué</em></h1></div>
+      <div class="arriba"><h1>Bitácora <em>quién hizo qué, y cuándo</em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="bitacora" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></div>
+      </div>
+      <div class="busca-caja" id="busca-bitacora" hidden></div>
       <div id="listaBitacora"></div>
+    </section>
+
+    <section class="vista" id="v-catalogo">
+      <div class="arriba"><h1>Catálogo <em id="resumenCatalogo"></em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="catalogo" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><button class="btn vino" id="nuevoModelo">＋ Modelo</button></div>
+      </div>
+      <div class="busca-caja" id="busca-catalogo" hidden></div>
+      <div class="lista" id="listaCatalogo"></div>
     </section>
 
     <section class="vista" id="v-apodos">
       <div class="arriba"><h1>Apodos y litros <em>solo se edita esto</em></h1>
         <div class="der"><button class="btn" id="deshacerApodos" hidden>Deshacer</button><button class="btn vino" id="guardarApodos" disabled>Guardar cambios</button></div>
       </div>
-      <div class="candado"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Aquí solo se cambian los <b>apodos (hasta 3)</b> y los <b>litros por envase</b>. Nombre, código, cantidades y mínimos no se tocan desde esta pantalla.</span></div>
-      <div class="buscador simple"><label class="campo-busca"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="buscaApodos" placeholder="Buscar producto…" autocomplete="off"></label></div>
+      <div class="candado"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Aquí solo se cambian los <b>apodos (hasta 3)</b> y los <b>litros por envase</b> del material.</span></div>
+      <div class="busca-caja"><label class="campo-busca"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="buscaApodos" placeholder="Buscar producto…" autocomplete="off"></label></div>
       <div id="listaApodos"></div>
     </section>
 
@@ -114,9 +154,9 @@
   <!-- ── Barra inferior (celular) ── -->
   <nav class="barra">
     <button class="dest" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles</button>
-    <button class="dest" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/></svg>Material</button>
+    <button class="dest" data-vista="piezas"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="7" height="17" rx="1"/><rect x="13" y="3.5" width="7" height="17" rx="1"/></svg>Piezas</button>
     <button class="fab" id="fabLupa" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
-    <button class="dest" data-vista="pedidos"><svg viewBox="0 0 24 24"><path d="M5 3.5h14v17l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16h4"/></svg>Pedidos</button>
+    <button class="dest" data-vista="listos"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg>Listos</button>
     <button class="dest" data-vista="mas" id="destMas"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>Más<span class="globo" id="globoRec" hidden></span></button>
   </nav>
 </div>
@@ -133,6 +173,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="config.js"></script>
 <script src="datos/catalogo.js"></script>
+<script src="datos/reglas.js"></script>
+<script src="datos/busca.js"></script>
 <script src="datos/almacen.js"></script>
 <script src="app.js"></script>
 </body>

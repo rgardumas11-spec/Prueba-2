@@ -98,25 +98,60 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .tile span{display:block;font-size:12px;color:var(--tinta2);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tile.amb b{color:var(--ambar)} .tile.roj b{color:var(--rojo)} .tile.ver b{color:var(--verde)}
 
-/* ── Buscador guiado ── */
-.buscador{background:var(--hoja);border:1px solid var(--linea);border-radius:var(--r);padding:12px;margin-bottom:12px}
-.pasos{display:flex;flex-direction:column;gap:10px}
-.paso{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.paso .num{width:22px;height:22px;border-radius:999px;background:var(--vino);color:#fff;font:600 11px var(--mono);display:grid;place-items:center;flex-shrink:0}
-.lupa{width:42px;height:42px;border-radius:10px;border:1.5px solid var(--vino);background:var(--vino-tinte);color:var(--vino);display:grid;place-items:center;cursor:pointer;flex-shrink:0}
-.lupa svg,.btn svg,.campo-busca svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.paso .titulo{font-size:13.5px;color:var(--tinta2)}
-.cats{display:flex;gap:6px;flex-wrap:wrap}
-.cat{border:1px solid var(--linea2);background:var(--hoja);border-radius:999px;padding:7px 12px;font-size:13.5px;cursor:pointer;font-weight:500;color:var(--tinta)}
-.cat.on{background:var(--vino);color:#fff;border-color:var(--vino);font-weight:600}
-.campo-busca{flex:1;min-width:0;display:flex;align-items:center;gap:8px;border:1.5px solid var(--vino);border-radius:10px;padding:0 12px;height:44px;background:var(--hoja)}
+/* ── Búsqueda: un icono; al tocarlo se despliega el campo ── */
+.lupa-btn{width:38px;height:38px;border-radius:10px;border:1px solid var(--linea2);background:var(--hoja);color:var(--tinta2);display:grid;place-items:center;cursor:pointer;flex-shrink:0}
+.lupa-btn.on{background:var(--vino);color:#fff;border-color:var(--vino)}
+.lupa-btn svg,.btn svg,.campo-busca svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.busca-caja{margin-bottom:12px}
+.campo-busca{display:flex;align-items:center;gap:8px;border:1.5px solid var(--vino);border-radius:10px;padding:0 12px;height:44px;background:var(--hoja)}
 .campo-busca input{border:0;outline:0;flex:1;min-width:0;font-size:16px;background:none;color:var(--tinta)}
 .campo-busca svg{stroke:var(--tinta3);flex-shrink:0}
 .campo-busca .limpia{border:0;background:none;color:var(--tinta3);font-size:18px;cursor:pointer;padding:4px}
-.buscador.simple{padding:8px}
 .pista{font-size:12.5px;color:var(--tinta2);margin:8px 0 0}
 .pista b{color:var(--tinta)}
-.opciones-busca{display:flex;gap:8px;margin-top:8px}
+.cats{display:flex;gap:6px;flex-wrap:wrap}
+.cat{border:1px solid var(--linea2);background:var(--hoja);border-radius:999px;padding:7px 12px;font-size:13.5px;cursor:pointer;font-weight:500;color:var(--tinta)}
+.cat.on{background:var(--vino);color:#fff;border-color:var(--vino);font-weight:600}
+.cat small{font:500 11px var(--mono);opacity:.75;margin-left:4px}
+
+/* ── Pestañas de etapa ── */
+.pestanas{display:flex;gap:4px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.pestanas::-webkit-scrollbar{display:none}
+.pestana{flex-shrink:0;border:1px solid var(--linea2);background:var(--hoja);border-radius:10px;padding:8px 12px;font-size:13.5px;font-weight:500;cursor:pointer;color:var(--tinta2);display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0}
+.pestana b{font:600 16px/1 var(--mono);color:var(--tinta)}
+.pestana.on{background:var(--vino);border-color:var(--vino);color:rgba(255,255,255,.85)}
+.pestana.on b{color:#fff}
+.pestana .flecha{color:var(--tinta3);align-self:center;font-size:13px}
+
+/* ── Sugerencias de la búsqueda tolerante ── */
+.sugerencias{display:flex;flex-direction:column;gap:4px;margin:6px 0 10px;max-height:38vh;overflow:auto}
+.sugerencias button{text-align:left;border:1px solid var(--linea2);background:var(--hoja);border-radius:var(--r-s);padding:10px 12px;font-size:15px;cursor:pointer;color:var(--tinta)}
+.sugerencias button.on{background:var(--vino-tinte);border-color:var(--vino);color:var(--vino);font-weight:600}
+.sugerencias button small{display:block;font:500 11px var(--mono);color:var(--tinta3)}
+.sin-hallar{color:var(--rojo);font-size:14px;font-weight:500;padding:8px 2px}
+
+/* ── Desglose por lote y traslado ── */
+.lotes{display:flex;flex-direction:column;gap:6px;margin:8px 0 12px}
+.lote{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:var(--hoja);border:1px solid var(--linea);border-radius:var(--r-s);padding:9px 12px}
+.lote .quien{font-weight:600;font-size:15px}
+.lote .quien small{display:block;font-weight:400;font-size:12px;color:var(--tinta2)}
+.lote .disp{font:500 12.5px var(--mono);color:var(--tinta2);white-space:nowrap}
+.lote .disp b{font-size:18px;color:var(--tinta)}
+.lote input{width:76px;font:600 18px var(--mono);text-align:center;border:1.5px solid var(--linea2);border-radius:8px;padding:6px;background:var(--hoja2);color:var(--tinta)}
+.lote input:focus{border-color:var(--vino);outline:none}
+.lote input.mal{border-color:var(--rojo);color:var(--rojo)}
+.lote .toma{display:flex;align-items:center;gap:6px}
+.lote .toma .tecla{width:36px;height:36px;font-size:19px}
+.total-paso{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--tinta2);padding:8px 2px}
+.total-paso b{font:600 22px var(--mono);color:var(--vino)}
+.paso-a{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--tinta2);margin-bottom:10px}
+.paso-a .de,.paso-a .a{background:var(--hoja2);border:1px solid var(--linea);border-radius:999px;padding:4px 11px;font-weight:600;color:var(--tinta)}
+.paso-a .a{background:var(--vino-tinte);border-color:var(--vino-medio);color:var(--vino)}
+
+/* ── Barra de progreso (pedidos) ── */
+.progreso{height:8px;border-radius:999px;background:var(--hoja3);overflow:hidden;margin:8px 0 4px}
+.progreso i{display:block;height:100%;background:var(--verde);border-radius:999px;transition:width .2s}
+.progreso-txt{font:500 12px var(--mono);color:var(--tinta2);display:flex;justify-content:space-between}
 
 /* ── Lista / tabla ── */
 .lista{background:var(--hoja);border:1px solid var(--linea);border-radius:var(--r);overflow:hidden;overflow-x:auto}
@@ -131,6 +166,19 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .fila .nombre small{display:block;font:500 11px var(--mono);color:var(--tinta3);margin-top:1px;overflow-wrap:anywhere}
 .fila .sub{grid-area:sub;padding-left:14px;font-size:12.5px;color:var(--tinta2);display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px}
 .fila .apodos,.fila .pres,.fila .min,.fila .ultimo{display:none}
+.fila .cifra{grid-area:stepper;text-align:right;padding-right:2px;cursor:pointer}
+.fila .cifra b{display:block;font:600 22px/1 var(--mono);font-variant-numeric:tabular-nums}
+.fila .cifra small{display:block;font-size:11.5px;color:var(--tinta2);margin-top:2px;max-width:150px;text-align:right}
+.fila .cifra .sello{display:inline-block;margin-top:3px}
+.fila.suave{opacity:.55}
+/* Listas nuevas (muebles, piezas, listos): nombre y color a la izquierda, número a la derecha, explicación y botones abajo */
+.lista.v2 .fila{grid-template-columns:1fr auto;grid-template-areas:"nombre cifra" "sub cifra" "ultimo stepper";row-gap:4px;padding:10px 12px 10px 0}
+.lista.v2 .fila .cifra{grid-area:cifra;align-self:start;padding-top:2px}
+.lista.v2 .fila .cifra small{max-width:120px}
+.lista.v2 .fila .ultimo{display:block;grid-area:ultimo;padding-left:14px;font-size:12.5px;color:var(--tinta2);align-self:center;min-width:0}
+.lista.v2 .fila .ultimo span{display:inline}
+.lista.v2 .fila .stepper{grid-area:stepper;justify-self:end;align-self:center;margin-top:2px}
+.lista.v2 .fila .apodos{display:none}
 .fila .stepper{grid-area:stepper;display:flex;align-items:center;gap:2px}
 .tecla{width:42px;height:42px;border-radius:var(--r-s);border:1px solid var(--linea2);background:var(--hoja2);font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center;user-select:none;color:var(--tinta)}
 .tecla:active,.tecla.on{background:var(--vino);color:#fff;border-color:var(--vino)}
@@ -182,7 +230,11 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .ticket .t-fila{display:flex;justify-content:space-between;gap:10px;padding:2px 0}
 .ticket .t-fila span{color:var(--tinta3);font-size:11px;letter-spacing:.08em}
 .ticket .t-fila b{font-weight:600;text-align:right;overflow-wrap:anywhere}
-.ticket .t-item{display:flex;gap:10px;padding:4px 0;border-bottom:1px dotted var(--linea)}
+.ticket .t-item{display:flex;gap:10px;padding:4px 0;border-bottom:1px dotted var(--linea);align-items:center}
+.ticket .t-ent{font-family:var(--sans);display:flex;align-items:center;gap:4px}
+.ticket .t-ent small{font:500 11px var(--mono);color:var(--tinta2);white-space:nowrap}
+.ticket .t-ent .tecla{width:30px;height:30px;font-size:16px;border-radius:7px}
+.ticket .t-item.hecho .t-desc{text-decoration:line-through;color:var(--tinta3)}
 .ticket .t-item:last-of-type{border-bottom:0}
 .ticket .t-n{min-width:3ch;text-align:right;font-weight:600;color:var(--vino)}
 .ticket .t-desc{flex:1;min-width:0;font-family:var(--sans);font-size:14px;font-weight:500}
@@ -195,6 +247,22 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .p-linea input,.p-linea select{background:var(--hoja);border:1px solid var(--linea2);border-radius:var(--r-s);padding:10px 8px;font-size:15px;min-width:0;color:var(--tinta)}
 .p-linea .p-cant{text-align:center;font:600 16px var(--mono)}
 @media (max-width:560px){.p-linea{grid-template-columns:56px 1fr auto}.p-linea .p-color{grid-column:1/3}}
+
+/* ── Catálogo ── */
+.ficha-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
+.ficha-chips .chip.falta{background:var(--rojo-t);border-color:var(--rojo);color:var(--rojo)}
+.ficha-chips .chip.mdf{background:var(--ambar-t);border-color:var(--ambar);color:var(--ambar)}
+.trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.opcion-si-no{display:flex;gap:6px}
+.opcion-si-no .cat{flex:1;text-align:center}
+
+/* ── Resumen ── */
+.resumen-fila{display:grid;grid-template-columns:1fr;gap:4px;padding:10px 14px;border-bottom:1px solid var(--linea)}
+.resumen-fila .nom b{font-weight:600}
+.resumen-fila .etapas{display:flex;gap:6px;flex-wrap:wrap}
+.resumen-fila .etapas span{font:500 12px var(--mono);background:var(--hoja2);border:1px solid var(--linea);border-radius:6px;padding:3px 7px;color:var(--tinta2)}
+.resumen-fila .etapas span b{color:var(--tinta);font-weight:600}
+.resumen-fila .etapas span.ok{background:var(--verde-t);border-color:var(--verde);color:var(--verde)} .resumen-fila .etapas span.ok b{color:var(--verde)}
 
 /* ── Bitácora ── */
 .dia{font:600 10.5px var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--tinta3);margin:16px 0 6px}
@@ -317,10 +385,20 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
   .tablero{grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
   .tile{padding:13px 15px}
   .tile b{font-size:26px}
-  .buscador{padding:14px 16px;margin-bottom:16px}
-  .pasos{flex-direction:row;align-items:center;flex-wrap:wrap}
-  .paso .titulo{display:none}
-  .campo-busca{min-width:260px;height:42px}
+  .busca-caja{max-width:560px}
+  .campo-busca{height:42px}
+  .pestanas{gap:6px;margin-bottom:16px;flex-wrap:wrap;overflow:visible}
+  .pestana{padding:9px 14px}
+  .fila .cifra{grid-area:cant;text-align:right}
+  .fila .cifra b{font-size:20px}
+  .fila .cifra small{max-width:none;white-space:nowrap}
+  .lista.v2 .encabezado-lista,.lista.v2 .fila{grid-template-columns:minmax(150px,1.3fr) minmax(120px,1fr) 84px minmax(170px,1.5fr) auto;grid-template-areas:"nombre apodos cant ultimo stepper";row-gap:0;padding-top:9px;padding-bottom:9px}
+  .lista.v2 .fila .apodos{display:flex}
+  .lista.v2 .fila .sub{display:none}
+  .lista.v2 .fila .cifra{grid-area:cant;align-self:center;padding-top:0}
+  .lista.v2 .fila .ultimo{display:block;grid-area:ultimo;padding-left:0;font-size:12.5px;align-self:center}
+  .lista.v2 .fila .ultimo span{white-space:normal;display:inline}
+  .lista.v2 .fila .stepper{grid-area:stepper;justify-self:end}
   /* tabla densa */
   .encabezado-lista{display:grid;grid-template-columns:minmax(130px,1.6fr) minmax(90px,1fr) 52px minmax(100px,1.2fr) 72px;gap:8px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--linea);background:var(--hoja2);font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--tinta3)}
   .encabezado-lista .d{text-align:right}

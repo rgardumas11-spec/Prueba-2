@@ -5,7 +5,7 @@ Esto es lo que protege los datos: dice que SOLO puede leer y escribir
 quien haya entrado con una de las cuentas del taller. Sin esto, cualquiera
 con la dirección podría meterse.
 
-Se pegan UNA vez:
+Se pegan UNA vez (y otra vez cuando cambian, como ahora en la versión 2):
   console.firebase.google.com → tu proyecto → Firestore Database →
   pestaña "Rules" (Reglas) → borrar lo que haya → pegar esto → Publish.
 ═══════════════════════════════════════════════════════════════════════════
@@ -19,6 +19,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    match /modelo/{id}     { allow read, write: if delTaller(); }
+    match /lote/{id}       { allow read, write: if delTaller(); }
+    match /pieza/{id}      { allow read, write: if delTaller(); }
     match /producto/{id}   { allow read, write: if delTaller(); }
     match /movimiento/{id} { allow read, write: if delTaller(); }
     match /recado/{id}     { allow read, write: if delTaller(); }
@@ -34,25 +37,45 @@ service cloud.firestore {
 QUÉ GUARDA CADA COSA (Firestore crea las colecciones solo; no hay que
 crear nada a mano)
 
-producto     id, tipo ('mueble' | 'material'), nombre, apodos[] (máx 3),
-             categoria (la sección: Puertas pintadas, Mueble armado,
-             Cubetas, Tambos…), color, marca, codigo, barras,
-             presentacion, litros, cantidad, minimo, activo,
-             creado, tocado, por_quien
+modelo       el catálogo, editable en la app. id (M001, D001…), nombre,
+             familia, tipo ('madera' | 'mdf'), cajones, puertas_grandes,
+             puertas_grandes_luna, puertas_chicas, puertas_chicas_luna,
+             total_puertas, lleva_parches, lleva_respaldo (null = falta
+             dato), activo, creado, actualizado, editado_por
 
-movimiento   id, producto_id, nombre, color, tipo (entrada | salida |
-             conteo | alta | baja), delta, resultado, persona,
-             motivo, origen, hecho_por (quién pintó, armó, maquiló),
-             creado
+lote         muebles en UNA etapa con su origen. modelo_id, modelo, color,
+             etapa ('maquilado' | 'armado' | 'pintado' | 'mdf' |
+             'mdf_pintado'), cantidad, maquilo, armo, pinto[] (hasta 2),
+             creado, actualizado. La llave es determinista (mismo origen
+             → mismo documento), así dos aparatos se suman, no se pisan.
 
-recado       id, texto, de, para, hecho, urgente, vistos{}, creado
+pieza        puertas, cajones y parches por modelo y color. modelo_id,
+             modelo, color, categoria ('puertas_pre_lijadas' |
+             'puertas_lijadas' | 'puertas_con_bisagras' |
+             'puertas_pintadas' | 'cajones_pintados' | 'parches_pintados'),
+             cantidad, minimo, creado, actualizado
 
-pedido       id, cliente, fecha, lineas[] ({modelo, color, cantidad}),
-             notas, estado (pendiente | entregado), de, creado
+producto     material: nombre, apodos[] (máx 3), categoria (Cubetas |
+             Tambos), marca, codigo, barras, presentacion, litros,
+             cantidad, minimo, activo, creado, tocado, por_quien
 
+movimiento   la bitácora. tipo (alta | traslado | ajuste | entrada |
+             salida | baja | catalogo), nombre, color, modelo_id,
+             etapa_de, etapa_a, categoria, delta, resultado,
+             desglose[] ({de, lote_id, cantidad}: de qué lotes salió),
+             hecho_por (quién maquiló / armó / pintó / puso bisagras),
+             persona (quién lo capturó), origen (celular | computadora),
+             motivo, creado (fecha y hora exactas)
+
+pedido       cliente, fecha, lineas[] ({modelo, color, cantidad,
+             entregado}), notas, estado (pendiente | entregado), de, creado
+
+recado       texto, de, para, hecho, urgente, vistos{}, creado
 persona      nombre (es el propio id), creado
 
 Las sumas y restas usan `increment`, que Firestore aplica de su lado: si
 dos personas le pican a lo mismo en el mismo segundo, se suman las dos en
-vez de perderse una. Sin señal, Firestore guarda lo hecho en el aparato y
-lo sube solo al volver la conexión.
+vez de perderse una. Un traslado entre etapas (descontar de un lado y
+sumar al otro) va en UN solo batch: o se hace completo o no se hace.
+Sin señal, Firestore guarda lo hecho en el aparato y lo sube solo al
+volver la conexión.

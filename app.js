@@ -1,8 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Almacén San Bernardo — la pantalla.
-   Muebles y material con − y +, búsqueda guiada (lupa → qué ver → nombre),
-   recados, bitácora, apodos y litros, ajustes con modo práctica y
-   diagnóstico del aparato. Celular y computadora con el mismo código.
+   Muebles por etapa (maquilado → armado → pintado) con traslados que
+   conservan quién hizo cada paso; piezas con equivalencia a muebles;
+   listos para preparar; pedidos en ticket; catálogo editable; material.
+   Celular y computadora con el mismo código. La lógica vive en
+   datos/reglas.js; aquí solo se pregunta y se pinta.
    ═══════════════════════════════════════════════════════════════════════════ */
 "use strict";
 
@@ -13,8 +15,10 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp
 const sinAcento = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const iniciales = n => String(n || "?").trim().split(/\s+/).map(p => p[0]).join("").slice(0,2).toUpperCase();
 const CAT = window.CATALOGO || {};
+const R = window.Reglas;
 const esEscritorio = () => matchMedia("(min-width:1024px)").matches;
 const esApple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const plural = (n, uno, varios) => n + " " + (n === 1 ? uno : varios);
 
 function reloj(iso){ return new Date(iso).toLocaleTimeString("es-MX", {hour:"2-digit", minute:"2-digit"}); }
 function cuando(iso){
@@ -23,7 +27,7 @@ function cuando(iso){
   if (d < 3600) return "hace " + Math.floor(d/60) + " min";
   if (d < 86400) return "hoy " + reloj(iso);
   if (d < 172800) return "ayer " + reloj(iso);
-  return new Date(iso).toLocaleDateString("es-MX", {day:"numeric", month:"short"});
+  return new Date(iso).toLocaleDateString("es-MX", {day:"numeric", month:"short"}) + " " + reloj(iso);
 }
 const hoyIso = () => new Date().toISOString().slice(0,10);
 function isoADma(iso){ if (!iso) return ""; const [a,m,d] = String(iso).slice(0,10).split("-"); return d + "/" + m + "/" + a; }
@@ -38,23 +42,29 @@ function fechaLarga(iso){
 let relojGrito;
 window.grita = function(txt){
   const g = $("#grito"); g.textContent = txt; g.classList.add("on");
-  clearTimeout(relojGrito); relojGrito = setTimeout(() => g.classList.remove("on"), 2600);
+  clearTimeout(relojGrito); relojGrito = setTimeout(() => g.classList.remove("on"), 2800);
 };
 const TINTES = { negro:"#20232a", café:"#6B4A2F", cafe:"#6B4A2F", nogal:"#8A5A32", gris:"#8D9299", blanco:"#F3F3EF",
   rojo:"#A63122", rosa:"#D98BA5", azul:"#3C6FA8", amarillo:"#D9A521", crema:"#E4D6B4", "iron-man":"#A63122" };
 function tinte(c){ c = sinAcento(c); for (const k in TINTES) if (c.startsWith(sinAcento(k))) return TINTES[k]; return "#9AA095"; }
+const chipColor = c => c ? '<span class="chip color"><span class="punto" style="background:' + tinte(c) + '"></span>' + esc(c) + '</span>' : "";
 
 /* ── estado de pantalla ── */
 const E = {
   yo: localStorage.getItem("alm.yo") || "",
   vista: "muebles",
-  productos: [], movimientos: [], recados: [], personas: [], pedidos: [],
-  busca: { mueble: {cat:"", q:""}, material: {cat:"", q:""} },
-  sel: null,
+  modelos: [], lotes: [], piezas: [], productos: [], movimientos: [], recados: [], personas: [], pedidos: [],
+  etapa: "maquilado", catPieza: "puertas_pre_lijadas", catMat: "",
+  busca: {}, buscaAbierta: {},
+  sel: null,                       // {tipo, ...llaves}
   pend: new Map(), relojes: new Map(),
-  apodosCambios: new Map()
+  apodosCambios: new Map(),
+  ordenPedidos: localStorage.getItem("alm.ordenPedidos") || "desc",
+  ultimoQuien: {}
 };
 const origen = () => (esEscritorio() ? "computadora" : "celular");
+const modeloDe = id => E.modelos.find(m => m.id === id) || null;
+const modelosActivos = () => E.modelos.filter(m => m.activo !== false).sort((a,b) => sinAcento(a.nombre) < sinAcento(b.nombre) ? -1 : 1);
 
 /* ═══════════════ persona ═══════════════ */
 function pintaYo(){
@@ -91,180 +101,441 @@ function pintaPulso(){
   else if (Almacen.modo === "nube" && Almacen.enLinea){ t.textContent = "Compartido en vivo con el taller" + (Almacen.pendientes ? " · subiendo " + Almacen.pendientes + " pendientes" : ""); }
   else if (Almacen.modo === "nube"){ p.classList.add("sin"); t.textContent = "Sin señal: lo que hagas se guarda aquí y se sube al volver"; }
   else if (Almacen.hayNube){ p.classList.add("local"); t.textContent = "Sin sesión: guardando solo en este aparato"; }
-  else { p.classList.add("local"); t.textContent = "Guardando solo en este aparato (falta conectar Firebase)"; }
+  else { p.classList.add("local"); t.textContent = "Guardando solo en este aparato"; }
   $("#practicaBanda").hidden = !Almacen.practica;
   $("#yoEstadoLat").textContent = Almacen.practica ? "PRÁCTICA" : (Almacen.modo === "nube" ? "EN LÍNEA" : "LOCAL");
   $("#entrada").hidden = !Almacen.necesitaEntrar();
 }
 
-/* ═══════════════ productos: ayudantes ═══════════════ */
-const vivo = p => Math.max(0, Number(p.cantidad || 0) + (E.pend.get(p.id) || 0));
-const titulo = p => (p.tipo === "material" && p.apodos && p.apodos[0]) ? p.apodos[0] : p.nombre;
-const subtitulo = p => p.tipo === "material"
-  ? [p.nombre !== titulo(p) ? p.nombre : "", p.marca, p.codigo].filter(Boolean).join(" · ")
-  : [p.categoria].filter(Boolean).join(" · ");
-const estado = p => { const n = vivo(p), m = Number(p.minimo || 0); return n === 0 ? "cero" : (m > 0 && n <= m ? "bajo" : ""); };
-const catsDe = tipo => tipo === "material" ? (CAT.categoriasMaterial || []) : (CAT.categoriasMueble || []);
-const catDe = p => p.tipo === "material" ? (p.presentacion === "Tambo" ? "Tambos" : p.presentacion === "Cubeta" ? "Cubetas" : (p.categoria || "")) : (p.categoria || "");
-function coincide(p, q){
-  if (!q) return true;
-  const pajar = sinAcento([p.nombre, ...(p.apodos || []), p.color, p.categoria, p.codigo, p.barras, p.marca].join(" "));
-  return sinAcento(q).split(/\s+/).filter(Boolean).every(w => pajar.includes(w));
+/* ═══════════════ búsqueda: un icono, se despliega al tocarlo ═══════════════ */
+const TEXTO_BUSCA = { muebles:"Mueble o color…", piezas:"Mueble o color…", listos:"Mueble o color…", pedidos:"Cliente o mueble…", resumen:"Mueble o color…", material:"Nombre o apodo…", bitacora:"Mueble, persona…", catalogo:"Nombre del modelo…" };
+function pintaLupa(vista){
+  const caja = $("#busca-" + vista); const btn = $('[data-lupa="' + vista + '"]'); if (!caja) return;
+  const abierta = !!E.buscaAbierta[vista];
+  caja.hidden = !abierta; if (btn) btn.classList.toggle("on", abierta);
+  if (!abierta){ caja.innerHTML = ""; return; }
+  if (!caja.querySelector("input")){
+    caja.innerHTML = '<label class="campo-busca"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input placeholder="' + esc(TEXTO_BUSCA[vista] || "Buscar…") + '" value="' + esc(E.busca[vista] || "") + '" autocomplete="off"><button class="limpia" aria-label="Cerrar">×</button></label>';
+    const inp = caja.querySelector("input");
+    inp.oninput = () => { E.busca[vista] = inp.value; pintaVista(vista); };
+    inp.onkeydown = e => { if (e.key === "Escape") cierraLupa(vista); };
+    caja.querySelector(".limpia").onclick = () => cierraLupa(vista);
+  }
 }
-function ultimoMov(p){
-  return E.movimientos.filter(m => m.producto_id === p.id).sort((a,b) => a.creado < b.creado ? 1 : -1)[0];
-}
-function filtrados(tipo){
-  const b = E.busca[tipo];
-  let l = E.productos.filter(p => p.tipo === tipo && p.activo !== false);
-  if (b.cat) l = l.filter(p => catDe(p) === b.cat);
-  l = l.filter(p => coincide(p, b.q));
-  const orden = ["cero","bajo",""];
-  return l.sort((a,b) => (sinAcento(titulo(a)) > sinAcento(titulo(b)) ? 1 : sinAcento(titulo(a)) < sinAcento(titulo(b)) ? -1 : sinAcento(a.color) > sinAcento(b.color) ? 1 : -1));
-}
+function abreLupa(vista){ E.buscaAbierta[vista] = true; pintaLupa(vista); const i = $("#busca-" + vista + " input"); if (i){ i.focus(); } }
+function cierraLupa(vista){ E.buscaAbierta[vista] = false; E.busca[vista] = ""; pintaLupa(vista); pintaVista(vista); }
+$$("[data-lupa]").forEach(b => b.onclick = () => { const v = b.dataset.lupa; if (E.buscaAbierta[v]) cierraLupa(v); else abreLupa(v); });
+const q = vista => (E.busca[vista] || "").trim();
+const sinHallar = (vista, que) => '<div class="vacio"><b>No encontré ' + que + '</b><p>Nada se parece a «' + esc(q(vista)) + '». Revisa cómo se escribe o prueba con menos letras.</p></div>';
 
-/* ═══════════════ tablero ═══════════════ */
-function pintaTablero(tipo){
-  const caja = $(tipo === "mueble" ? "#tableroMueble" : "#tableroMaterial");
-  const todos = E.productos.filter(p => p.tipo === tipo && p.activo !== false);
-  const bajos = todos.filter(p => estado(p) === "bajo"), ceros = todos.filter(p => estado(p) === "cero");
-  const hoy = new Date().toISOString().slice(0,10);
-  const movsHoy = E.movimientos.filter(m => (m.creado || "").slice(0,10) === hoy && todos.some(p => p.id === m.producto_id));
-  const ultimo = movsHoy.sort((a,b) => a.creado < b.creado ? 1 : -1)[0];
-  const cuarto = tipo === "material"
-    ? '<div class="tile"><small>Litros en almacén</small><b>' + Math.round(todos.reduce((s,p) => s + vivo(p) * Number(p.litros || 0), 0)) + '</b><span>en ' + todos.reduce((s,p) => s + vivo(p), 0) + ' envases</span></div>'
-    : '<div class="tile"><small>Piezas en total</small><b>' + todos.reduce((s,p) => s + vivo(p), 0) + '</b><span>' + todos.length + ' artículos</span></div>';
-  caja.innerHTML =
-    '<div class="tile amb" data-filtro="bajo"><small>Por acabarse</small><b>' + bajos.length + '</b><span>' + esc(bajos.slice(0,3).map(titulo).join(" · ") || "ninguno") + '</span></div>' +
-    '<div class="tile roj" data-filtro="cero"><small>' + (tipo === "material" ? "Sin envases" : "Sin piezas") + '</small><b>' + ceros.length + '</b><span>' + esc(ceros.slice(0,3).map(titulo).join(" · ") || "ninguno") + '</span></div>' +
-    '<div class="tile ver"><small>Movimientos hoy</small><b>' + movsHoy.length + '</b><span>' + (ultimo ? "último: " + esc(ultimo.persona) + ", " + reloj(ultimo.creado) : "nada todavía") + '</span></div>' + cuarto;
-  caja.querySelectorAll("[data-filtro]").forEach(t => t.onclick = () => { E.busca[tipo].q = t.dataset.filtro === "bajo" ? "" : ""; E.busca[tipo].soloEstado = t.dataset.filtro; pintaBuscador(tipo); pintaLista(tipo); });
+/* ═══════════════ agrupar lotes y piezas por mueble + color ═══════════════ */
+const llaveMC = x => x.modelo_id + "|" + (x.color || "");
+function gruposMueble(etapa){
+  const g = {};
+  E.lotes.filter(l => l.etapa === etapa && Number(l.cantidad) > 0).forEach(l => {
+    const k = llaveMC(l);
+    (g[k] = g[k] || { k, modelo_id: l.modelo_id, modelo: l.modelo, color: l.color || "", etapa, total: 0, lotes: [] });
+    g[k].total += Number(l.cantidad); g[k].lotes.push(l);
+  });
+  return Object.values(g).map(x => { x.lotes.sort((a,b) => b.cantidad - a.cantidad); return x; })
+    .sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1);
 }
+const totalEtapa = etapa => E.lotes.filter(l => l.etapa === etapa).reduce((s,l) => s + Number(l.cantidad || 0), 0);
+const piezasDe = (modelo_id, color) => { const r = {}; E.piezas.filter(p => p.modelo_id === modelo_id && (p.color || "") === (color || "")).forEach(p => { r[p.categoria] = Number(p.cantidad || 0); }); return r; };
+const vivoPieza = p => Math.max(0, Number(p.cantidad || 0) + (E.pend.get(p.id) || 0));
 
-/* ═══════════════ buscador guiado ═══════════════ */
-function pintaBuscador(tipo){
-  const caja = $(tipo === "mueble" ? "#buscadorMueble" : "#buscadorMaterial");
-  const b = E.busca[tipo];
-  const cats = catsDe(tipo);
-  caja.innerHTML =
-    '<div class="pasos">' +
-      '<div class="paso"><span class="num">1</span><button class="lupa" data-lupa aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><span class="titulo">¿Qué quieres ver?</span></div>' +
-      '<div class="paso"><span class="num">2</span><div class="cats">' +
-        '<button class="cat' + (!b.cat ? " on" : "") + '" data-cat="">' + (tipo === "material" ? "Todo el material" : "Todo") + '</button>' +
-        cats.map(c => '<button class="cat' + (b.cat === c ? " on" : "") + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join("") +
-      '</div></div>' +
-      '<div class="paso" style="flex:1"><span class="num">3</span>' +
-        '<label class="campo-busca"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg>' +
-        '<input data-q placeholder="' + (tipo === "material" ? "Escribe el nombre o el apodo…" : "Escribe el mueble o el color…") + '" value="' + esc(b.q) + '" autocomplete="off">' +
-        (b.q ? '<button class="limpia" data-limpia aria-label="Limpiar">×</button>' : "") + '</label>' +
-        '<button class="btn" data-barras title="Leer código de barras"><svg viewBox="0 0 24 24"><path d="M4 5v14M8 5v14M11 5v14M15 5v14M20 5v14M18 5v14" stroke-width="1.4"/></svg><span class="solo-escritorio-inline">Código</span></button>' +
-      '</div>' +
-    '</div>' +
-    '<p class="pista" data-pista></p>';
-  caja.querySelector("[data-lupa]").onclick = () => { caja.querySelector("[data-q]").focus(); caja.scrollIntoView({block:"start", behavior:"smooth"}); };
-  caja.querySelectorAll("[data-cat]").forEach(c => c.onclick = () => { b.cat = c.dataset.cat; b.soloEstado = ""; pintaBuscador(tipo); pintaLista(tipo); caja.querySelector("[data-q]").focus(); });
-  const inp = caja.querySelector("[data-q]");
-  inp.oninput = () => { b.q = inp.value; b.soloEstado = ""; pintaLista(tipo); const l = caja.querySelector("[data-limpia]"); if (l) l.hidden = !b.q; };
-  inp.onkeydown = e => {
-    if (e.key === "Escape"){ b.q = ""; pintaBuscador(tipo); pintaLista(tipo); }
-    const primero = filtrados(tipo)[0];
-    if (!primero) return;
-    if (e.key === "+" || e.key === "="){ e.preventDefault(); mueve(primero.id, +1); }
-    if (e.key === "-"){ e.preventDefault(); mueve(primero.id, -1); }
-    if (e.key === "Enter"){ e.preventDefault(); selecciona(primero.id); }
-  };
-  const lim = caja.querySelector("[data-limpia]"); if (lim) lim.onclick = () => { b.q = ""; pintaBuscador(tipo); pintaLista(tipo); };
-  caja.querySelector("[data-barras]").onclick = () => hojaBarras(tipo);
+/* ═══════════════ MUEBLES ═══════════════ */
+function pintaEtapasMueble(){
+  const caja = $("#etapasMueble");
+  const tabs = [];
+  R.CADENA.madera.forEach((e, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(e, R.ETAPAS[e].corto, totalEtapa(e), E.etapa === e)); });
+  tabs.push('<span class="flecha" style="margin:0 6px">|</span>');
+  R.CADENA.mdf.forEach((e, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(e, R.ETAPAS[e].corto, totalEtapa(e), E.etapa === e)); });
+  caja.innerHTML = tabs.join("");
+  caja.querySelectorAll("[data-etapa]").forEach(b => b.onclick = () => { E.etapa = b.dataset.etapa; E.sel = null; pintaMuebles(); if (esEscritorio()) pintaDetalle(); });
+  const total = E.lotes.reduce((s,l) => s + Number(l.cantidad || 0), 0);
+  $("#resumenMueble").textContent = total ? plural(total, "mueble en producción", "muebles en producción") : "";
 }
-
-/* ═══════════════ lista ═══════════════ */
-function pintaLista(tipo){
-  const caja = $(tipo === "mueble" ? "#listaMueble" : "#listaMaterial");
-  const b = E.busca[tipo];
-  let l = filtrados(tipo);
-  if (b.soloEstado) l = l.filter(p => estado(p) === b.soloEstado);
-  const total = E.productos.filter(p => p.tipo === tipo && p.activo !== false);
-  $(tipo === "mueble" ? "#resumenMueble" : "#resumenMaterial").textContent =
-    total.length ? total.length + (tipo === "mueble" ? " artículos · " : " productos · ") + total.reduce((s,p) => s + vivo(p), 0) + (tipo === "mueble" ? " piezas" : " envases") : "";
-  const pista = $(tipo === "mueble" ? "#buscadorMueble [data-pista]" : "#buscadorMaterial [data-pista]");
-  if (pista) pista.innerHTML = (b.q || b.cat || b.soloEstado)
-    ? l.length + " resultado" + (l.length === 1 ? "" : "s") + (b.cat ? " en <b>" + esc(b.cat) + "</b>" : "") + (b.soloEstado ? " <b>" + (b.soloEstado === "bajo" ? "por acabarse" : "sin existencia") + "</b>" : "") + (esEscritorio() ? " · <b>+</b> suma · <b>−</b> resta · <b>Enter</b> abre el detalle" : "")
-    : (esEscritorio() ? "Escribe y aparece. <b>+</b> suma · <b>−</b> resta al primero de la lista · <b>Enter</b> abre el detalle" : "Toca el nombre para ver el detalle");
-  pintaTablero(tipo);
-
-  if (!total.length){
-    caja.innerHTML = '<div class="aviso"><b>' + (tipo === "mueble" ? "Empieza tu inventario de muebles" : "Empieza tu lista de material") + '</b>' +
-      '<p>' + (tipo === "mueble" ? "Agrega el primer artículo con el botón de abajo. El catálogo te completa modelo y color." : "Puedo dejarte los 6 productos que ya identificamos por sus etiquetas para que solo pongas cuántos hay.") + '</p>' +
-      '<div class="pie">' + (tipo === "material" ? '<button class="btn vino" data-sembrar>Poner los 6 productos</button>' : "") + '<button class="btn" data-nuevo="' + tipo + '">＋ Agregar</button></div></div>';
-    const s = caja.querySelector("[data-sembrar]"); if (s) s.onclick = sembrarMaterial;
-    caja.querySelector("[data-nuevo]").onclick = () => hojaProducto(tipo);
+const pestana = (id, txt, n, on) => '<button class="pestana' + (on ? " on" : "") + '" data-etapa="' + id + '"><b>' + n + '</b>' + esc(txt) + '</button>';
+function pintaMuebles(){
+  pintaEtapasMueble();
+  const caja = $("#listaMueble");
+  const et = R.ETAPAS[E.etapa];
+  let l = gruposMueble(E.etapa);
+  const total = l.reduce((s,g) => s + g.total, 0);
+  if (q("muebles")) l = Busca.busca(q("muebles"), l, g => g.modelo + " " + g.color);
+  if (!l.length){
+    if (q("muebles")){ caja.innerHTML = sinHallar("muebles", "ese mueble en " + et.nombre.toLowerCase()); return; }
+    const ant = etapaAnterior(E.etapa);
+    caja.innerHTML = '<div class="vacio"><b>No hay muebles en «' + esc(et.nombre) + '»</b><p>' +
+      (R.admiteAlta(E.etapa) ? "Aquí entran los muebles recién hechos. Regístralos con el botón de arriba." : "Aquí solo llegan los que pasan desde «" + esc(R.ETAPAS[ant].nombre) + "»: abre uno allá y toca «Pasar a " + esc(et.corto.toLowerCase()) + "».") + '</p>' +
+      (R.admiteAlta(E.etapa) ? '<button class="btn vino" data-registrar="mueble">＋ Registrar</button>' : '<button class="btn" data-ir-etapa="' + ant + '">Ver ' + esc(R.ETAPAS[ant].nombre.toLowerCase()) + '</button>') + '</div>';
+    const b = caja.querySelector("[data-registrar]"); if (b) b.onclick = () => hojaRegistrarMueble();
+    const v = caja.querySelector("[data-ir-etapa]"); if (v) v.onclick = () => { E.etapa = v.dataset.irEtapa; pintaMuebles(); };
     return;
   }
-  if (!l.length){ caja.innerHTML = '<div class="vacio"><b>Nada por aquí</b><p>Ningún ' + (tipo === "mueble" ? "artículo" : "producto") + ' coincide. Prueba con menos letras o quita el filtro.</p></div>'; return; }
-
-  const enc = tipo === "material"
-    ? '<div class="encabezado-lista"><span>Producto</span><span>Otros apodos</span><span class="pres">Presentación</span><span class="d">Hay</span><span class="d min">Mín</span><span>Último movimiento</span><span></span></div>'
-    : '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="pres">Categoría</span><span class="d">Hay</span><span class="d min">Mín</span><span>Último movimiento</span><span></span></div>';
-  caja.innerHTML = enc + l.map(p => filaHtml(p)).join("");
-  caja.querySelectorAll("[data-mas]").forEach(x => x.onclick = e => { e.stopPropagation(); mueve(x.dataset.mas, +1); });
-  caja.querySelectorAll("[data-menos]").forEach(x => x.onclick = e => { e.stopPropagation(); mueve(x.dataset.menos, -1); });
-  caja.querySelectorAll("[data-abre]").forEach(x => x.onclick = () => selecciona(x.dataset.abre, true));
+  caja.innerHTML = '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="d">Hay</span><span>Quién</span><span></span></div>' +
+    l.map(g => {
+      const sel = E.sel && E.sel.tipo === "mueble" && E.sel.k === g.k && E.sel.etapa === g.etapa;
+      const porFirma = {}; g.lotes.forEach(x => { const f = R.firmaDe(x); porFirma[f] = (porFirma[f] || 0) + Number(x.cantidad); });
+      const quien = Object.keys(porFirma).map(f => esc(f) + " " + porFirma[f]).join(" · ");
+      return '<div class="fila' + (sel ? " sel" : "") + '" data-abre="' + esc(g.k) + '">' +
+        '<div class="nombre"><b>' + esc(g.modelo) + '</b></div>' +
+        '<div class="sub">' + chipColor(g.color) + '</div>' +
+        '<div class="apodos">' + chipColor(g.color) + '</div>' +
+        '<div class="cifra"><b>' + g.total + '</b><small>' + (g.total === 1 ? "mueble" : "muebles") + '</small></div>' +
+        '<div class="ultimo"><span>' + quien + '</span></div>' +
+        '<div class="stepper">' + (R.siguienteEtapa(g.etapa) ? '<button class="btn suave" data-pasar="' + esc(g.k) + '">Pasar a ' + esc(R.ETAPAS[R.siguienteEtapa(g.etapa)].corto.toLowerCase()) + ' →</button>' : '<span class="sello ver">final</span>') + '</div>' +
+      '</div>';
+    }).join("");
+  caja.querySelectorAll("[data-abre]").forEach(f => f.onclick = e => { if (e.target.closest("[data-pasar]")) return; seleccionaMueble(f.dataset.abre, true); });
+  caja.querySelectorAll("[data-pasar]").forEach(b => b.onclick = e => { e.stopPropagation(); const g = gruposMueble(E.etapa).find(x => x.k === b.dataset.pasar); if (g) hojaPasar(g); });
+  if (!total && !q("muebles")) return;
 }
-function filaHtml(p){
-  const n = vivo(p), est = estado(p), u = ultimoMov(p);
-  const sello = est === "cero" ? '<span class="sello roj">se acabó</span>' : est === "bajo" ? '<span class="sello amb">pocos</span>' : "";
-  const colorChip = p.tipo === "mueble" && p.color ? '<span class="chip color"><span class="punto" style="background:' + tinte(p.color) + '"></span>' + esc(p.color) + '</span>' : "";
-  const otros = (p.apodos || []).slice(p.tipo === "material" ? 1 : 0);
-  const pres = p.tipo === "material" ? esc((p.presentacion || "") + (p.litros ? " " + p.litros + " L" : "")) : esc(p.categoria || "");
-  return '<div class="fila ' + est + (E.sel === p.id ? " sel" : "") + '" data-id="' + p.id + '">' +
-    '<div class="nombre" data-abre="' + p.id + '"><b>' + esc(titulo(p)) + '</b>' + (subtitulo(p) ? '<small>' + esc(subtitulo(p)) + '</small>' : "") + '</div>' +
-    '<div class="sub">' + colorChip + (p.tipo === "mueble" && p.categoria ? '<span>' + esc(p.categoria) + '</span>' : "") + (p.tipo === "material" ? '<span>' + pres + '</span>' : "") + (p.minimo ? '<span style="color:var(--tinta3)">mín ' + p.minimo + '</span>' : "") + sello + '</div>' +
-    '<div class="apodos">' + (p.tipo === "mueble" ? colorChip : otros.map(a => '<span class="chip">' + esc(a) + '</span>').join("")) + '</div>' +
-    '<div class="pres">' + pres + '</div>' +
-    '<div class="cant' + (E.pend.get(p.id) ? " pend" : "") + '" data-abre="' + p.id + '">' + n + (esEscritorio() ? sello : "") + '</div>' +
-    '<div class="min">' + (p.minimo || "—") + '</div>' +
-    '<div class="ultimo">' + (u ? '<b>' + esc(u.persona || "?") + ' · ' + esc(cuando(u.creado)) + '</b><span>' + (u.delta > 0 ? "+" : "") + (u.delta || "") + (u.motivo ? " · " + esc(u.motivo) : "") + '</span>' : '<span>sin movimientos</span>') + '</div>' +
-    '<div class="stepper"><button class="tecla" data-menos="' + p.id + '" aria-label="Quitar uno"' + (n === 0 ? " disabled" : "") + '>−</button>' +
-      '<span class="cant' + (E.pend.get(p.id) ? " pend" : "") + '">' + n + '</span>' +
-      '<button class="tecla" data-mas="' + p.id + '" aria-label="Agregar uno">＋</button></div>' +
-    '</div>';
+function etapaAnterior(etapa){ const c = R.cadenaDe(R.ETAPAS[etapa].tipo); const i = c.indexOf(etapa); return i > 0 ? c[i-1] : c[0]; }
+function seleccionaMueble(k, abrir){
+  E.sel = { tipo: "mueble", k, etapa: E.etapa };
+  pintaMuebles();
+  if (esEscritorio()) pintaDetalle(); else if (abrir) abreHoja(htmlDetalleMueble(), montaDetalleMueble);
+}
+function grupoSel(){ return E.sel && E.sel.tipo === "mueble" ? gruposMueble(E.sel.etapa).find(g => g.k === E.sel.k) : null; }
+function htmlDetalleMueble(){
+  const g = grupoSel(); if (!g) return '<div class="detalle-vacio">Ese mueble ya no está en esta etapa</div>';
+  const et = R.ETAPAS[g.etapa]; const sig = R.siguienteEtapa(g.etapa);
+  const movs = E.movimientos.filter(m => m.modelo_id === g.modelo_id && (m.color || "") === g.color && !m.pieza_id).sort((a,b) => a.creado < b.creado ? 1 : -1).slice(0,10);
+  return '<h2>' + esc(g.modelo) + '</h2><div class="sub">' + chipColor(g.color) + ' &nbsp;' + esc(et.nombre) + '</div>' +
+    '<div class="grande-cant"><b>' + g.total + '</b><span>' + (g.total === 1 ? "mueble" : "muebles") + '<br>' + esc(et.nombre.toLowerCase().replace("mueble ", "")) + '</span></div>' +
+    '<h3>De quién vienen</h3><div class="lotes">' + g.lotes.map(l => '<div class="lote"><div class="quien">' + esc(R.firmaDe(l)) + '<small>' + esc(R.origenDe(l)) + ' · desde ' + esc(cuando(l.creado)) + '</small></div><div class="disp"><b>' + l.cantidad + '</b></div></div>').join("") + '</div>' +
+    '<div class="acciones">' + (sig ? '<button class="btn vino" data-pasar>Pasar a ' + esc(R.ETAPAS[sig].corto.toLowerCase()) + ' →</button>' : "") + '<button class="btn" data-corrige>Corregir cantidad</button></div>' +
+    '<h3>Últimos movimientos</h3>' + (movs.length ? movs.map(lineaMov).join("") : '<div class="vacio" style="padding:14px"><p style="margin:0">Todavía nada.</p></div>');
+}
+function montaDetalleMueble(caja){
+  const g = grupoSel(); if (!g) return;
+  const p = caja.querySelector("[data-pasar]"); if (p) p.onclick = () => hojaPasar(g);
+  caja.querySelector("[data-corrige]").onclick = () => hojaCorregirLote(g);
 }
 
-/* Sumar o restar: la pantalla cambia al instante; los toques seguidos se
-   juntan en un solo envío. */
-function mueve(id, d){
+/* Registrar muebles recién hechos (solo en la primera etapa) */
+function hojaRegistrarMueble(){
   if (!exigeYo()) return;
-  const p = E.productos.find(x => x.id === id); if (!p) return;
-  if (d < 0 && vivo(p) === 0) return;
-  E.pend.set(id, (E.pend.get(id) || 0) + d);
-  pintaLista(p.tipo); if (E.sel === id) pintaDetalle();
-  clearTimeout(E.relojes.get(id));
-  E.relojes.set(id, setTimeout(() => confirma(id), 650));
+  let modelo = null, color = "", quien = [];
+  const pinta = () => {
+    const tipo = R.tipoDe(modelo); const etapa = R.primeraEtapa(tipo); const regla = R.responsables(etapa);
+    const h = $("#panel");
+    h.querySelector("#rEtapa").innerHTML = modelo ? 'Entra a <span class="a">' + esc(R.ETAPAS[etapa].nombre) + '</span>' + (tipo === "mdf" ? ' <small style="color:var(--tinta3)">(es de MDF: Fernando lo maquila y arma)</small>' : "") : "";
+    h.querySelector("#rQuien").innerHTML = modelo ? '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>' : "";
+    h.querySelectorAll("#rQuien [data-n]").forEach(b => b.onclick = () => { quien = quien.includes(b.dataset.n) ? [] : [b.dataset.n]; pinta(); });
+    h.querySelector("#rOk").disabled = !(modelo && color && quien.length && Number(h.querySelector("#rCant").value) > 0);
+  };
+  abreHoja('<h3>Registrar muebles</h3><p class="guia">Muebles recién hechos. Los de las etapas siguientes no se registran aquí: se pasan desde la etapa anterior.</p>' +
+    campoModelo() + campoColor() +
+    '<label class="campo"><span>Cuántos</span><input id="rCant" type="number" inputmode="numeric" min="1" value="1"></label>' +
+    '<div class="paso-a" id="rEtapa"></div><div id="rQuien"></div>' +
+    '<button class="btn vino grande" id="rOk" disabled style="margin-top:14px">Registrar</button>',
+    h => {
+      montaCampoModelo(h, m => { modelo = m; if (m && m.tipo === "mdf") quien = ["Fernando"]; else quien = []; pinta(); });
+      h.querySelector("#rColor").onchange = e => { color = e.target.value; pinta(); };
+      h.querySelector("#rCant").oninput = pinta;
+      h.querySelector("#rOk").onclick = async () => {
+        const n = Math.floor(Number(h.querySelector("#rCant").value || 0)); if (!modelo || !color || !quien.length || n <= 0) return;
+        const tipo = R.tipoDe(modelo); const etapa = R.primeraEtapa(tipo);
+        const d = { modelo_id: modelo.id, modelo: modelo.nombre, color, etapa, cantidad: n };
+        if (tipo === "mdf"){ d.maquilo = quien[0]; d.armo = quien[0]; } else d.maquilo = quien[0];
+        await Almacen.registra(d, E.yo, origen());
+        cierraHoja(); E.etapa = etapa; E.sel = { tipo:"mueble", k: modelo.id + "|" + color, etapa }; irA("muebles"); pintaTodo();
+        grita("Listo: " + plural(n, "mueble", "muebles") + " en " + R.ETAPAS[etapa].nombre.toLowerCase());
+      };
+    });
 }
-async function confirma(id, motivo){
+/* Campo de modelo con búsqueda tolerante: se escribe y se escoge de la lista; nunca queda texto libre */
+function campoModelo(){ return '<label class="campo"><span>Mueble</span><input id="rModelo" placeholder="Escribe el nombre, aunque sea aproximado…" autocomplete="off"></label><div class="sugerencias" id="rSug" hidden></div>'; }
+function campoColor(sel){ const grupos = CAT.gruposColor || []; return '<label class="campo"><span>Color</span><select id="rColor"><option value="">— escoge el color —</option>' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (sel === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("") + '</select></label>'; }
+function montaCampoModelo(h, alEscoger){
+  const inp = h.querySelector("#rModelo"), sug = h.querySelector("#rSug");
+  let escogido = null;
+  const pinta = () => {
+    const t = inp.value.trim();
+    if (escogido && escogido.nombre === t){ sug.hidden = true; return; }
+    escogido = null; alEscoger(null);
+    if (!t){ sug.hidden = true; return; }
+    const l = Busca.busca(t, modelosActivos(), m => m.nombre).slice(0, 8);
+    sug.hidden = false;
+    sug.innerHTML = l.length ? l.map(m => '<button data-id="' + esc(m.id) + '">' + esc(m.nombre) + '<small>' + (m.tipo === "mdf" ? "MDF · " : "") + fichaCorta(m) + '</small></button>').join("") : '<div class="sin-hallar">No encontré ese mueble. Revisa el nombre o agrégalo en Catálogo.</div>';
+    sug.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { escogido = modeloDe(b.dataset.id); inp.value = escogido.nombre; sug.hidden = true; alEscoger(escogido); });
+  };
+  inp.oninput = pinta;
+  inp.onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); const b = sug.querySelector("[data-id]"); if (b && !sug.hidden) b.click(); } };
+  inp.focus();
+}
+function fichaCorta(m){
+  const p = [];
+  p.push(m.cajones == null ? "cajones: falta dato" : plural(m.cajones, "cajón", "cajones"));
+  p.push(m.total_puertas == null ? "puertas: falta dato" : plural(m.total_puertas, "puerta", "puertas"));
+  if (m.lleva_parches === true) p.push("lleva parches");
+  return p.join(" · ");
+}
+
+/* Pasar a la siguiente etapa: se escoge de qué lotes salen, con tope */
+function hojaPasar(g){
+  if (!exigeYo()) return;
+  const sig = R.siguienteEtapa(g.etapa); if (!sig) return;
+  const regla = R.responsables(sig);
+  let quien = [];
+  const rec = E.ultimoQuien[sig]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
+  const tomas = {}; g.lotes.forEach(l => tomas[l.id] = 0);
+  abreHoja('<h3>Pasar a ' + esc(R.ETAPAS[sig].corto.toLowerCase()) + '</h3>' +
+    '<div class="paso-a"><span class="de">' + esc(R.ETAPAS[g.etapa].nombre) + '</span> → <span class="a">' + esc(R.ETAPAS[sig].nombre) + '</span></div>' +
+    '<p class="guia"><b>' + esc(g.modelo) + '</b> · ' + esc(g.color) + ' · hay <b>' + g.total + '</b>. Escribe cuántos salen de cada quien.</p>' +
+    '<div class="lotes">' + g.lotes.map(l => '<div class="lote" data-lote="' + esc(l.id) + '"><div class="quien">' + esc(R.firmaDe(l)) + '<small>' + esc(R.origenDe(l)) + '</small><div class="disp">' + l.cantidad + ' disponibles</div></div>' +
+      '<div class="toma"><button class="tecla" data-menos>−</button><input type="number" inputmode="numeric" min="0" max="' + l.cantidad + '" value="0"><button class="tecla" data-mas>＋</button></div></div>').join("") + '</div>' +
+    '<div class="total-paso"><span>Pasan en total</span><b id="pTotal">0</b></div>' +
+    (regla ? '<div class="grupo-h">' + esc(regla.pregunta) + (regla.max > 1 ? " · hasta " + regla.max : "") + '</div><div class="cats" id="pQuien">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>'
+           : '<p class="guia" style="margin-top:6px">Aquí no se pregunta quién: el lote sigue siendo de ' + esc(g.lotes.map(l => R.firmaDe(l)).filter((x,i,a) => a.indexOf(x) === i).join(" y ")) + '.</p>') +
+    '<p class="sin-hallar" id="pError" hidden></p>' +
+    '<button class="btn vino grande" id="pOk" disabled style="margin-top:12px">Confirmar</button>',
+    h => {
+      const filas = Array.from(h.querySelectorAll("[data-lote]"));
+      const total = () => filas.reduce((s,f) => s + (Number(f.querySelector("input").value) || 0), 0);
+      const revisa = () => {
+        let mal = false;
+        filas.forEach(f => { const l = g.lotes.find(x => x.id === f.dataset.lote); const inp = f.querySelector("input"); const v = Number(inp.value) || 0; const m = v < 0 || v > l.cantidad || !Number.isInteger(v); inp.classList.toggle("mal", m); if (m) mal = true; });
+        const t = total(); h.querySelector("#pTotal").textContent = t;
+        const err = h.querySelector("#pError");
+        const excedido = filas.find(f => (Number(f.querySelector("input").value) || 0) > g.lotes.find(x => x.id === f.dataset.lote).cantidad);
+        if (excedido){ const l = g.lotes.find(x => x.id === excedido.dataset.lote); err.hidden = false; err.textContent = R.firmaDe(l) + ": solo hay " + l.cantidad + " disponibles"; } else err.hidden = true;
+        h.querySelector("#pOk").disabled = mal || t <= 0 || (regla && !quien.length);
+      };
+      filas.forEach(f => {
+        const l = g.lotes.find(x => x.id === f.dataset.lote); const inp = f.querySelector("input");
+        f.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(0, (Number(inp.value) || 0) - 1); revisa(); };
+        f.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(l.cantidad, (Number(inp.value) || 0) + 1); revisa(); };
+        inp.oninput = revisa; inp.onfocus = () => inp.select();
+      });
+      h.querySelectorAll("#pQuien [data-n]").forEach(b => b.onclick = () => {
+        const n = b.dataset.n;
+        if (quien.includes(n)) quien = quien.filter(x => x !== n);
+        else if (regla.max === 1) quien = [n];
+        else if (quien.length < regla.max) quien.push(n);
+        else return grita("Máximo " + regla.max + " nombres");
+        h.querySelectorAll("#pQuien [data-n]").forEach(x => x.classList.toggle("on", quien.includes(x.dataset.n)));
+        revisa();
+      });
+      // Si solo hay un lote, se propone pasar todo
+      if (filas.length === 1){ filas[0].querySelector("input").value = g.lotes[0].cantidad; }
+      revisa();
+      h.querySelector("#pOk").onclick = async () => {
+        const d = { etapa_a: sig, tomas: filas.map(f => ({ lote_id: f.dataset.lote, cantidad: Number(f.querySelector("input").value) || 0 })) };
+        if (regla){ if (regla.campo === "armo") d.armo = quien[0]; if (regla.campo === "pinto") d.pinto = quien.slice(); E.ultimoQuien[sig] = { nombres: quien.slice(), t: Date.now() }; }
+        try {
+          const mov = await Almacen.traslada(d, E.yo, origen());
+          cierraHoja(); grita(plural(mov.delta, "mueble pasó", "muebles pasaron") + " a " + R.ETAPAS[sig].nombre.toLowerCase());
+          E.etapa = sig; E.sel = { tipo:"mueble", k: g.k, etapa: sig }; pintaTodo();
+        } catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; }
+      };
+    });
+}
+function hojaCorregirLote(g){
+  if (!exigeYo()) return;
+  abreHoja('<h3>Corregir cantidad</h3><p class="guia">' + esc(g.modelo) + ' · ' + esc(g.color) + ' · ' + esc(R.ETAPAS[g.etapa].nombre) + '. Solo para arreglar un error o anotar una merma; los muebles que avanzan se pasan con «Pasar a…».</p>' +
+    '<div class="lotes">' + g.lotes.map(l => '<div class="lote" data-lote="' + esc(l.id) + '"><div class="quien">' + esc(R.firmaDe(l)) + '<small>' + esc(R.origenDe(l)) + '</small><div class="disp">ahora ' + l.cantidad + '</div></div><div class="toma"><input type="number" inputmode="numeric" min="0" value="' + l.cantidad + '"></div></div>').join("") + '</div>' +
+    '<label class="campo"><span>Motivo (obligatorio)</span><input id="cMot" placeholder="se contó mal, se rompió uno…"></label>' +
+    '<button class="btn vino grande" id="cOk">Guardar</button>',
+    h => {
+      h.querySelector("#cOk").onclick = async () => {
+        const mot = h.querySelector("#cMot").value.trim(); if (!mot) return grita("Escribe el motivo");
+        let cambios = 0;
+        for (const f of h.querySelectorAll("[data-lote]")){
+          const l = g.lotes.find(x => x.id === f.dataset.lote); const nuevo = Math.max(0, Math.floor(Number(f.querySelector("input").value) || 0));
+          if (nuevo !== l.cantidad){ await Almacen.ajustaLote(l.id, nuevo - l.cantidad, E.yo, mot, origen()); cambios++; }
+        }
+        cierraHoja(); grita(cambios ? "Corregido" : "Sin cambios"); pintaTodo();
+      };
+    });
+}
+
+/* ═══════════════ PIEZAS ═══════════════ */
+function gruposPieza(cat){
+  return E.piezas.filter(p => p.categoria === cat && vivoPieza(p) > 0).map(p => Object.assign({}, p, { k: llaveMC(p) }))
+    .sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1);
+}
+const totalCat = cat => E.piezas.filter(p => p.categoria === cat).reduce((s,p) => s + vivoPieza(p), 0);
+function pintaEtapasPieza(){
+  const caja = $("#etapasPieza");
+  const tabs = [];
+  R.CADENA_PUERTAS.forEach((c, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(c, R.PIEZAS[c].nombre, totalCat(c), E.catPieza === c)); });
+  tabs.push('<span class="flecha" style="margin:0 6px">|</span>');
+  ["cajones_pintados", "parches_pintados"].forEach(c => tabs.push(pestana(c, R.PIEZAS[c].nombre, totalCat(c), E.catPieza === c)));
+  caja.innerHTML = tabs.join("");
+  caja.querySelectorAll("[data-etapa]").forEach(b => b.onclick = () => { E.catPieza = b.dataset.etapa; E.sel = null; pintaPiezas(); if (esEscritorio()) pintaDetalle(); });
+}
+function pintaPiezas(){
+  pintaEtapasPieza();
+  const caja = $("#listaPieza"); const cat = E.catPieza; const P = R.PIEZAS[cat]; const sig = R.siguientePieza(cat);
+  let l = gruposPieza(cat);
+  if (q("piezas")) l = Busca.busca(q("piezas"), l, p => p.modelo + " " + p.color);
+  $("#resumenPieza").textContent = "";
+  if (!l.length){
+    if (q("piezas")){ caja.innerHTML = sinHallar("piezas", "eso en " + P.nombre.toLowerCase()); return; }
+    const ant = R.CADENA_PUERTAS[R.CADENA_PUERTAS.indexOf(cat) - 1];
+    caja.innerHTML = '<div class="vacio"><b>No hay ' + esc(P.nombre.toLowerCase()) + '</b><p>' + (R.admiteAltaPieza(cat) ? "Regístralas con el botón de arriba." : "Aquí solo llegan las que pasan desde «" + esc(R.PIEZAS[ant].nombre) + "».") + '</p></div>';
+    return;
+  }
+  caja.innerHTML = '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="d">Hay</span><span>Equivale a</span><span></span></div>' +
+    l.map(p => {
+      const m = modeloDe(p.modelo_id); const n = vivoPieza(p);
+      const txt = R.textoEquivalencia(n, cat, m);
+      const eq = txt.replace(/^\d+ \w+( ·| =)?\s?/, "");
+      const sel = E.sel && E.sel.tipo === "pieza" && E.sel.id === p.id;
+      return '<div class="fila' + (sel ? " sel" : "") + (E.pend.get(p.id) ? " pend" : "") + '" data-abre="' + esc(p.id) + '">' +
+        '<div class="nombre"><b>' + esc(p.modelo) + '</b></div>' +
+        '<div class="sub">' + chipColor(p.color) + '</div>' +
+        '<div class="apodos">' + chipColor(p.color) + '</div>' +
+        '<div class="cifra"><b>' + n + '</b><small>' + esc(txt.replace(/^\d+ /, "").split(/ [=·] /)[0]) + '</small></div>' +
+        '<div class="ultimo"><span>' + esc(eq) + '</span></div>' +
+        '<div class="stepper">' +
+          (R.admiteAltaPieza(cat) || !sig
+            ? '<button class="tecla" data-menos="' + esc(p.id) + '"' + (n === 0 ? " disabled" : "") + '>−</button><span class="cant">' + n + '</span><button class="tecla" data-mas="' + esc(p.id) + '"' + (R.admiteAltaPieza(cat) ? "" : " disabled title='Aquí solo se llega pasando desde la sección anterior'") + '>＋</button>'
+            : '<button class="btn suave" data-pasar="' + esc(p.id) + '">' + (sig === "puertas_con_bisagras" ? "Poner bisagras" : "Pasar a " + esc(R.PIEZAS[sig].corto.toLowerCase())) + ' →</button>') +
+          (sig && R.admiteAltaPieza(cat) ? '<button class="btn suave" data-pasar="' + esc(p.id) + '" style="margin-left:6px">Pasar →</button>' : "") +
+        '</div></div>';
+    }).join("");
+  caja.querySelectorAll("[data-abre]").forEach(f => f.onclick = e => { if (e.target.closest("button")) return; seleccionaPieza(f.dataset.abre, true); });
+  caja.querySelectorAll("[data-mas]").forEach(b => b.onclick = e => { e.stopPropagation(); muevePieza(b.dataset.mas, +1); });
+  caja.querySelectorAll("[data-menos]").forEach(b => b.onclick = e => { e.stopPropagation(); muevePieza(b.dataset.menos, -1); });
+  caja.querySelectorAll("[data-pasar]").forEach(b => b.onclick = e => { e.stopPropagation(); const p = E.piezas.find(x => x.id === b.dataset.pasar); if (p) hojaPasarPieza(p); });
+}
+function seleccionaPieza(id, abrir){
+  E.sel = { tipo:"pieza", id }; pintaPiezas();
+  if (esEscritorio()) pintaDetalle(); else if (abrir) abreHoja(htmlDetallePieza(), montaDetallePieza);
+}
+function htmlDetallePieza(){
+  const p = E.piezas.find(x => x.id === (E.sel || {}).id); if (!p) return '<div class="detalle-vacio">Esa pieza ya no está</div>';
+  const m = modeloDe(p.modelo_id); const n = vivoPieza(p); const cat = p.categoria; const sig = R.siguientePieza(cat);
+  const movs = E.movimientos.filter(x => x.pieza_id === p.id || (x.modelo_id === p.modelo_id && (x.color || "") === (p.color || "") && x.categoria === cat)).sort((a,b) => a.creado < b.creado ? 1 : -1).slice(0,10);
+  const e = R.equivalencia(n, R.piezasPorMueble(m, cat));
+  return '<h2>' + esc(p.modelo) + '</h2><div class="sub">' + chipColor(p.color) + ' &nbsp;' + esc(R.PIEZAS[cat].nombre) + '</div>' +
+    '<div class="grande-cant"><b>' + n + '</b><span>' + esc(R.PIEZAS[cat].unidad) + (cat !== "parches_pintados" ? "<br>" + (e.sinFicha ? "sin ficha: no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad : "= <b style='font-size:13px;color:var(--tinta2)'>" + plural(e.muebles, "mueble", "muebles") + "</b>" + (e.faltan ? "<br>falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para el siguiente" : "")) : "") + '</span></div>' +
+    '<dl class="ficha">' + (m ? '<dt>Por mueble</dt><dd>' + esc(fichaCorta(m)) + '</dd>' : '<dt>Ficha</dt><dd style="color:var(--rojo)">este modelo no está en el catálogo</dd>') + '</dl>' +
+    '<div class="acciones">' + (sig ? '<button class="btn vino" data-pasar>' + (sig === "puertas_con_bisagras" ? "Poner bisagras" : "Pasar a " + esc(R.PIEZAS[sig].corto.toLowerCase())) + ' →</button>' : "") + '<button class="btn" data-corrige>Corregir cantidad</button>' + (e.sinFicha && m ? '<button class="btn" data-ficha>Completar ficha</button>' : "") + '</div>' +
+    '<h3>Últimos movimientos</h3>' + (movs.length ? movs.map(lineaMov).join("") : '<div class="vacio" style="padding:14px"><p style="margin:0">Todavía nada.</p></div>');
+}
+function montaDetallePieza(caja){
+  const p = E.piezas.find(x => x.id === (E.sel || {}).id); if (!p) return;
+  const b = caja.querySelector("[data-pasar]"); if (b) b.onclick = () => hojaPasarPieza(p);
+  caja.querySelector("[data-corrige]").onclick = () => hojaCorregirPieza(p);
+  const f = caja.querySelector("[data-ficha]"); if (f) f.onclick = () => hojaModelo(modeloDe(p.modelo_id));
+}
+/* − y + en piezas: los toques seguidos se juntan en un envío */
+function muevePieza(id, d){
+  if (!exigeYo()) return;
+  const p = E.piezas.find(x => x.id === id); if (!p) return;
+  if (d < 0 && vivoPieza(p) === 0) return;
+  E.pend.set(id, (E.pend.get(id) || 0) + d);
+  pintaPiezas(); if (E.sel && E.sel.id === id) pintaDetalle();
+  clearTimeout(E.relojes.get(id));
+  E.relojes.set(id, setTimeout(() => confirmaPieza(id), 650));
+}
+async function confirmaPieza(id){
   const d = E.pend.get(id); if (!d) return;
   E.pend.delete(id);
-  const p = E.productos.find(x => x.id === id);
-  const regla = (p && d > 0 && p.tipo === "mueble") ? (CAT.quienHizo || {})[p.categoria] : null;
+  const p = E.piezas.find(x => x.id === id); if (!p) return;
+  const regla = d > 0 ? R.responsables(p.categoria) : null;
   let hechoPor = "";
   if (regla){
-    const nombres = await pideQuienHizo(p, d, regla);
-    if (nombres === null){ pintaLista(p.tipo); if (E.sel === id) pintaDetalle(); return; }   // canceló: no pasa nada
+    const nombres = await pideQuien(regla, "+" + d + " · " + p.modelo + " · " + p.color + " · " + R.PIEZAS[p.categoria].nombre, p.categoria);
+    if (nombres === null){ pintaPiezas(); if (E.sel && E.sel.id === id) pintaDetalle(); return; }
     hechoPor = nombres.join(" y ");
-    motivo = (motivo ? motivo + " · " : "") + "hizo: " + hechoPor;
   }
-  await Almacen.ajusta(id, d, E.yo, motivo || "", origen(), hechoPor);
+  await Almacen.ajustaPieza(p, d, E.yo, "", origen(), hechoPor);
+}
+function hojaRegistrarPieza(){
+  if (!exigeYo()) return;
+  let modelo = null, color = "", quien = [];
+  const cats = ["puertas_pre_lijadas", "cajones_pintados", "parches_pintados"];
+  let cat = cats.includes(E.catPieza) ? E.catPieza : "puertas_pre_lijadas";
+  const pinta = () => {
+    const h = $("#panel"); const regla = R.responsables(cat);
+    h.querySelectorAll("[data-cat]").forEach(b => b.classList.toggle("on", b.dataset.cat === cat));
+    h.querySelector("#rQuien").innerHTML = regla ? '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>' : "";
+    h.querySelectorAll("#rQuien [data-n]").forEach(b => b.onclick = () => { quien = quien.includes(b.dataset.n) ? [] : [b.dataset.n]; pinta(); });
+    h.querySelector("#rEq").textContent = modelo && Number(h.querySelector("#rCant").value) > 0 ? R.textoEquivalencia(Math.floor(Number(h.querySelector("#rCant").value)), cat, modelo) : "";
+    h.querySelector("#rOk").disabled = !(modelo && color && Number(h.querySelector("#rCant").value) > 0 && (!regla || quien.length));
+  };
+  abreHoja('<h3>Registrar piezas</h3><p class="guia">Las puertas entran como «pre lijadas» y de ahí se van pasando (lijadas → con bisagras → pintadas). Cajones y parches entran ya pintados.</p>' +
+    '<div class="grupo-h">Qué son</div><div class="cats" style="margin-bottom:12px">' + cats.map(c => '<button class="cat" data-cat="' + c + '">' + esc(R.PIEZAS[c].nombre) + '</button>').join("") + '</div>' +
+    campoModelo() + campoColor() +
+    '<label class="campo"><span>Cuántas</span><input id="rCant" type="number" inputmode="numeric" min="1" value="1"></label><p class="guia" id="rEq"></p>' +
+    '<div id="rQuien"></div><button class="btn vino grande" id="rOk" disabled style="margin-top:14px">Registrar</button>',
+    h => {
+      h.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { cat = b.dataset.cat; quien = []; pinta(); });
+      montaCampoModelo(h, m => { modelo = m; pinta(); });
+      h.querySelector("#rColor").onchange = e => { color = e.target.value; pinta(); };
+      h.querySelector("#rCant").oninput = pinta;
+      pinta();
+      h.querySelector("#rOk").onclick = async () => {
+        const n = Math.floor(Number(h.querySelector("#rCant").value || 0)); if (!modelo || !color || n <= 0) return;
+        await Almacen.ajustaPieza({ modelo_id: modelo.id, modelo: modelo.nombre, color, categoria: cat }, n, E.yo, "", origen(), quien.join(" y "), "alta");
+        cierraHoja(); E.catPieza = cat; E.sel = { tipo:"pieza", id: Almacen.clavePieza({ modelo_id: modelo.id, color, categoria: cat }) }; irA("piezas"); pintaTodo();
+        grita("Listo: " + n + " " + R.PIEZAS[cat].unidad);
+      };
+    });
+}
+function hojaPasarPieza(p){
+  if (!exigeYo()) return;
+  const sig = R.siguientePieza(p.categoria); if (!sig) return;
+  const regla = R.responsables(sig); let quien = [];
+  const rec = E.ultimoQuien[sig]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
+  const n = vivoPieza(p);
+  abreHoja('<h3>' + (sig === "puertas_con_bisagras" ? "Poner bisagras" : "Pasar a " + esc(R.PIEZAS[sig].corto.toLowerCase())) + '</h3>' +
+    '<div class="paso-a"><span class="de">' + esc(R.PIEZAS[p.categoria].nombre) + '</span> → <span class="a">' + esc(R.PIEZAS[sig].nombre) + '</span></div>' +
+    '<p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(p.color) + ' · hay <b>' + n + '</b> disponibles.</p>' +
+    '<div class="lote"><div class="quien">Cuántas pasan</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="1" max="' + n + '" value="' + n + '"><button class="tecla" data-mas>＋</button></div></div>' +
+    (regla ? '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats" id="pQuien">' + regla.opciones.map(x => '<button class="cat' + (quien.includes(x) ? " on" : "") + '" data-n="' + esc(x) + '">' + esc(x) + '</button>').join("") + '</div>' : "") +
+    '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" style="margin-top:12px">Confirmar</button>',
+    h => {
+      const inp = h.querySelector("#pCant");
+      const revisa = () => { const v = Number(inp.value) || 0; inp.classList.toggle("mal", v > n || v < 1); const err = h.querySelector("#pError"); err.hidden = v <= n; err.textContent = "Solo hay " + n + " disponibles"; h.querySelector("#pOk").disabled = v > n || v < 1 || (regla && !quien.length); };
+      h.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(1, (Number(inp.value) || 0) - 1); revisa(); };
+      h.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(n, (Number(inp.value) || 0) + 1); revisa(); };
+      inp.oninput = revisa; inp.onfocus = () => inp.select();
+      h.querySelectorAll("#pQuien [data-n]").forEach(b => b.onclick = () => { quien = quien.includes(b.dataset.n) ? [] : [b.dataset.n]; h.querySelectorAll("#pQuien [data-n]").forEach(x => x.classList.toggle("on", quien.includes(x.dataset.n))); revisa(); });
+      revisa();
+      h.querySelector("#pOk").onclick = async () => {
+        try {
+          if (regla) E.ultimoQuien[sig] = { nombres: quien.slice(), t: Date.now() };
+          const mov = await Almacen.trasladaPieza({ pieza_id: p.id, cantidad: Number(inp.value), categoria_a: sig, hecho_por: quien.join(" y ") }, E.yo, origen());
+          cierraHoja(); grita(mov.delta + " " + R.PIEZAS[sig].unidad + " → " + R.PIEZAS[sig].nombre.toLowerCase());
+          E.catPieza = sig; E.sel = { tipo:"pieza", id: mov.pieza_id }; pintaTodo();
+        } catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; }
+      };
+    });
+}
+function hojaCorregirPieza(p){
+  if (!exigeYo()) return;
+  const n = vivoPieza(p);
+  abreHoja('<h3>Corregir cantidad</h3><p class="guia">' + esc(p.modelo) + ' · ' + esc(p.color) + ' · ' + esc(R.PIEZAS[p.categoria].nombre) + ' · ahora hay <b>' + n + '</b>.</p>' +
+    '<label class="campo"><span>Contado</span><input id="cCant" type="number" inputmode="numeric" min="0" value="' + n + '"></label>' +
+    '<label class="campo"><span>Motivo (obligatorio)</span><input id="cMot" placeholder="conteo físico, se rompieron 2…"></label>' +
+    '<button class="btn vino grande" id="cOk">Guardar</button>',
+    h => {
+      h.querySelector("#cCant").focus(); h.querySelector("#cCant").select();
+      h.querySelector("#cOk").onclick = async () => {
+        const mot = h.querySelector("#cMot").value.trim(); if (!mot) return grita("Escribe el motivo");
+        const nuevo = Math.max(0, Math.floor(Number(h.querySelector("#cCant").value || 0)));
+        cierraHoja();
+        if (nuevo !== n){ E.pend.delete(p.id); await Almacen.ajustaPieza(p, nuevo - n, E.yo, mot, origen(), "", "ajuste"); }
+        grita("Guardado"); pintaTodo();
+      };
+    });
 }
 
-/* "¿Quién lo hizo?" — solo al sumar en las secciones que lo piden. Recuerda
-   la última respuesta de esa sección unos minutos para que sea un solo toque. */
-E.ultimoQuien = {};
-function pideQuienHizo(p, d, regla){
+/* "¿Quién?" para el + de cajones (y cualquier sección que lo pida) */
+function pideQuien(regla, texto, llave){
   return new Promise(resolve => {
-    const rec = E.ultimoQuien[p.categoria];
-    let marcados = (rec && Date.now() - rec.t < 15*60*1000) ? rec.nombres.slice() : [];
+    const rec = E.ultimoQuien[llave];
+    let marcados = (rec && Date.now() - rec.t < 15*60*1000) ? rec.nombres.filter(n => regla.opciones.includes(n)) : [];
     const max = regla.max || 1;
-    abreHoja('<h3>¿Quién lo hizo?</h3><p class="guia"><b>+' + d + '</b> · ' + esc(titulo(p)) + (p.color ? " · " + esc(p.color) : "") + ' · ' + esc(p.categoria) + (max > 1 ? " · puedes marcar hasta " + max : "") + '</p>' +
+    abreHoja('<h3>' + esc(regla.pregunta) + '</h3><p class="guia">' + esc(texto) + (max > 1 ? " · hasta " + max : "") + '</p>' +
       '<div class="cats" id="quienCats" style="margin-bottom:16px">' + regla.opciones.map(n => '<button class="cat' + (marcados.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '" style="font-size:15px;padding:10px 16px">' + esc(n) + '</button>').join("") + '</div>' +
       '<button class="btn vino grande" id="quienOk"' + (marcados.length ? "" : " disabled") + '>Listo</button>' +
       '<button class="btn fantasma grande" id="quienNo" style="margin-top:8px">Cancelar</button>',
@@ -277,33 +548,136 @@ function pideQuienHizo(p, d, regla){
           h.querySelectorAll("[data-n]").forEach(x => x.classList.toggle("on", marcados.includes(x.dataset.n)));
           ok.disabled = !marcados.length;
         });
-        ok.onclick = () => { E.ultimoQuien[p.categoria] = {nombres: marcados.slice(), t: Date.now()}; cierraHojaSin(); resolve(marcados); };
+        ok.onclick = () => { E.ultimoQuien[llave] = {nombres: marcados.slice(), t: Date.now()}; cierraHojaSin(); resolve(marcados); };
         h.querySelector("#quienNo").onclick = () => { cierraHojaSin(); resolve(null); };
-        $("#telon").dataset.cancela = "1";
       });
     E.resolverQuien = () => resolve(null);
   });
 }
 function cierraHojaSin(){ E.resolverQuien = null; cierraHoja(); }
 
-/* ═══════════════ detalle ═══════════════ */
-function selecciona(id, abrir){
-  E.sel = id;
+/* ═══════════════ LISTOS PARA PREPARAR ═══════════════ */
+function calculaListos(){
+  const r = [];
+  ["pintado", "mdf_pintado"].forEach(et => gruposMueble(et).forEach(g => {
+    const m = modeloDe(g.modelo_id);
+    const res = R.listos(m, g.total, piezasDe(g.modelo_id, g.color));
+    r.push(Object.assign({ modelo: g.modelo, color: g.color, modelo_id: g.modelo_id, k: g.k, etapa: et, m }, res));
+  }));
+  return r.sort((a,b) => b.listos - a.listos || (sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1));
+}
+function pintaListos(){
+  const caja = $("#listaListos");
+  let l = calculaListos();
+  const total = l.reduce((s,x) => s + x.listos, 0);
+  $("#resumenListos").textContent = l.length ? plural(total, "mueble listo", "muebles listos") : "";
+  $("#nListos").hidden = !total; $("#nListos").textContent = total;
+  if (q("listos")) l = Busca.busca(q("listos"), l, x => x.modelo + " " + x.color);
+  if (!l.length){ caja.innerHTML = q("listos") ? sinHallar("listos", "ese mueble") : '<div class="vacio"><b>Todavía no hay muebles pintados</b><p>Cuando un mueble llegue a «Mueble pintado», aquí se revisa si ya tiene sus puertas, cajones y parches para prepararlo.</p></div>'; return; }
+  caja.innerHTML = '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="d">Listos</span><span>Por qué</span><span></span></div>' + l.map(x => {
+    const sel = E.sel && E.sel.tipo === "listo" && E.sel.k === x.k;
+    const sellos = (x.faltanParches ? '<span class="sello amb">faltan parches</span>' : "") + (x.sinFicha ? '<span class="sello roj">sin ficha completa</span>' : "");
+    const porque = x.sinFicha ? "no se puede calcular" : x.listos < x.pintados ? "faltan " + x.limitante : "completos";
+    return '<div class="fila' + (sel ? " sel" : "") + (x.listos === 0 ? " suave" : "") + '" data-abre="' + esc(x.k) + '" data-etapa="' + x.etapa + '">' +
+      '<div class="nombre"><b>' + esc(x.modelo) + '</b></div><div class="sub">' + chipColor(x.color) + '</div><div class="apodos">' + chipColor(x.color) + '</div>' +
+      '<div class="cifra"><b>' + x.listos + '</b><small>' + (x.listos === 1 ? "listo" : "listos") + ' de ' + x.pintados + '</small></div>' +
+      '<div class="ultimo"><span>' + esc(porque) + '</span> ' + sellos + '</div><div class="stepper"></div></div>';
+  }).join("");
+  caja.querySelectorAll("[data-abre]").forEach(f => f.onclick = () => { E.sel = { tipo:"listo", k: f.dataset.abre, etapa: f.dataset.etapa }; pintaListos(); if (esEscritorio()) pintaDetalle(); else abreHoja(htmlDetalleListo(), montaDetalleListo); });
+}
+function htmlDetalleListo(){
+  const x = calculaListos().find(y => y.k === (E.sel || {}).k); if (!x) return '<div class="detalle-vacio">Ya no está</div>';
+  return '<h2>' + esc(x.modelo) + '</h2><div class="sub">' + chipColor(x.color) + '</div>' +
+    '<div class="grande-cant"><b>' + x.listos + '</b><span>' + (x.listos === 1 ? "listo" : "listos") + ' para preparar<br>de ' + x.pintados + ' pintados</span></div>' +
+    (x.faltanParches ? '<div class="candado" style="margin-bottom:10px"><span>Faltan parches</span></div>' : "") +
+    '<h3>Cómo se calculó</h3>' + x.detalle.map(d => '<div class="linea"><span class="det">' + esc(d) + '</span></div>').join("") +
+    (x.m ? '<div class="acciones" style="margin-top:12px"><button class="btn" data-ficha>Ver ficha en Catálogo</button></div>' : "");
+}
+function montaDetalleListo(caja){ const x = calculaListos().find(y => y.k === (E.sel || {}).k); const b = caja.querySelector("[data-ficha]"); if (b && x) b.onclick = () => hojaModelo(x.m); }
+
+/* ═══════════════ RESUMEN (solo consulta; nada se cuenta dos veces) ═══════════════ */
+function pintaResumen(){
+  const caja = $("#listaResumen");
+  const g = {};
+  E.lotes.filter(l => Number(l.cantidad) > 0).forEach(l => { const k = llaveMC(l); (g[k] = g[k] || { k, modelo: l.modelo, modelo_id: l.modelo_id, color: l.color || "", etapas: {}, piezas: {} }).etapas[l.etapa] = (g[k].etapas[l.etapa] || 0) + Number(l.cantidad); });
+  E.piezas.filter(p => vivoPieza(p) > 0).forEach(p => { const k = llaveMC(p); (g[k] = g[k] || { k, modelo: p.modelo, modelo_id: p.modelo_id, color: p.color || "", etapas: {}, piezas: {} }).piezas[p.categoria] = vivoPieza(p); });
+  const listos = calculaListos();
+  let l = Object.values(g).sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1);
+  $("#resumenResumen").textContent = l.length ? plural(l.length, "mueble con existencia", "muebles con existencia") : "";
+  if (q("resumen")) l = Busca.busca(q("resumen"), l, x => x.modelo + " " + x.color);
+  if (!l.length){ caja.innerHTML = q("resumen") ? sinHallar("resumen", "ese mueble") : '<div class="vacio"><b>Sin existencias todavía</b></div>'; return; }
+  caja.innerHTML = l.map(x => {
+    const li = listos.find(y => y.k === x.k);
+    const chips = Object.keys(R.ETAPAS).filter(e => x.etapas[e]).map(e => '<span><b>' + x.etapas[e] + '</b> ' + esc(R.ETAPAS[e].nombre.toLowerCase().replace("mueble ", "").replace("mueble de ", "")) + '</span>');
+    if (li && li.listos) chips.push('<span class="ok"><b>' + li.listos + '</b> listos</span>');
+    const pz = Object.keys(R.PIEZAS).filter(c => x.piezas[c]).map(c => '<span><b>' + x.piezas[c] + '</b> ' + esc(R.PIEZAS[c].nombre.toLowerCase()) + '</span>');
+    return '<div class="resumen-fila"><div class="nom"><b>' + esc(x.modelo) + '</b> ' + chipColor(x.color) + '</div><div class="etapas">' + (chips.join("") || '<span>sin muebles</span>') + '</div>' + (pz.length ? '<div class="etapas">' + pz.join("") + '</div>' : "") + '</div>';
+  }).join("");
+}
+
+/* ═══════════════ MATERIAL ═══════════════ */
+const vivo = p => Math.max(0, Number(p.cantidad || 0) + (E.pend.get(p.id) || 0));
+const titulo = p => (p.apodos && p.apodos[0]) ? p.apodos[0] : p.nombre;
+const estado = p => { const n = vivo(p), m = Number(p.minimo || 0); return n === 0 ? "cero" : (m > 0 && n <= m ? "bajo" : ""); };
+const catDe = p => p.presentacion === "Tambo" ? "Tambos" : p.presentacion === "Cubeta" ? "Cubetas" : (p.categoria || "");
+const materiales = () => E.productos.filter(p => p.tipo === "material" && p.activo !== false);
+function pintaMaterial(){
+  const caja = $("#listaMaterial"); const tabs = $("#catsMaterial");
+  const todos = materiales();
+  tabs.innerHTML = ['', ...(CAT.categoriasMaterial || [])].map(c => '<button class="pestana' + (E.catMat === c ? " on" : "") + '" data-cat="' + esc(c) + '"><b>' + (c ? todos.filter(p => catDe(p) === c) : todos).reduce((s,p) => s + vivo(p), 0) + '</b>' + esc(c || "Todo") + '</button>').join("");
+  tabs.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { E.catMat = b.dataset.cat; pintaMaterial(); });
+  let l = todos.filter(p => !E.catMat || catDe(p) === E.catMat);
+  if (q("material")) l = Busca.busca(q("material"), l, p => [p.nombre, ...(p.apodos || []), p.marca, p.codigo, p.barras].filter(Boolean).join(" "));
+  l.sort((a,b) => sinAcento(titulo(a)) < sinAcento(titulo(b)) ? -1 : 1);
+  $("#resumenMaterial").textContent = todos.length ? plural(todos.reduce((s,p) => s + vivo(p), 0), "envase", "envases") + " · " + Math.round(todos.reduce((s,p) => s + vivo(p) * Number(p.litros || 0), 0)) + " L" : "";
+  const bajos = todos.filter(p => estado(p)).length; $("#nMat").hidden = !bajos; $("#nMat").textContent = bajos;
+  if (!todos.length){
+    caja.innerHTML = '<div class="aviso"><b>Empieza tu lista de material</b><p>Puedo dejarte los 6 productos que ya identificamos por sus etiquetas para que solo pongas cuántos hay.</p><div class="pie"><button class="btn vino" data-sembrar>Poner los 6 productos</button><button class="btn" data-nuevo="material">＋ Agregar</button></div></div>';
+    caja.querySelector("[data-sembrar]").onclick = sembrarMaterial; caja.querySelector("[data-nuevo]").onclick = () => hojaProducto();
+    return;
+  }
+  if (!l.length){ caja.innerHTML = q("material") ? sinHallar("material", "ese producto") : '<div class="vacio"><b>Nada en ' + esc(E.catMat.toLowerCase()) + '</b></div>'; return; }
+  caja.innerHTML = '<div class="encabezado-lista"><span>Producto</span><span>Otros apodos</span><span class="d">Hay</span><span>Último movimiento</span><span></span></div>' + l.map(p => {
+    const n = vivo(p), est = estado(p), u = E.movimientos.filter(m => m.producto_id === p.id).sort((a,b) => a.creado < b.creado ? 1 : -1)[0];
+    const sello = est === "cero" ? '<span class="sello roj">se acabó</span>' : est === "bajo" ? '<span class="sello amb">pocos</span>' : "";
+    const otros = (p.apodos || []).slice(1);
+    const sel = E.sel && E.sel.tipo === "material" && E.sel.id === p.id;
+    return '<div class="fila ' + est + (sel ? " sel" : "") + '" data-id="' + p.id + '">' +
+      '<div class="nombre" data-abre="' + p.id + '"><b>' + esc(titulo(p)) + '</b>' + (p.nombre !== titulo(p) ? '<small>' + esc(p.nombre) + '</small>' : "") + '</div>' +
+      '<div class="sub"><span>' + esc(catDe(p)) + (p.litros ? " · " + p.litros + " L" : "") + '</span>' + sello + '</div>' +
+      '<div class="apodos">' + otros.map(a => '<span class="chip">' + esc(a) + '</span>').join("") + '</div>' +
+      '<div class="cant' + (E.pend.get(p.id) ? " pend" : "") + '" data-abre="' + p.id + '">' + n + (esEscritorio() ? sello : "") + '</div>' +
+      '<div class="ultimo">' + (u ? '<b>' + esc(u.persona || "?") + ' · ' + esc(cuando(u.creado)) + '</b><span>' + (u.delta > 0 ? "+" : "") + (u.delta || "") + (u.motivo ? " · " + esc(u.motivo) : "") + '</span>' : '<span>sin movimientos</span>') + '</div>' +
+      '<div class="stepper"><button class="tecla" data-menos="' + p.id + '"' + (n === 0 ? " disabled" : "") + '>−</button><span class="cant' + (E.pend.get(p.id) ? " pend" : "") + '">' + n + '</span><button class="tecla" data-mas="' + p.id + '">＋</button></div></div>';
+  }).join("");
+  caja.querySelectorAll("[data-mas]").forEach(x => x.onclick = e => { e.stopPropagation(); mueve(x.dataset.mas, +1); });
+  caja.querySelectorAll("[data-menos]").forEach(x => x.onclick = e => { e.stopPropagation(); mueve(x.dataset.menos, -1); });
+  caja.querySelectorAll("[data-abre]").forEach(x => x.onclick = () => seleccionaMaterial(x.dataset.abre, true));
+}
+function mueve(id, d){
+  if (!exigeYo()) return;
   const p = E.productos.find(x => x.id === id); if (!p) return;
-  pintaLista(p.tipo);
-  if (esEscritorio()) pintaDetalle(); else if (abrir) abreHoja(htmlDetalle(p), montaDetalle);
+  if (d < 0 && vivo(p) === 0) return;
+  E.pend.set(id, (E.pend.get(id) || 0) + d);
+  pintaMaterial(); if (E.sel && E.sel.id === id) pintaDetalle();
+  clearTimeout(E.relojes.get(id));
+  E.relojes.set(id, setTimeout(() => confirma(id), 650));
 }
-function pintaDetalle(){
-  const caja = $("#detalle");
-  const p = E.productos.find(x => x.id === E.sel);
-  if (!p){ caja.innerHTML = '<div class="detalle-vacio">Escoge un renglón para ver su detalle</div>'; return; }
-  caja.innerHTML = htmlDetalle(p); montaDetalle(caja);
+async function confirma(id, motivo){
+  const d = E.pend.get(id); if (!d) return;
+  E.pend.delete(id);
+  await Almacen.ajusta(id, d, E.yo, motivo || "", origen());
 }
-function htmlDetalle(p){
+function seleccionaMaterial(id, abrir){
+  E.sel = { tipo:"material", id }; pintaMaterial();
+  if (esEscritorio()) pintaDetalle(); else if (abrir) abreHoja(htmlDetalleMaterial(), montaDetalleMaterial);
+}
+function htmlDetalleMaterial(){
+  const p = E.productos.find(x => x.id === (E.sel || {}).id); if (!p) return '<div class="detalle-vacio">Ya no está</div>';
   const n = vivo(p);
   const movs = E.movimientos.filter(m => m.producto_id === p.id).sort((a,b) => a.creado < b.creado ? 1 : -1).slice(0,12);
-  const unidad = p.tipo === "material" ? (p.presentacion ? p.presentacion.toLowerCase() + (n === 1 ? "" : "s") : "envases") : "piezas";
-  return '<h2>' + esc(titulo(p)) + '</h2><div class="sub">' + esc([p.nombre !== titulo(p) ? p.nombre : "", p.marca, p.color, p.categoria].filter(Boolean).join(" · ")) + '</div>' +
+  const unidad = p.presentacion ? p.presentacion.toLowerCase() + (n === 1 ? "" : "s") : "envases";
+  return '<h2>' + esc(titulo(p)) + '</h2><div class="sub">' + esc([p.nombre !== titulo(p) ? p.nombre : "", p.marca, catDe(p)].filter(Boolean).join(" · ")) + '</div>' +
     '<div class="grande-cant"><b>' + n + '</b><span>' + esc(unidad) + (p.litros ? "<br>de " + p.litros + " L<br><b style='font-size:13px;color:var(--tinta2)'>" + Math.round(n * p.litros) + " L</b>" : "") + '</span>' +
       '<div class="stepper"><button class="tecla" data-menos="' + p.id + '"' + (n === 0 ? " disabled" : "") + '>−</button><button class="tecla on" data-mas="' + p.id + '">＋</button></div></div>' +
     '<dl class="ficha">' +
@@ -314,70 +688,52 @@ function htmlDetalle(p){
       (p.por_quien ? '<dt>Último</dt><dd>' + esc(p.por_quien) + (p.tocado ? " · " + esc(cuando(p.tocado)) : "") + '</dd>' : "") +
     '</dl>' +
     '<div class="acciones"><button class="btn" data-conteo="' + p.id + '">Poner cantidad exacta</button><button class="btn" data-editar="' + p.id + '">Editar</button><button class="btn fantasma" data-quitar="' + p.id + '">Quitar</button></div>' +
-    '<h3>Últimos movimientos</h3>' +
-    (movs.length ? movs.map(m => '<div class="linea"><span class="reloj">' + esc(cuando(m.creado)) + '</span><span class="delta ' + (m.delta > 0 ? "mas" : m.delta < 0 ? "menos" : "") + '">' + (m.delta > 0 ? "+" + m.delta : (m.delta || "·")) + '</span><span class="det"><b>' + esc(m.persona || "?") + '</b><small>' + esc(m.motivo || m.tipo || "") + (m.resultado != null ? " · quedan " + m.resultado : "") + '</small></span></div>').join("")
-               : '<div class="vacio" style="padding:14px"><p style="margin:0">Todavía nadie lo ha movido.</p></div>');
+    '<h3>Últimos movimientos</h3>' + (movs.length ? movs.map(lineaMov).join("") : '<div class="vacio" style="padding:14px"><p style="margin:0">Todavía nadie lo ha movido.</p></div>');
 }
-function montaDetalle(caja){
+function montaDetalleMaterial(caja){
   caja.querySelectorAll("[data-mas]").forEach(x => x.onclick = () => mueve(x.dataset.mas, +1));
   caja.querySelectorAll("[data-menos]").forEach(x => x.onclick = () => mueve(x.dataset.menos, -1));
   caja.querySelectorAll("[data-conteo]").forEach(x => x.onclick = () => hojaConteo(x.dataset.conteo));
-  caja.querySelectorAll("[data-editar]").forEach(x => x.onclick = () => { const p = E.productos.find(y => y.id === x.dataset.editar); hojaProducto(p.tipo, p); });
+  caja.querySelectorAll("[data-editar]").forEach(x => x.onclick = () => hojaProducto(E.productos.find(y => y.id === x.dataset.editar)));
   caja.querySelectorAll("[data-quitar]").forEach(x => x.onclick = async () => {
     const p = E.productos.find(y => y.id === x.dataset.quitar);
     if (!confirm("¿Quitar «" + titulo(p) + "» del inventario?")) return;
     await Almacen.parcha("producto", p.id, {activo:false});
-    await Almacen.anota({producto_id:p.id, nombre:p.nombre, color:p.color || "", tipo:"baja", persona:E.yo, motivo:"quitado del inventario", origen:origen()});
+    await Almacen.anota({producto_id:p.id, nombre:p.nombre, tipo:"baja", persona:E.yo, motivo:"quitado del inventario", origen:origen()});
     E.sel = null; cierraHoja(); pintaTodo(); grita("Quitado");
   });
 }
-
-/* ═══════════════ formularios ═══════════════ */
-function hojaProducto(tipo, p){
-  p = p || {};
-  const nuevo = !p.id;
-  const esMat = tipo === "material";
-  const cats = catsDe(tipo);
-  const grupos = CAT.gruposColor || [];
-  const pres = CAT.presentaciones || [];
-  abreHoja('<h3>' + (nuevo ? (esMat ? "Agregar producto" : "Agregar artículo") : "Editar") + '</h3>' +
-    (esMat
-      ? '<label class="campo"><span>Nombre de la etiqueta</span><input id="fNombre" value="' + esc(p.nombre || "") + '" placeholder="LACA INDUSTRIAL NITRO…"></label>' +
-        '<label class="campo"><span>Cómo le dicen (apodo principal)</span><input id="fApodo" value="' + esc((p.apodos || [])[0] || "") + '" placeholder="laca amarilla"></label>' +
-        '<label class="campo"><span>Marca</span><input id="fMarca" value="' + esc(p.marca || "") + '" placeholder="HiCoat"></label>' +
-        '<div class="dupla"><label class="campo"><span>Presentación</span><select id="fPres">' + pres.map(x => '<option value="' + esc(x.n) + '|' + x.l + '"' + (p.presentacion === x.n && Number(p.litros) === x.l ? " selected" : "") + '>' + esc(x.n) + ' ' + x.l + ' L</option>').join("") + '<option value="|"' + (!p.presentacion ? " selected" : "") + '>Otra / no sé</option></select></label>' +
-        '<label class="campo"><span>Litros por envase</span><input id="fLitros" type="number" inputmode="decimal" min="0" step="0.5" value="' + (p.litros != null ? p.litros : "") + '"></label></div>' +
-        '<div class="dupla"><label class="campo"><span>Código del fabricante</span><input id="fCodigo" value="' + esc(p.codigo || "") + '" placeholder="13261"></label>' +
-        '<label class="campo"><span>Código de barras</span><input id="fBarras" inputmode="numeric" value="' + esc(p.barras || "") + '" placeholder="7506180720880"></label></div>'
-      : '<label class="campo"><span>Mueble</span><input id="fNombre" list="dlModelos" value="' + esc(p.nombre || "") + '" placeholder="Monarca Midas" autocomplete="off"></label>' +
-        '<datalist id="dlModelos">' + (CAT.modelos || []).map(m => '<option value="' + esc(m) + '">').join("") + '</datalist>' +
-        '<label class="campo"><span>Color</span><select id="fColor"><option value="">— sin color —</option>' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (p.color === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("") + '</select></label>' +
-        '<label class="campo"><span>¿Qué es?</span><select id="fCat">' + cats.map(c => '<option' + ((p.categoria || "Mueble terminado") === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select></label>'
-    ) +
-    '<div class="dupla"><label class="campo"><span>' + (esMat ? "Envases que hay" : "Piezas que hay") + '</span><input id="fCant" type="number" inputmode="numeric" min="0" value="' + (nuevo ? 0 : vivo(p)) + '"' + (nuevo ? "" : " disabled title='Cambia la cantidad con − y +, o con Poner cantidad exacta'") + '></label>' +
+function hojaProducto(p){
+  p = p || {}; const nuevo = !p.id; const pres = CAT.presentaciones || [];
+  abreHoja('<h3>' + (nuevo ? "Agregar producto" : "Editar") + '</h3>' +
+    '<label class="campo"><span>Nombre de la etiqueta</span><input id="fNombre" value="' + esc(p.nombre || "") + '" placeholder="LACA INDUSTRIAL NITRO…"></label>' +
+    '<label class="campo"><span>Cómo le dicen (apodo principal)</span><input id="fApodo" value="' + esc((p.apodos || [])[0] || "") + '" placeholder="laca amarilla"></label>' +
+    '<label class="campo"><span>Marca</span><input id="fMarca" value="' + esc(p.marca || "") + '" placeholder="HiCoat"></label>' +
+    '<div class="dupla"><label class="campo"><span>Presentación</span><select id="fPres">' + pres.map(x => '<option value="' + esc(x.n) + '|' + x.l + '"' + (p.presentacion === x.n && Number(p.litros) === x.l ? " selected" : "") + '>' + esc(x.n) + ' ' + x.l + ' L</option>').join("") + '<option value="|"' + (!p.presentacion ? " selected" : "") + '>Otra / no sé</option></select></label>' +
+    '<label class="campo"><span>Litros por envase</span><input id="fLitros" type="number" inputmode="decimal" min="0" step="0.5" value="' + (p.litros != null ? p.litros : "") + '"></label></div>' +
+    '<div class="dupla"><label class="campo"><span>Código del fabricante</span><input id="fCodigo" value="' + esc(p.codigo || "") + '" placeholder="13261"></label>' +
+    '<label class="campo"><span>Código de barras</span><input id="fBarras" inputmode="numeric" value="' + esc(p.barras || "") + '" placeholder="7506180720880"></label></div>' +
+    '<div class="dupla"><label class="campo"><span>Envases que hay</span><input id="fCant" type="number" inputmode="numeric" min="0" value="' + (nuevo ? 0 : vivo(p)) + '"' + (nuevo ? "" : " disabled") + '></label>' +
     '<label class="campo"><span>Avisar cuando baje a</span><input id="fMin" type="number" inputmode="numeric" min="0" value="' + Number(p.minimo || 0) + '"></label></div>' +
     '<button class="btn vino grande" id="fOk">' + (nuevo ? "Agregar" : "Guardar cambios") + '</button>',
     h => {
       const g = id => h.querySelector(id);
-      if (esMat && g("#fPres")) g("#fPres").onchange = () => { const [,l] = g("#fPres").value.split("|"); if (l) g("#fLitros").value = l; };
+      g("#fPres").onchange = () => { const [,l] = g("#fPres").value.split("|"); if (l) g("#fLitros").value = l; };
       g("#fNombre").focus();
       g("#fOk").onclick = async () => {
         if (!exigeYo()) return;
         const nombre = g("#fNombre").value.trim(); if (!nombre) return grita("Falta el nombre");
-        const datos = { tipo, nombre, categoria: esMat ? "" : g("#fCat").value, minimo: Math.max(0, Number(g("#fMin").value || 0)), por_quien: E.yo };
-        if (esMat){
-          const ap = g("#fApodo").value.trim();
-          datos.apodos = ap ? [ap].concat((p.apodos || []).filter(a => a !== ap)).slice(0,3) : (p.apodos || []);
-          datos.marca = g("#fMarca").value.trim(); datos.codigo = g("#fCodigo").value.trim(); datos.barras = g("#fBarras").value.trim().replace(/\s+/g, "");
-          datos.presentacion = g("#fPres").value.split("|")[0] || (p.presentacion || ""); datos.litros = g("#fLitros").value === "" ? null : Number(g("#fLitros").value);
-          datos.categoria = datos.presentacion === "Tambo" ? "Tambos" : datos.presentacion === "Cubeta" ? "Cubetas" : "";
-          datos.color = "";
-        } else { datos.color = g("#fColor").value; datos.apodos = p.apodos || []; }
+        const ap = g("#fApodo").value.trim();
+        const datos = { tipo:"material", nombre, minimo: Math.max(0, Number(g("#fMin").value || 0)), por_quien: E.yo, color:"",
+          apodos: ap ? [ap].concat((p.apodos || []).filter(a => a !== ap)).slice(0,3) : (p.apodos || []),
+          marca: g("#fMarca").value.trim(), codigo: g("#fCodigo").value.trim(), barras: g("#fBarras").value.trim().replace(/\s+/g, ""),
+          presentacion: g("#fPres").value.split("|")[0] || (p.presentacion || ""), litros: g("#fLitros").value === "" ? null : Number(g("#fLitros").value) };
+        datos.categoria = datos.presentacion === "Tambo" ? "Tambos" : datos.presentacion === "Cubeta" ? "Cubetas" : "";
         if (nuevo){
           datos.cantidad = Math.max(0, Number(g("#fCant").value || 0));
           const f = await Almacen.pon("producto", datos);
-          await Almacen.anota({producto_id:f.id, nombre:f.nombre, color:f.color || "", tipo:"alta", delta:f.cantidad, resultado:f.cantidad, persona:E.yo, motivo:"artículo nuevo", origen:origen()});
-          E.sel = f.id; grita("Agregado");
+          await Almacen.anota({producto_id:f.id, nombre:f.nombre, tipo:"alta", delta:f.cantidad, resultado:f.cantidad, persona:E.yo, motivo:"producto nuevo", origen:origen()});
+          E.sel = { tipo:"material", id: f.id }; grita("Agregado");
         } else { await Almacen.parcha("producto", p.id, datos); grita("Guardado"); }
         cierraHoja(); pintaTodo();
       };
@@ -393,8 +749,7 @@ function hojaConteo(id){
       h.querySelector("#cCant").focus(); h.querySelector("#cCant").select();
       h.querySelector("#cOk").onclick = async () => {
         if (!exigeYo()) return;
-        const nuevo = Math.max(0, Number(h.querySelector("#cCant").value || 0));
-        const d = nuevo - vivo(p);
+        const nuevo = Math.max(0, Number(h.querySelector("#cCant").value || 0)); const d = nuevo - vivo(p);
         cierraHoja();
         if (d !== 0){ E.pend.delete(id); await Almacen.ajusta(id, d, E.yo, h.querySelector("#cMot").value.trim() || "conteo exacto", origen()); }
         grita("Guardado"); pintaTodo();
@@ -410,9 +765,9 @@ async function sembrarMaterial(){
   grita("Listo: pon cuántos hay de cada uno");
 }
 
-/* ═══════════════ código de barras (opción) ═══════════════ */
+/* ═══════════════ código de barras (material) ═══════════════ */
 let lector = null;
-function hojaBarras(tipo){
+function hojaBarras(){
   abreHoja('<h3>Código de barras</h3><p class="guia">Apunta la cámara al código, o escríbelo abajo si no lo lee.</p>' +
     '<div id="camBarras"><video id="vidBarras" muted playsinline hidden></video><button class="btn grande" id="btnCam">Abrir cámara</button></div>' +
     '<label class="campo" style="margin-top:12px"><span>O escribe el código</span><input id="codBarras" inputmode="numeric" placeholder="7506180720880" autocomplete="off"></label>' +
@@ -421,12 +776,11 @@ function hojaBarras(tipo){
       const inp = h.querySelector("#codBarras");
       const resolver = cod => {
         cod = String(cod || "").replace(/\s+/g, "").trim(); if (!cod) return;
-        const p = E.productos.find(x => x.activo !== false && x.barras && x.barras === cod);
-        if (p){ paraLector(); cierraHoja(); irA(p.tipo === "material" ? "material" : "muebles"); selecciona(p.id, true); grita("Encontrado: " + titulo(p)); return; }
+        const p = materiales().find(x => x.barras && x.barras === cod);
+        if (p){ paraLector(); cierraHoja(); irA("material"); seleccionaMaterial(p.id, true); grita("Encontrado: " + titulo(p)); return; }
         h.querySelector("#resBarras").innerHTML = '<div class="aviso"><b>Código ' + esc(cod) + ' no está registrado</b><p>Escoge a qué producto pertenece y lo dejo guardado para la próxima.</p></div>' +
-          E.productos.filter(x => x.tipo === tipo && x.activo !== false).sort((a,b) => sinAcento(titulo(a)) > sinAcento(titulo(b)) ? 1 : -1).slice(0,40)
-            .map(x => '<button class="btn" style="justify-content:flex-start" data-liga="' + x.id + '">' + esc(titulo(x)) + (x.color ? " · " + esc(x.color) : "") + '</button>').join("");
-        h.querySelectorAll("[data-liga]").forEach(b => b.onclick = async () => { await Almacen.parcha("producto", b.dataset.liga, {barras:cod}); paraLector(); cierraHoja(); selecciona(b.dataset.liga, true); grita("Código guardado"); });
+          materiales().sort((a,b) => sinAcento(titulo(a)) > sinAcento(titulo(b)) ? 1 : -1).slice(0,40).map(x => '<button class="btn" style="justify-content:flex-start" data-liga="' + x.id + '">' + esc(titulo(x)) + '</button>').join("");
+        h.querySelectorAll("[data-liga]").forEach(b => b.onclick = async () => { await Almacen.parcha("producto", b.dataset.liga, {barras:cod}); paraLector(); cierraHoja(); seleccionaMaterial(b.dataset.liga, true); grita("Código guardado"); });
       };
       h.querySelector("#okBarras").onclick = () => resolver(inp.value);
       inp.onkeydown = e => { if (e.key === "Enter") resolver(inp.value); };
@@ -440,9 +794,7 @@ async function abreCamara(h, resolver){
     if (!window.ZXing) await cargaScript("https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js");
     video.hidden = false;
     lector = new ZXing.BrowserMultiFormatReader();
-    await lector.decodeFromVideoDevice(undefined, video, (res, err) => {
-      if (res){ if (navigator.vibrate) navigator.vibrate(60); resolver(res.getText()); }
-    });
+    await lector.decodeFromVideoDevice(undefined, video, (res) => { if (res){ if (navigator.vibrate) navigator.vibrate(60); resolver(res.getText()); } });
     btn.textContent = "Leyendo… apunta al código";
   } catch(e){
     video.hidden = true; btn.disabled = false; btn.textContent = "Abrir cámara";
@@ -451,6 +803,159 @@ async function abreCamara(h, resolver){
 }
 function paraLector(){ try { lector && lector.reset(); } catch(e){} lector = null; }
 function cargaScript(src){ return new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => no(new Error("no cargó")); document.head.appendChild(s); }); }
+
+/* ═══════════════ PEDIDOS (tickets) ═══════════════ */
+const lineasDe = p => (Array.isArray(p.lineas) ? p.lineas : []).map(x => Object.assign({ entregado: 0 }, x));
+const avance = p => { const ls = lineasDe(p); const t = ls.reduce((s,x) => s + Number(x.cantidad || 0), 0); const e = ls.reduce((s,x) => s + Math.min(Number(x.cantidad || 0), Number(x.entregado || 0)), 0); return { t, e, pct: t ? Math.round(e * 100 / t) : 0 }; };
+function pintaPedidos(){
+  const caja = $("#listaPedidos");
+  $("#ordenPedidos").textContent = E.ordenPedidos === "desc" ? "Más nuevos primero" : "Más viejos primero";
+  let l = E.pedidos.slice().sort((a,b) => { const ka = (a.fecha || "") + a.creado, kb = (b.fecha || "") + b.creado; return E.ordenPedidos === "desc" ? (ka < kb ? 1 : -1) : (ka < kb ? -1 : 1); });
+  const pend = l.filter(p => p.estado !== "entregado").length;
+  $("#resumenPedidos").textContent = l.length ? plural(pend, "pedido por entregar", "pedidos por entregar") : "";
+  $("#nPed").hidden = !pend; $("#nPed").textContent = pend;
+  if (q("pedidos")) l = Busca.busca(q("pedidos"), l, p => [p.cliente, ...lineasDe(p).map(x => x.modelo + " " + (x.color || ""))].join(" "));
+  if (!l.length){ caja.innerHTML = q("pedidos") ? sinHallar("pedidos", "ese pedido") : '<div class="vacio"><b>Sin pedidos</b><p>Agrega el primero con el botón. Cada pedido queda como un ticket con el cliente, la fecha y lo que pidió.</p></div>'; return; }
+  caja.innerHTML = '<div class="tickets">' + l.map(p => {
+    const ls = lineasDe(p); const av = avance(p);
+    return '<article class="ticket' + (p.estado === "entregado" ? " entregado" : "") + '" data-id="' + p.id + '">' +
+      '<div class="t-cab"><span class="t-caja">MUEBLES</span><span class="t-script">San Bernardo</span></div><div class="t-linea"></div>' +
+      '<div class="t-fila"><span>CLIENTE</span><b>' + esc(p.cliente) + '</b></div>' +
+      '<div class="t-fila"><span>FECHA</span><b>' + esc(isoADma(p.fecha) || "—") + '</b></div>' +
+      '<div class="t-fila"><span>CAPTURÓ</span><b>' + esc(p.de || "?") + '</b></div><div class="t-linea"></div>' +
+      (ls.length ? ls.map((x, i) => { const ent = Math.min(x.cantidad, x.entregado || 0); return '<div class="t-item' + (ent >= x.cantidad ? " hecho" : "") + '"><span class="t-n">' + Number(x.cantidad || 0) + '</span><span class="t-desc">' + esc(x.modelo) + (x.color ? '<small>' + esc(x.color) + '</small>' : "") + '</span>' +
+        '<span class="t-ent"><button class="tecla" data-ent="' + p.id + '|' + i + '|-1"' + (ent <= 0 ? " disabled" : "") + '>−</button><small>' + ent + ' de ' + x.cantidad + '</small><button class="tecla" data-ent="' + p.id + '|' + i + '|1"' + (ent >= x.cantidad ? " disabled" : "") + '>＋</button></span></div>'; }).join("")
+               : '<div class="t-item"><span class="t-desc" style="color:var(--tinta3)">sin renglones</span></div>') +
+      '<div class="t-linea"></div>' +
+      '<div class="progreso"><i style="width:' + av.pct + '%"></i></div><div class="progreso-txt"><span>' + av.e + ' de ' + av.t + ' entregados</span><span>' + av.pct + ' %</span></div>' +
+      (p.notas ? '<div class="t-notas">' + esc(p.notas) + '</div>' : "") +
+      '<div class="t-estado">' + (p.estado === "entregado" ? "✓ ENTREGADO" : av.e ? "EN ENTREGA" : "PENDIENTE") + '</div>' +
+      '<div class="t-acciones">' + (p.estado === "entregado" ? '<button class="btn fantasma" data-reabre="' + p.id + '">Reabrir</button>' : '<button class="btn" data-todo="' + p.id + '">✓ Todo entregado</button>') + '<button class="btn fantasma" data-edita="' + p.id + '">Editar</button><button class="btn fantasma" data-borra="' + p.id + '">Borrar</button></div>' +
+    '</article>';
+  }).join("") + '</div>';
+  caja.querySelectorAll("[data-ent]").forEach(b => b.onclick = () => { const [id, i, d] = b.dataset.ent.split("|"); entrega(id, Number(i), Number(d)); });
+  caja.querySelectorAll("[data-todo]").forEach(b => b.onclick = () => { if (!exigeYo()) return; const p = E.pedidos.find(x => x.id === b.dataset.todo); Almacen.parcha("pedido", p.id, { lineas: lineasDe(p).map(x => Object.assign({}, x, { entregado: x.cantidad })), estado: "entregado" }); });
+  caja.querySelectorAll("[data-reabre]").forEach(b => b.onclick = () => Almacen.parcha("pedido", b.dataset.reabre, {estado:"pendiente"}));
+  caja.querySelectorAll("[data-edita]").forEach(b => b.onclick = () => hojaPedido(E.pedidos.find(x => x.id === b.dataset.edita)));
+  caja.querySelectorAll("[data-borra]").forEach(b => b.onclick = () => { if (confirm("¿Borrar este pedido?")) Almacen.borra("pedido", b.dataset.borra); });
+}
+function entrega(id, i, d){
+  if (!exigeYo()) return;
+  const p = E.pedidos.find(x => x.id === id); if (!p) return;
+  const ls = lineasDe(p); const x = ls[i]; if (!x) return;
+  x.entregado = Math.max(0, Math.min(Number(x.cantidad || 0), Number(x.entregado || 0) + d));
+  const completo = ls.every(y => Number(y.entregado || 0) >= Number(y.cantidad || 0));
+  Almacen.parcha("pedido", id, { lineas: ls, estado: completo ? "entregado" : "pendiente" });
+}
+$("#ordenPedidos").onclick = () => { E.ordenPedidos = E.ordenPedidos === "desc" ? "asc" : "desc"; localStorage.setItem("alm.ordenPedidos", E.ordenPedidos); pintaPedidos(); };
+function hojaPedido(p){
+  p = p || {}; const nuevo = !p.id;
+  let lineas = lineasDe(p); if (!lineas.length) lineas = [{modelo:"", color:"", cantidad:1, entregado:0}];
+  const grupos = CAT.gruposColor || [];
+  const opcionesColor = sel => '<option value="">— color —</option>' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (sel === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("");
+  const filaHtml_ = (x, i) => '<div class="p-linea" data-i="' + i + '" data-ent="' + (x.entregado || 0) + '"><input class="p-cant" type="number" inputmode="numeric" min="1" value="' + (x.cantidad || 1) + '" aria-label="Cantidad"><input class="p-modelo" list="dlModelosP" placeholder="Mueble" value="' + esc(x.modelo || "") + '" autocomplete="off"><select class="p-color">' + opcionesColor(x.color) + '</select><button class="btn fantasma p-quita" aria-label="Quitar renglón">×</button></div>';
+  abreHoja('<h3>' + (nuevo ? "Nuevo pedido" : "Editar pedido") + '</h3>' +
+    '<label class="campo"><span>Cliente</span><input id="pCliente" list="dlClientes" value="' + esc(p.cliente || "") + '" placeholder="Sr. Pedro Orozco" autocomplete="off"></label>' +
+    '<datalist id="dlClientes">' + (CAT.clientes || []).map(c => '<option value="' + esc(c) + '">').join("") + '</datalist>' +
+    '<datalist id="dlModelosP">' + modelosActivos().map(m => '<option value="' + esc(m.nombre) + '">').join("") + '</datalist>' +
+    '<label class="campo"><span>Fecha (día/mes/año)</span><input id="pFecha" inputmode="numeric" placeholder="dd/mm/aaaa" value="' + esc(isoADma(p.fecha) || isoADma(hoyIso())) + '"></label>' +
+    '<div class="grupo-h">Lo que pidió</div><div id="pLineas">' + lineas.map(filaHtml_).join("") + '</div>' +
+    '<button class="btn" id="pMas" style="margin:6px 0 14px">＋ Otro renglón</button>' +
+    '<label class="campo"><span>Notas</span><textarea id="pNotas" placeholder="urgente, con lámpara, entregar en…">' + esc(p.notas || "") + '</textarea></label>' +
+    '<button class="btn vino grande" id="pOk">' + (nuevo ? "Guardar pedido" : "Guardar cambios") + '</button>',
+    h => {
+      const cont = h.querySelector("#pLineas");
+      const leer = () => Array.from(cont.querySelectorAll(".p-linea")).map(f => ({ cantidad: Math.max(0, Number(f.querySelector(".p-cant").value || 0)), modelo: f.querySelector(".p-modelo").value.trim(), color: f.querySelector(".p-color").value, entregado: Number(f.dataset.ent || 0) }));
+      const enlaza = () => cont.querySelectorAll(".p-quita").forEach(b => b.onclick = () => { if (cont.children.length > 1) b.closest(".p-linea").remove(); });
+      enlaza();
+      h.querySelector("#pMas").onclick = () => { cont.insertAdjacentHTML("beforeend", filaHtml_({cantidad:1}, cont.children.length)); enlaza(); cont.lastElementChild.querySelector(".p-modelo").focus(); };
+      const f = h.querySelector("#pFecha");
+      f.oninput = () => { let v = f.value.replace(/[^\d]/g, "").slice(0,8); if (v.length > 4) v = v.slice(0,2) + "/" + v.slice(2,4) + "/" + v.slice(4); else if (v.length > 2) v = v.slice(0,2) + "/" + v.slice(2); f.value = v; };
+      h.querySelector("#pCliente").focus();
+      h.querySelector("#pOk").onclick = async () => {
+        if (!exigeYo()) return;
+        const cliente = h.querySelector("#pCliente").value.trim(); if (!cliente) return grita("Falta el cliente");
+        const iso = dmaAIso(f.value); if (f.value && !iso) return grita("La fecha va día/mes/año, por ejemplo 04/09/2026");
+        const ls = leer().filter(x => x.modelo && x.cantidad > 0).map(x => Object.assign(x, { entregado: Math.min(x.entregado, x.cantidad) }));
+        const completo = ls.length && ls.every(x => x.entregado >= x.cantidad);
+        const datos = { cliente, fecha: iso || null, lineas: ls, notas: h.querySelector("#pNotas").value.trim(), estado: completo ? "entregado" : "pendiente", de: p.de || E.yo };
+        if (nuevo) await Almacen.pon("pedido", datos); else await Almacen.parcha("pedido", p.id, datos);
+        cierraHoja(); grita(nuevo ? "Pedido guardado" : "Guardado"); pintaPedidos();
+      };
+    });
+}
+
+/* ═══════════════ CATÁLOGO (editable) ═══════════════ */
+function pintaCatalogo(){
+  const caja = $("#listaCatalogo");
+  let l = modelosActivos();
+  $("#resumenCatalogo").textContent = l.length ? plural(l.length, "modelo", "modelos") + " · " + l.filter(m => !R.ficha(m).completa).length + " con datos faltantes" : "";
+  if (q("catalogo")) l = Busca.busca(q("catalogo"), l, m => m.nombre + " " + m.familia);
+  if (!l.length){ caja.innerHTML = q("catalogo") ? sinHallar("catalogo", "ese modelo") + '<div style="text-align:center;margin-top:-10px"><button class="btn vino" id="agregaDesde">Agregarlo al catálogo</button></div>' : '<div class="vacio"><b>El catálogo está vacío</b></div>'; const b = caja.querySelector("#agregaDesde"); if (b) b.onclick = () => hojaModelo(null, q("catalogo")); return; }
+  caja.innerHTML = l.map(m => {
+    const f = R.ficha(m);
+    const chips = [(m.tipo === "mdf" ? '<span class="chip mdf">MDF</span>' : '<span class="chip">madera</span>'),
+      m.cajones == null ? '<span class="chip falta">cajones: falta dato</span>' : '<span class="chip">' + plural(m.cajones, "cajón", "cajones") + '</span>',
+      m.total_puertas == null ? '<span class="chip falta">puertas: falta dato</span>' : '<span class="chip">' + plural(m.total_puertas, "puerta", "puertas") + '</span>',
+      m.lleva_parches == null ? '<span class="chip falta">¿parches?: falta dato</span>' : m.lleva_parches ? '<span class="chip">lleva parches</span>' : "",
+      m.lleva_respaldo === true ? '<span class="chip">lleva respaldo</span>' : ""].filter(Boolean).join("");
+    return '<div class="fila" data-id="' + esc(m.id) + '"><div class="nombre"><b>' + esc(m.nombre) + '</b><small>' + esc(m.familia || "") + '</small></div><div class="sub ficha-chips">' + chips + '</div><div class="apodos ficha-chips">' + chips + '</div><div class="cifra"></div><div class="ultimo"><span>' + (m.editado_por ? esc(m.editado_por) + " · " + esc(cuando(m.actualizado || m.creado)) : "") + '</span></div><div class="stepper"><button class="btn" data-edita="' + esc(m.id) + '">Editar</button></div></div>';
+  }).join("");
+  caja.querySelectorAll("[data-id]").forEach(f => f.onclick = () => hojaModelo(modeloDe(f.dataset.id)));
+}
+function hojaModelo(m, nombreSugerido){
+  if (!exigeYo()) return;
+  const nuevo = !m; m = m || { nombre: nombreSugerido || "", familia: "", tipo: "madera", cajones: null, puertas_grandes: null, puertas_grandes_luna: null, puertas_chicas: null, puertas_chicas_luna: null, total_puertas: null, lleva_parches: null, lleva_respaldo: null };
+  const num = (id, txt, v) => '<label class="campo"><span>' + txt + '</span><input id="' + id + '" type="number" inputmode="numeric" min="0" value="' + (v == null ? "" : v) + '" placeholder="falta dato"></label>';
+  const siNo = (id, txt, v) => '<div class="campo"><span>' + txt + '</span><div class="opcion-si-no" id="' + id + '"><button class="cat' + (v === true ? " on" : "") + '" data-v="1">Sí</button><button class="cat' + (v === false ? " on" : "") + '" data-v="0">No</button><button class="cat' + (v == null ? " on" : "") + '" data-v="">No sé</button></div></div>';
+  abreHoja('<h3>' + (nuevo ? "Modelo nuevo" : "Ficha del modelo") + '</h3><p class="guia">Con esta ficha el sistema traduce puertas y cajones a muebles. Si no sabes un dato, déjalo vacío: el sistema dirá «falta dato» en vez de inventar.</p>' +
+    '<label class="campo"><span>Nombre</span><input id="mNombre" value="' + esc(m.nombre) + '" placeholder="Monarca Midas"></label>' +
+    '<div class="dupla"><label class="campo"><span>Familia</span><input id="mFamilia" value="' + esc(m.familia || "") + '" placeholder="Monarca"></label>' +
+    '<div class="campo"><span>Material</span><div class="opcion-si-no" id="mTipo"><button class="cat' + (m.tipo !== "mdf" ? " on" : "") + '" data-v="madera">Madera</button><button class="cat' + (m.tipo === "mdf" ? " on" : "") + '" data-v="mdf">MDF</button></div></div></div>' +
+    num("mCajones", "Cajones", m.cajones) +
+    '<div class="grupo-h">Puertas</div><div class="dupla">' + num("mPG", "Grandes", m.puertas_grandes) + num("mPGL", "Grandes con luna", m.puertas_grandes_luna) + '</div>' +
+    '<div class="dupla">' + num("mPC", "Chicas", m.puertas_chicas) + num("mPCL", "Chicas con luna", m.puertas_chicas_luna) + '</div>' +
+    num("mTotal", "Total de puertas (lo que cuenta para las equivalencias)", m.total_puertas) +
+    '<div class="dupla">' + siNo("mParches", "¿Lleva parches?", m.lleva_parches) + siNo("mRespaldo", "¿Lleva respaldo?", m.lleva_respaldo) + '</div>' +
+    '<button class="btn vino grande" id="mOk" style="margin-top:8px">' + (nuevo ? "Agregar al catálogo" : "Guardar cambios") + '</button>' +
+    (nuevo ? "" : '<button class="btn fantasma grande" id="mQuita" style="margin-top:8px">Quitar del catálogo</button>'),
+    h => {
+      const g = id => h.querySelector(id);
+      let tipo = m.tipo === "mdf" ? "mdf" : "madera", parches = m.lleva_parches, respaldo = m.lleva_respaldo;
+      const marca = (cont, v) => cont.querySelectorAll("[data-v]").forEach(b => b.classList.toggle("on", b.dataset.v === (v == null ? "" : String(v === true ? 1 : v === false ? 0 : v))));
+      g("#mTipo").querySelectorAll("[data-v]").forEach(b => b.onclick = () => { tipo = b.dataset.v; marca(g("#mTipo"), tipo); });
+      g("#mParches").querySelectorAll("[data-v]").forEach(b => b.onclick = () => { parches = b.dataset.v === "" ? null : b.dataset.v === "1"; marca(g("#mParches"), parches); });
+      g("#mRespaldo").querySelectorAll("[data-v]").forEach(b => b.onclick = () => { respaldo = b.dataset.v === "" ? null : b.dataset.v === "1"; marca(g("#mRespaldo"), respaldo); });
+      const suma = () => { const vs = ["#mPG", "#mPGL", "#mPC", "#mPCL"].map(id => g(id).value); if (vs.every(v => v !== "")) g("#mTotal").value = vs.reduce((s,v) => s + Number(v), 0); };
+      ["#mPG", "#mPGL", "#mPC", "#mPCL"].forEach(id => g(id).oninput = suma);
+      const leeNum = id => g(id).value === "" ? null : Math.max(0, Math.floor(Number(g(id).value)));
+      g("#mOk").onclick = async () => {
+        const nombre = g("#mNombre").value.trim(); if (!nombre) return grita("Falta el nombre");
+        const repetido = E.modelos.find(x => x.id !== m.id && x.activo !== false && sinAcento(x.nombre) === sinAcento(nombre)); if (repetido) return grita("Ya existe un modelo con ese nombre");
+        const datos = { nombre, familia: g("#mFamilia").value.trim() || nombre.split(" ")[0], tipo, cajones: leeNum("#mCajones"), puertas_grandes: leeNum("#mPG"), puertas_grandes_luna: leeNum("#mPGL"), puertas_chicas: leeNum("#mPC"), puertas_chicas_luna: leeNum("#mPCL"), total_puertas: leeNum("#mTotal"), lleva_parches: parches, lleva_respaldo: respaldo, editado_por: E.yo };
+        const cambios = nuevo ? "modelo nuevo" : Object.keys(datos).filter(k => k !== "editado_por" && JSON.stringify(datos[k]) !== JSON.stringify(m[k] == null ? null : m[k])).map(k => k.replace(/_/g, " ") + ": " + (m[k] == null ? "vacío" : m[k]) + " → " + (datos[k] == null ? "vacío" : datos[k])).join(" · ");
+        if (!nuevo && !cambios){ cierraHoja(); return; }
+        let id = m.id;
+        if (nuevo){ const f = await Almacen.pon("modelo", Object.assign({ id: "N" + Date.now().toString(36), activo: true }, datos)); id = f.id; }
+        else { await Almacen.parcha("modelo", id, datos); if (datos.nombre !== m.nombre) renombraEnTodo(id, datos.nombre); }
+        await Almacen.anota({ tipo:"catalogo", modelo_id: id, nombre, persona: E.yo, motivo: cambios, origen: origen() });
+        cierraHoja(); grita(nuevo ? "Modelo agregado" : "Ficha guardada"); pintaTodo();
+      };
+      const qb = g("#mQuita"); if (qb) qb.onclick = async () => {
+        if (!confirm("¿Quitar «" + m.nombre + "» del catálogo? Las existencias que ya tenga se conservan.")) return;
+        await Almacen.parcha("modelo", m.id, { activo:false, editado_por: E.yo });
+        await Almacen.anota({ tipo:"catalogo", modelo_id: m.id, nombre: m.nombre, persona: E.yo, motivo: "quitado del catálogo", origen: origen() });
+        cierraHoja(); pintaTodo();
+      };
+      g("#mNombre").focus();
+    });
+}
+/* Si se renombra un modelo, los lotes y piezas que ya existen cambian de nombre también */
+function renombraEnTodo(id, nombre){
+  E.lotes.filter(l => l.modelo_id === id).forEach(l => Almacen.parcha("lote", l.id, { modelo: nombre }));
+  E.piezas.filter(p => p.modelo_id === id).forEach(p => Almacen.parcha("pieza", p.id, { modelo: nombre }));
+}
+$("#nuevoModelo").onclick = () => hojaModelo(null);
 
 /* ═══════════════ recados ═══════════════ */
 function pintaRecados(){
@@ -461,10 +966,10 @@ function pintaRecados(){
   const nuevos = l.filter(r => !r.hecho && !(r.vistos || {})[E.yo]).length;
   $("#globoRec").hidden = !nuevos; $("#globoRec").textContent = nuevos;
   $("#nRec").hidden = !pend; $("#nRec").textContent = pend;
-  if (!l.length){ caja.innerHTML = '<div class="vacio"><b>No hay recados</b><p>Aquí van los avisos que antes se perdían en la libreta. Escribe uno arriba y todos lo ven.</p></div>'; return; }
+  if (!l.length){ caja.innerHTML = '<div class="vacio"><b>No hay recados</b><p>Escribe uno arriba y todos lo ven.</p></div>'; return; }
   caja.innerHTML = l.map(r => {
     const vistos = Object.keys(r.vistos || {}).filter(v => v !== r.de);
-    return '<article class="tarjeta' + (r.hecho ? " lista" : r.urgente ? " urge" : "") + '"><div class="enc"><span class="av">' + esc(iniciales(r.de)) + '</span><b>' + esc(r.de || "Alguien") + '</b>' + (r.para ? '<span style="color:var(--tinta2)">para ' + esc(r.para) + '</span>' : "") + '<span class="hora">' + esc(cuando(r.creado)) + '</span></div>' +
+    return '<article class="tarjeta' + (r.hecho ? " lista" : r.urgente ? " urge" : "") + '"><div class="enc"><span class="av">' + esc(iniciales(r.de)) + '</span><b>' + esc(r.de || "Alguien") + '</b><span class="hora">' + esc(cuando(r.creado)) + '</span></div>' +
       '<div class="cuerpo">' + esc(r.texto) + '</div><div class="pie"><span class="visto">' + (vistos.length ? "Visto: " + esc(vistos.join(", ")) : "Nadie lo ha visto") + '</span>' +
       (r.hecho ? '<button class="btn fantasma" data-reabre="' + r.id + '">Reabrir</button>' : '<button class="btn" data-hecho="' + r.id + '">✓ Ya quedó</button>') +
       '<button class="btn fantasma" data-borra="' + r.id + '">Borrar</button></div></article>';
@@ -491,107 +996,56 @@ async function ponRecado(texto){
   grita("Recado puesto");
 }
 
-/* ═══════════════ pedidos (formato ticket) ═══════════════ */
-function pintaPedidos(){
-  const caja = $("#listaPedidos");
-  const l = E.pedidos.slice().sort((a,b) => (a.estado === "entregado") - (b.estado === "entregado") || (a.creado < b.creado ? 1 : -1));
-  const pend = l.filter(p => p.estado !== "entregado").length;
-  $("#resumenPedidos").textContent = l.length ? pend + " por entregar" : "";
-  $("#nPed").hidden = !pend; $("#nPed").textContent = pend;
-  if (!l.length){ caja.innerHTML = '<div class="vacio"><b>Sin pedidos</b><p>Agrega el primero con el botón. Cada pedido queda como un ticket con el cliente, la fecha y lo que pidió.</p></div>'; return; }
-  caja.innerHTML = '<div class="tickets">' + l.map(p => {
-    const lineas = Array.isArray(p.lineas) ? p.lineas : [];
-    const piezas = lineas.reduce((s,x) => s + Number(x.cantidad || 0), 0);
-    return '<article class="ticket' + (p.estado === "entregado" ? " entregado" : "") + '">' +
-      '<div class="t-cab"><span class="t-caja">MUEBLES</span><span class="t-script">San Bernardo</span></div>' +
-      '<div class="t-linea"></div>' +
-      '<div class="t-fila"><span>CLIENTE</span><b>' + esc(p.cliente) + '</b></div>' +
-      '<div class="t-fila"><span>FECHA</span><b>' + esc(isoADma(p.fecha) || "—") + '</b></div>' +
-      '<div class="t-fila"><span>CAPTURÓ</span><b>' + esc(p.de || "?") + '</b></div>' +
-      '<div class="t-linea"></div>' +
-      (lineas.length ? lineas.map(x => '<div class="t-item"><span class="t-n">' + Number(x.cantidad || 0) + '</span><span class="t-desc">' + esc(x.modelo) + (x.color ? '<small>' + esc(x.color) + '</small>' : "") + '</span></div>').join("") : '<div class="t-item"><span class="t-desc" style="color:var(--tinta3)">sin renglones</span></div>') +
-      '<div class="t-linea"></div>' +
-      '<div class="t-fila"><span>TOTAL</span><b>' + piezas + ' pieza' + (piezas === 1 ? "" : "s") + '</b></div>' +
-      (p.notas ? '<div class="t-notas">' + esc(p.notas) + '</div>' : "") +
-      '<div class="t-estado">' + (p.estado === "entregado" ? "✓ ENTREGADO" : "PENDIENTE") + '</div>' +
-      '<div class="t-acciones">' + (p.estado === "entregado" ? '<button class="btn fantasma" data-reabre="' + p.id + '">Reabrir</button>' : '<button class="btn" data-entrega="' + p.id + '">✓ Entregado</button>') + '<button class="btn fantasma" data-edita="' + p.id + '">Editar</button><button class="btn fantasma" data-borra="' + p.id + '">Borrar</button></div>' +
-    '</article>';
-  }).join("") + '</div>';
-  caja.querySelectorAll("[data-entrega]").forEach(b => b.onclick = () => { if (exigeYo()) Almacen.parcha("pedido", b.dataset.entrega, {estado:"entregado"}); });
-  caja.querySelectorAll("[data-reabre]").forEach(b => b.onclick = () => Almacen.parcha("pedido", b.dataset.reabre, {estado:"pendiente"}));
-  caja.querySelectorAll("[data-edita]").forEach(b => b.onclick = () => hojaPedido(E.pedidos.find(x => x.id === b.dataset.edita)));
-  caja.querySelectorAll("[data-borra]").forEach(b => b.onclick = () => { if (confirm("¿Borrar este pedido?")) Almacen.borra("pedido", b.dataset.borra); });
-}
-function hojaPedido(p){
-  p = p || {}; const nuevo = !p.id;
-  let lineas = (Array.isArray(p.lineas) && p.lineas.length) ? p.lineas.map(x => Object.assign({}, x)) : [{modelo:"", color:"", cantidad:1}];
-  const grupos = CAT.gruposColor || [];
-  const opcionesColor = sel => '<option value="">— color —</option>' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (sel === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("");
-  const filaHtml_ = (x, i) => '<div class="p-linea" data-i="' + i + '"><input class="p-cant" type="number" inputmode="numeric" min="1" value="' + (x.cantidad || 1) + '" aria-label="Cantidad"><input class="p-modelo" list="dlModelosP" placeholder="Mueble" value="' + esc(x.modelo || "") + '" autocomplete="off"><select class="p-color">' + opcionesColor(x.color) + '</select><button class="btn fantasma p-quita" aria-label="Quitar renglón">×</button></div>';
-  abreHoja('<h3>' + (nuevo ? "Nuevo pedido" : "Editar pedido") + '</h3>' +
-    '<label class="campo"><span>Cliente</span><input id="pCliente" list="dlClientes" value="' + esc(p.cliente || "") + '" placeholder="Sr. Pedro Orozco" autocomplete="off"></label>' +
-    '<datalist id="dlClientes">' + (CAT.clientes || []).map(c => '<option value="' + esc(c) + '">').join("") + '</datalist>' +
-    '<datalist id="dlModelosP">' + (CAT.modelos || []).map(m => '<option value="' + esc(m) + '">').join("") + '</datalist>' +
-    '<label class="campo"><span>Fecha (día/mes/año)</span><input id="pFecha" inputmode="numeric" placeholder="dd/mm/aaaa" value="' + esc(isoADma(p.fecha) || isoADma(hoyIso())) + '"></label>' +
-    '<div class="grupo-h">Lo que pidió</div><div id="pLineas">' + lineas.map(filaHtml_).join("") + '</div>' +
-    '<button class="btn" id="pMas" style="margin:6px 0 14px">＋ Otro renglón</button>' +
-    '<label class="campo"><span>Notas</span><textarea id="pNotas" placeholder="urgente, con lámpara, entregar en…">' + esc(p.notas || "") + '</textarea></label>' +
-    '<button class="btn vino grande" id="pOk">' + (nuevo ? "Guardar pedido" : "Guardar cambios") + '</button>',
-    h => {
-      const cont = h.querySelector("#pLineas");
-      const leer = () => Array.from(cont.querySelectorAll(".p-linea")).map(f => ({ cantidad: Math.max(0, Number(f.querySelector(".p-cant").value || 0)), modelo: f.querySelector(".p-modelo").value.trim(), color: f.querySelector(".p-color").value }));
-      const enlaza = () => cont.querySelectorAll(".p-quita").forEach(b => b.onclick = () => { if (cont.children.length > 1) b.closest(".p-linea").remove(); });
-      enlaza();
-      h.querySelector("#pMas").onclick = () => { cont.insertAdjacentHTML("beforeend", filaHtml_({cantidad:1}, cont.children.length)); enlaza(); cont.lastElementChild.querySelector(".p-modelo").focus(); };
-      const f = h.querySelector("#pFecha");
-      f.oninput = () => { let v = f.value.replace(/[^\d]/g, "").slice(0,8); if (v.length > 4) v = v.slice(0,2) + "/" + v.slice(2,4) + "/" + v.slice(4); else if (v.length > 2) v = v.slice(0,2) + "/" + v.slice(2); f.value = v; };
-      h.querySelector("#pCliente").focus();
-      h.querySelector("#pOk").onclick = async () => {
-        if (!exigeYo()) return;
-        const cliente = h.querySelector("#pCliente").value.trim(); if (!cliente) return grita("Falta el cliente");
-        const iso = dmaAIso(f.value); if (f.value && !iso) return grita("La fecha va día/mes/año, por ejemplo 04/09/2026");
-        const ls = leer().filter(x => x.modelo && x.cantidad > 0);
-        const datos = { cliente, fecha: iso || null, lineas: ls, notas: h.querySelector("#pNotas").value.trim(), estado: p.estado || "pendiente", de: p.de || E.yo };
-        if (nuevo) await Almacen.pon("pedido", datos); else await Almacen.parcha("pedido", p.id, datos);
-        cierraHoja(); grita(nuevo ? "Pedido guardado" : "Guardado"); pintaPedidos();
-      };
-    });
-}
-
 /* ═══════════════ bitácora ═══════════════ */
+function descMov(m){
+  const et = k => (R.ETAPAS[k] || R.PIEZAS[k] || {}).nombre || k;
+  let titulo_ = esc(m.nombre || m.tipo) + (m.color ? " · " + esc(m.color) : "");
+  let sub = "";
+  if (m.tipo === "traslado") sub = esc(et(m.etapa_de)) + " → " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.categoria === "puertas_con_bisagras" ? "bisagras: " : m.etapa_a === "armado" ? "armó " : "pintó ") + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · de: " + m.desglose.map(d => esc(d.de) + " " + d.cantidad).join(", ") : "");
+  else if (m.tipo === "alta" && m.etapa_a) sub = "entró a " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "mdf" ? "hizo " : "maquiló ") + esc(m.hecho_por) : "");
+  else if (m.tipo === "alta" && m.categoria) sub = "entró a " + esc(et(m.categoria)) + (m.hecho_por ? " · pintó " + esc(m.hecho_por) : "");
+  else if (m.tipo === "ajuste" && (m.etapa_a || m.categoria)) sub = "corrección en " + esc(et(m.etapa_a || m.categoria)) + (m.motivo ? " · " + esc(m.motivo) : "");
+  else if (m.categoria) sub = esc(et(m.categoria)) + (m.hecho_por ? " · pintó " + esc(m.hecho_por) : "") + (m.motivo ? " · " + esc(m.motivo) : "");
+  else if (m.tipo === "catalogo") sub = "catálogo · " + esc(m.motivo || "");
+  else sub = esc(m.motivo || m.tipo || "");
+  if (m.resultado != null && m.tipo !== "catalogo") sub += " · quedan " + m.resultado;
+  return { titulo: titulo_, sub };
+}
+function lineaMov(m){
+  const d = descMov(m);
+  return '<div class="linea"><span class="reloj">' + esc(cuando(m.creado)) + '</span><span class="delta ' + (m.delta > 0 ? "mas" : m.delta < 0 ? "menos" : "") + '">' + (m.tipo === "traslado" ? "→" + m.delta : m.delta > 0 ? "+" + m.delta : (m.delta || "·")) + '</span><span class="det"><b>' + d.titulo + '</b><small>' + d.sub + ' · ' + esc(m.persona || "?") + '</small></span></div>';
+}
 function pintaBitacora(){
   const caja = $("#listaBitacora");
+  let ms = E.movimientos.slice();
+  if (q("bitacora")) ms = Busca.busca(q("bitacora"), ms, m => [m.nombre, m.color, m.persona, m.hecho_por, m.motivo, (R.ETAPAS[m.etapa_a] || R.PIEZAS[m.etapa_a || m.categoria] || {}).nombre].filter(Boolean).join(" "));
   const dias = {};
-  E.movimientos.forEach(m => { const d = (m.creado || "").slice(0,10); (dias[d] = dias[d] || []).push(m); });
+  ms.forEach(m => { const d = (m.creado || "").slice(0,10); (dias[d] = dias[d] || []).push(m); });
   const ord = Object.keys(dias).sort().reverse().slice(0,30);
-  if (!ord.length){ caja.innerHTML = '<div class="vacio"><b>Todavía no hay movimientos</b><p>Cada vez que alguien suma, resta o agrega algo, queda aquí con su nombre y su hora.</p></div>'; return; }
-  caja.innerHTML = ord.map(d => '<div class="dia">' + esc(fechaLarga(d)) + '</div>' + dias[d].sort((a,b) => a.creado < b.creado ? 1 : -1).map(m =>
-    '<div class="linea"><span class="reloj">' + esc(reloj(m.creado)) + '</span><span class="delta ' + (m.delta > 0 ? "mas" : m.delta < 0 ? "menos" : "") + '">' + (m.delta > 0 ? "+" + m.delta : (m.delta || "·")) + '</span>' +
-    '<span class="det"><b>' + esc(m.nombre || m.tipo) + '</b>' + (m.color ? " · " + esc(m.color) : "") + '<small>' + esc(m.persona || "?") + (m.motivo ? " · " + esc(m.motivo) : m.hecho_por ? " · hizo: " + esc(m.hecho_por) : m.tipo && !m.delta ? " · " + esc(m.tipo) : "") + (m.resultado != null ? " · quedan " + m.resultado : "") + (m.origen ? " · " + esc(m.origen) : "") + '</small></span></div>').join("")).join("");
+  if (!ord.length){ caja.innerHTML = q("bitacora") ? sinHallar("bitacora", "eso en la bitácora") : '<div class="vacio"><b>Todavía no hay movimientos</b><p>Cada registro, paso de etapa o corrección queda aquí con fecha, hora, quién lo capturó y quién hizo el trabajo.</p></div>'; return; }
+  caja.innerHTML = ord.map(d => '<div class="dia">' + esc(fechaLarga(d)) + '</div>' + dias[d].sort((a,b) => a.creado < b.creado ? 1 : -1).map(m => {
+    const x = descMov(m);
+    return '<div class="linea"><span class="reloj">' + esc(reloj(m.creado)) + '</span><span class="delta ' + (m.delta > 0 ? "mas" : m.delta < 0 ? "menos" : "") + '">' + (m.tipo === "traslado" ? "→" + m.delta : m.delta > 0 ? "+" + m.delta : (m.delta || "·")) + '</span><span class="det"><b>' + x.titulo + '</b><small>' + x.sub + ' · capturó ' + esc(m.persona || "?") + (m.origen ? " · " + esc(m.origen) : "") + '</small></span></div>';
+  }).join("")).join("");
 }
 
-/* ═══════════════ apodos y litros ═══════════════ */
+/* ═══════════════ apodos y litros (material) ═══════════════ */
 function pintaApodos(){
   const caja = $("#listaApodos");
-  const q = $("#buscaApodos").value;
-  const grupos = [["Material", E.productos.filter(p => p.tipo === "material" && p.activo !== false)], ["Muebles · apodos nada más (aquí no hay litros)", E.productos.filter(p => p.tipo === "mueble" && p.activo !== false)]];
-  let html = "";
-  grupos.forEach(([titulo_, l]) => {
-    l = l.filter(p => coincide(p, q)).sort((a,b) => sinAcento(titulo(a)) > sinAcento(titulo(b)) ? 1 : -1);
-    if (!l.length) return;
-    html += '<div class="grupo-apodos">' + esc(titulo_) + '</div>' + l.map(p => {
-      const c = E.apodosCambios.get(p.id) || {};
-      const apodos = c.apodos || p.apodos || [];
-      const litros = c.litros !== undefined ? c.litros : p.litros;
-      return '<div class="fila-apodo' + (E.apodosCambios.has(p.id) ? " cambiada" : "") + '" data-id="' + p.id + '">' +
-        '<div class="nom"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>' + esc(p.nombre) + (p.color ? ' <span class="chip color"><span class="punto" style="background:' + tinte(p.color) + '"></span>' + esc(p.color) + '</span>' : "") + '</div>' +
-        '<div class="apodos">' + apodos.map((a,i) => '<span class="chip edit" data-quita="' + i + '" title="Quitar">' + esc(a) + ' ×</span>').join("") +
-          (apodos.length < 3 ? '<span class="chip mas" data-agrega>＋ apodo</span>' : '<span style="font-size:11px;color:var(--tinta3)">ya tiene 3</span>') + '</div>' +
-        (p.tipo === "material" ? '<div class="litros"><input type="number" inputmode="decimal" min="0" step="0.5" data-litros value="' + (litros != null ? litros : "") + '" placeholder="?"> L por ' + esc((p.presentacion || "envase").toLowerCase()) + '</div>' : '<div class="litros" style="color:var(--tinta3)">—</div>') +
-      '</div>';
-    }).join("");
-  });
-  caja.innerHTML = html || '<div class="vacio"><b>Nada que mostrar</b><p>Agrega productos primero.</p></div>';
+  const qq = $("#buscaApodos").value;
+  let l = materiales();
+  if (qq.trim()) l = Busca.busca(qq, l, p => [p.nombre, ...(p.apodos || [])].join(" "));
+  l.sort((a,b) => sinAcento(titulo(a)) > sinAcento(titulo(b)) ? 1 : -1);
+  caja.innerHTML = l.length ? l.map(p => {
+    const c = E.apodosCambios.get(p.id) || {};
+    const apodos = c.apodos || p.apodos || [];
+    const litros = c.litros !== undefined ? c.litros : p.litros;
+    return '<div class="fila-apodo' + (E.apodosCambios.has(p.id) ? " cambiada" : "") + '" data-id="' + p.id + '">' +
+      '<div class="nom"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>' + esc(p.nombre) + '</div>' +
+      '<div class="apodos">' + apodos.map((a,i) => '<span class="chip edit" data-quita="' + i + '" title="Quitar">' + esc(a) + ' ×</span>').join("") +
+        (apodos.length < 3 ? '<span class="chip mas" data-agrega>＋ apodo</span>' : '<span style="font-size:11px;color:var(--tinta3)">ya tiene 3</span>') + '</div>' +
+      '<div class="litros"><input type="number" inputmode="decimal" min="0" step="0.5" data-litros value="' + (litros != null ? litros : "") + '" placeholder="?"> L por ' + esc((p.presentacion || "envase").toLowerCase()) + '</div></div>';
+  }).join("") : '<div class="vacio"><b>Nada que mostrar</b><p>Agrega productos en Material primero.</p></div>';
   caja.querySelectorAll(".fila-apodo").forEach(f => {
     const id = f.dataset.id; const p = E.productos.find(x => x.id === id);
     const actual = () => (E.apodosCambios.get(id) || {}).apodos || p.apodos || [];
@@ -614,34 +1068,61 @@ function pintaApodos(){
 function cambiaApodo(id, cambio){ E.apodosCambios.set(id, Object.assign({}, E.apodosCambios.get(id) || {}, cambio)); pintaApodos(); }
 async function guardarApodos(){
   if (!exigeYo()) return;
-  for (const [id, c] of E.apodosCambios){ const p = E.productos.find(x => x.id === id); if (!p) continue; await Almacen.parcha("producto", id, Object.assign({}, c, {por_quien:E.yo})); }
+  for (const [id, c] of E.apodosCambios){ if (!E.productos.find(x => x.id === id)) continue; await Almacen.parcha("producto", id, Object.assign({}, c, {por_quien:E.yo})); }
   const n = E.apodosCambios.size; E.apodosCambios.clear(); pintaApodos(); grita("Guardado: " + n + " cambio" + (n === 1 ? "" : "s"));
 }
 
 /* ═══════════════ ajustes ═══════════════ */
 function pintaAjustes(){
   const C = window.CONFIG || {};
+  const viejos = Almacen.viejos();
   $("#ajustes").innerHTML =
+    (viejos.length ? '<div class="aviso"><b>' + plural(viejos.length, "artículo", "artículos") + ' de la versión anterior</b><p>Antes cada sección era un contador suelto. Dime en qué etapa o sección real va cada uno y lo paso al inventario nuevo; nada se inventa.</p><div class="pie"><button class="btn vino" id="ajMigra">Acomodarlos</button></div></div>' : "") +
     '<div class="ajuste"><h4>Quién soy</h4><p>' + (E.yo ? "Estás como <b>" + esc(E.yo) + "</b>." : "Todavía no has dicho quién eres.") + '</p><div class="acciones"><button class="btn" id="ajYo">Cambiar de persona</button>' + (Almacen.sesion ? '<button class="btn fantasma" id="ajSalir">Cerrar sesión</button>' : "") + '</div></div>' +
     '<div class="ajuste"><h4>Modo práctica</h4><p>Para jugar sin miedo: datos de juguete, solo en este aparato. El inventario real ni se entera.</p><label class="interruptor"><input type="checkbox" id="ajPractica"' + (Almacen.practica ? " checked" : "") + '> <span>' + (Almacen.practica ? "Practicando" : "Apagado") + '</span></label></div>' +
+    '<div class="ajuste"><h4>Hoja de conteo para imprimir</h4><p>Para caminar el almacén con papel y comparar contra el sistema.</p><div class="acciones"><button class="btn" data-imprime="mueble">Muebles</button><button class="btn" data-imprime="pieza">Piezas</button><button class="btn" data-imprime="material">Material</button></div></div>' +
     '<div class="ajuste"><h4>Revisar este aparato</h4><p>Prueba una por una las cosas que la app necesita y te dice cómo arreglar lo que falle.</p><div class="acciones"><button class="btn" id="ajDiag">Revisar ahora</button></div><div class="diag" id="diag" style="margin-top:10px"></div></div>' +
-    '<div class="ajuste"><h4>Exportar e imprimir</h4><p>Todo lo que hay, a Excel; o una hoja para hacer el conteo físico caminando el almacén.</p><div class="acciones"><button class="btn" data-exporta="mueble">Muebles a Excel</button><button class="btn" data-exporta="material">Material a Excel</button><button class="btn" data-imprime="mueble">Hoja de conteo muebles</button><button class="btn" data-imprime="material">Hoja de conteo material</button></div></div>' +
     '<div class="ajuste"><h4>Instalar en el celular</h4><p>' + (esApple ? "En iPhone: botón <b>Compartir</b> (el cuadrito con la flecha) → <b>Agregar a pantalla de inicio</b>." : "En Android: menú <b>⋮</b> → <b>Agregar a pantalla principal</b> o <b>Instalar app</b>.") + ' Queda con su icono y abre en un segundo.</p></div>' +
-    '<div class="ajuste"><h4>Versión</h4><p><b>' + esc(C.VERSION || "?") + '</b> · ' + (Almacen.hayNube ? "base compartida conectada (Firebase)" : "sin base compartida (faltan las llaves de Firebase en config.js)") + '</p><div class="acciones"><button class="btn" id="ajActualiza">Buscar actualización</button><button class="btn fantasma" id="ajTema">Claro / oscuro</button></div></div>';
+    '<div class="ajuste"><h4>Versión</h4><p><b>' + esc(C.VERSION || "?") + '</b> · ' + (Almacen.hayNube ? "base compartida conectada" : "sin base compartida") + '</p><div class="acciones"><button class="btn" id="ajActualiza">Buscar actualización</button><button class="btn fantasma" id="ajTema">Claro / oscuro</button></div></div>';
+  const mg = $("#ajMigra"); if (mg) mg.onclick = hojaMigrar;
   $("#ajYo").onclick = hojaQuienSoy;
   const s = $("#ajSalir"); if (s) s.onclick = async () => { await Almacen.sale(); pintaPulso(); pintaTodo(); };
   $("#ajPractica").onchange = async e => { await Almacen.setPractica(e.target.checked); pintaPulso(); pintaTodo(); grita(e.target.checked ? "Modo práctica encendido" : "De vuelta a lo real"); };
   $("#ajDiag").onclick = diagnostico;
   $("#ajActualiza").onclick = buscaActualizacion;
   $("#ajTema").onclick = () => { const osc = document.documentElement.dataset.theme ? document.documentElement.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; document.documentElement.dataset.theme = osc ? "light" : "dark"; localStorage.setItem("alm.tema", document.documentElement.dataset.theme); };
-  enlazaExportar($("#ajustes"));
+  $("#ajustes").querySelectorAll("[data-imprime]").forEach(b => b.onclick = () => imprime(b.dataset.imprime));
+}
+/* Artículos de la versión 1 → etapa o sección real. El usuario decide; el sistema no adivina. */
+function hojaMigrar(){
+  if (!exigeYo()) return;
+  const viejos = Almacen.viejos();
+  const MAPA = { "Mueble maquilado":"maquilado", "Mueble armado":"armado", "Mueble pintado":"pintado", "Mueble de MDF":"mdf", "Mueble de MDF pintado":"mdf_pintado", "Puertas pre lijadas":"puertas_pre_lijadas", "Puertas lijadas":"puertas_lijadas", "Puertas pintadas":"puertas_pintadas", "Cajones pintados":"cajones_pintados" };
+  const opciones = '<option value="">— no pasar —</option><optgroup label="Muebles">' + Object.keys(R.ETAPAS).map(e => '<option value="' + e + '">' + esc(R.ETAPAS[e].nombre) + '</option>').join("") + '</optgroup><optgroup label="Piezas">' + Object.keys(R.PIEZAS).map(c => '<option value="' + c + '">' + esc(R.PIEZAS[c].nombre) + '</option>').join("") + '</optgroup>';
+  abreHoja('<h3>Acomodar lo de antes</h3><p class="guia">Cada renglón dice cuántos había y en qué sección estaba. Escoge a dónde va en el sistema nuevo. Como antes no se anotaba quién los hizo, quedan «sin responsable registrado».</p>' +
+    viejos.map(p => { const m = Busca.busca(p.nombre, modelosActivos(), x => x.nombre)[0]; return '<div class="lote" data-vid="' + p.id + '" data-mid="' + (m ? esc(m.id) : "") + '" style="grid-template-columns:1fr;gap:6px"><div class="quien">' + esc(p.nombre) + ' · ' + esc(p.color || "sin color") + '<small>' + p.cantidad + ' en «' + esc(p.categoria || "?") + '»' + (m ? (m.nombre !== p.nombre ? " · se toma como " + esc(m.nombre) : "") : ' · <span style="color:var(--rojo)">no está en el catálogo: agrégalo primero</span>') + '</small></div><select class="dest" ' + (m ? "" : "disabled") + '>' + opciones.replace('value="' + (MAPA[p.categoria] || "—") + '"', 'value="' + (MAPA[p.categoria] || "—") + '" selected') + '</select></div>'; }).join("") +
+    '<button class="btn vino grande" id="migOk" style="margin-top:12px">Pasar al inventario nuevo</button>',
+    h => {
+      h.querySelector("#migOk").onclick = async () => {
+        let n = 0;
+        for (const f of h.querySelectorAll("[data-vid]")){
+          const p = viejos.find(x => x.id === f.dataset.vid); const m = modeloDe(f.dataset.mid); const dest = f.querySelector(".dest").value;
+          if (!p || !m || !dest || !(p.color)) continue;
+          if (R.ETAPAS[dest]) await Almacen.registra({ modelo_id: m.id, modelo: m.nombre, color: p.color, etapa: dest, cantidad: p.cantidad, motivo: "de la versión anterior" }, E.yo, origen());
+          else await Almacen.ajustaPieza({ modelo_id: m.id, modelo: m.nombre, color: p.color, categoria: dest }, Number(p.cantidad || 0), E.yo, "de la versión anterior", origen(), "", "alta");
+          await Almacen.parcha("producto", p.id, { activo:false, migrado:true });
+          n++;
+        }
+        cierraHoja(); grita(n ? plural(n, "artículo acomodado", "artículos acomodados") : "No se movió nada"); pintaTodo();
+      };
+    });
 }
 async function diagnostico(){
   const caja = $("#diag"); const filas = [];
   const fila = (ok, t, arreglo) => filas.push('<div class="r"><span class="' + (ok === true ? "ok" : ok === false ? "no" : "duda") + '">' + (ok === true ? "✓" : ok === false ? "✗" : "?") + '</span><span>' + t + (arreglo ? '<small>' + arreglo + '</small>' : "") + '</span></div>');
   const pinta = () => { caja.innerHTML = filas.join(""); };
   fila(navigator.onLine !== false, "Conexión a internet", navigator.onLine === false ? "Sin señal ahora. Lo que hagas se guarda y se sube después." : "");
-  fila(Almacen.hayNube ? (Almacen.modo === "nube") : null, "Base compartida", !Almacen.hayNube ? "Faltan las llaves de Supabase en config.js" : Almacen.modo !== "nube" ? "No has iniciado sesión" : "");
+  fila(Almacen.hayNube ? (Almacen.modo === "nube") : null, "Base compartida", !Almacen.hayNube ? "Faltan las llaves en config.js" : Almacen.modo !== "nube" ? "No has iniciado sesión" : "");
   const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   fila(instalada, "Instalada como app", instalada ? "" : (esApple ? "Compartir → Agregar a pantalla de inicio" : "Menú ⋮ → Instalar app"));
   try { localStorage.setItem("alm.prueba", "1"); localStorage.removeItem("alm.prueba"); fila(true, "Guardado en este aparato"); } catch(e){ fila(false, "Guardado en este aparato", "El navegador está bloqueando el almacenamiento. Sal del modo privado."); }
@@ -653,38 +1134,29 @@ async function diagnostico(){
     try { const s = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}); s.getTracks().forEach(t => t.stop()); fila(true, "Cámara (para el código de barras)"); }
     catch(e){ fila(false, "Cámara", e.name === "NotAllowedError" ? (esApple ? "iPhone: Ajustes → Safari → Cámara → Permitir" : "Android: toca el candado en la barra de dirección → Permisos → Cámara") : "No se encontró cámara."); }
     pinta();
-    try { const s = await navigator.mediaDevices.getUserMedia({audio:true}); s.getTracks().forEach(t => t.stop()); fila(true, "Micrófono", esApple ? "Para dictar usa el 🎤 del teclado del iPhone." : ""); }
-    catch(e){ fila(false, "Micrófono", e.name === "NotAllowedError" ? (esApple ? "iPhone: Ajustes → Safari → Micrófono → Permitir. Y el 🎤 del teclado funciona aunque esto falle." : "Android: candado en la barra → Permisos → Micrófono") : "No se encontró micrófono."); }
-    pinta();
   }
-  fila("BarcodeDetector" in window ? true : null, "Lector de código de barras", "BarcodeDetector" in window ? "Nativo, rápido." : "Se usa el lector de respaldo (funciona, un poco más lento).");
   fila(true, "Versión instalada: " + esc((window.CONFIG || {}).VERSION || "?"));
   pinta();
 }
-
-/* ═══════════════ exportar e imprimir ═══════════════ */
-function enlazaExportar(raiz){
-  raiz.querySelectorAll("[data-exporta]").forEach(b => b.onclick = () => exporta(b.dataset.exporta));
-  raiz.querySelectorAll("[data-imprime]").forEach(b => b.onclick = () => imprime(b.dataset.imprime));
-}
-function exporta(tipo){
-  const l = E.productos.filter(p => p.tipo === tipo && p.activo !== false);
-  const cab = tipo === "material" ? ["Nombre etiqueta","Apodos","Categoría","Marca","Código","Barras","Presentación","Litros","Hay","Mínimo","Litros totales","Último","Quién"]
-                                  : ["Mueble","Color","Categoría","Apodos","Hay","Mínimo","Último","Quién"];
-  const filas = l.map(p => tipo === "material"
-    ? [p.nombre, (p.apodos || []).join(", "), p.categoria, p.marca, p.codigo, p.barras, p.presentacion, p.litros, vivo(p), p.minimo, p.litros ? vivo(p) * p.litros : "", p.tocado ? new Date(p.tocado).toLocaleString("es-MX") : "", p.por_quien]
-    : [p.nombre, p.color, p.categoria, (p.apodos || []).join(", "), vivo(p), p.minimo, p.tocado ? new Date(p.tocado).toLocaleString("es-MX") : "", p.por_quien]);
-  const csv = "﻿" + [cab].concat(filas).map(r => r.map(v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(";")).join("\r\n");
-  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
-  a.download = (tipo === "material" ? "material" : "muebles") + "-" + new Date().toISOString().slice(0,10) + ".csv"; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
 function imprime(tipo){
-  const l = E.productos.filter(p => p.tipo === tipo && p.activo !== false).sort((a,b) => sinAcento(titulo(a)) > sinAcento(titulo(b)) ? 1 : -1);
-  $("#impresion").innerHTML = '<h1>Hoja de conteo · ' + (tipo === "material" ? "Material" : "Muebles") + '</h1><p>' + esc((window.CONFIG || {}).TALLER || "") + ' · ' + new Date().toLocaleDateString("es-MX", {weekday:"long", day:"numeric", month:"long", year:"numeric"}) + ' · contó: ______________</p>' +
-    '<table><thead><tr><th>' + (tipo === "material" ? "Producto" : "Mueble") + '</th><th>' + (tipo === "material" ? "Presentación" : "Color · categoría") + '</th><th>Sistema</th><th>Contado</th><th>Notas</th></tr></thead><tbody>' +
-    l.map(p => '<tr><td>' + esc(titulo(p)) + (p.nombre !== titulo(p) ? '<br><small>' + esc(p.nombre) + '</small>' : "") + '</td><td>' + esc(tipo === "material" ? (p.presentacion || "") + (p.litros ? " " + p.litros + " L" : "") : [p.color, p.categoria].filter(Boolean).join(" · ")) + '</td><td class="n">' + vivo(p) + '</td><td class="blanco"></td><td></td></tr>').join("") + '</tbody></table>';
+  let filas, cab;
+  if (tipo === "material"){ cab = ["Producto", "Presentación"]; filas = materiales().sort((a,b) => sinAcento(titulo(a)) > sinAcento(titulo(b)) ? 1 : -1).map(p => [esc(titulo(p)) + (p.nombre !== titulo(p) ? '<br><small>' + esc(p.nombre) + '</small>' : ""), esc((p.presentacion || "") + (p.litros ? " " + p.litros + " L" : "")), vivo(p)]); }
+  else if (tipo === "pieza"){ cab = ["Mueble · color", "Sección"]; filas = []; Object.keys(R.PIEZAS).forEach(c => gruposPieza(c).forEach(p => filas.push([esc(p.modelo) + " · " + esc(p.color), esc(R.PIEZAS[c].nombre), vivoPieza(p)]))); }
+  else { cab = ["Mueble · color", "Etapa · de quién"]; filas = []; Object.keys(R.ETAPAS).forEach(e => gruposMueble(e).forEach(g => g.lotes.forEach(l => filas.push([esc(g.modelo) + " · " + esc(g.color), esc(R.ETAPAS[e].nombre) + " · " + esc(R.origenDe(l)), l.cantidad])))); }
+  $("#impresion").innerHTML = '<h1>Hoja de conteo · ' + (tipo === "material" ? "Material" : tipo === "pieza" ? "Piezas" : "Muebles") + '</h1><p>' + esc((window.CONFIG || {}).TALLER || "") + ' · ' + new Date().toLocaleDateString("es-MX", {weekday:"long", day:"numeric", month:"long", year:"numeric"}) + ' · contó: ______________</p>' +
+    '<table><thead><tr><th>' + cab[0] + '</th><th>' + cab[1] + '</th><th>Sistema</th><th>Contado</th><th>Notas</th></tr></thead><tbody>' + filas.map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td class="n">' + r[2] + '</td><td class="blanco"></td><td></td></tr>').join("") + '</tbody></table>';
   $("#impresion").hidden = false; window.print(); setTimeout(() => { $("#impresion").hidden = true; }, 500);
+}
+
+/* ═══════════════ detalle (computadora) ═══════════════ */
+function pintaDetalle(){
+  const caja = $("#detalle"); const s = E.sel;
+  if (!s){ caja.innerHTML = '<div class="detalle-vacio">Escoge un renglón para ver su detalle</div>'; return; }
+  if (s.tipo === "mueble" && E.vista === "muebles"){ caja.innerHTML = htmlDetalleMueble(); montaDetalleMueble(caja); }
+  else if (s.tipo === "pieza" && E.vista === "piezas"){ caja.innerHTML = htmlDetallePieza(); montaDetallePieza(caja); }
+  else if (s.tipo === "material" && E.vista === "material"){ caja.innerHTML = htmlDetalleMaterial(); montaDetalleMaterial(caja); }
+  else if (s.tipo === "listo" && E.vista === "listos"){ caja.innerHTML = htmlDetalleListo(); montaDetalleListo(caja); }
+  else caja.innerHTML = '<div class="detalle-vacio">Escoge un renglón para ver su detalle</div>';
 }
 
 /* ═══════════════ hoja deslizante ═══════════════ */
@@ -699,29 +1171,42 @@ $("#telon").addEventListener("click", e => { if (e.target.id === "telon") cierra
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#telon").classList.contains("on")) cierraDesdeAfuera(); });
 
 /* ═══════════════ navegación ═══════════════ */
+const VISTAS = ["muebles","piezas","listos","pedidos","resumen","material","recados","bitacora","catalogo","apodos","ajustes"];
+const EN_MAS = ["pedidos","resumen","material","recados","bitacora","catalogo","apodos","ajustes"];
 function irA(v){
   if (v === "mas"){ hojaMas(); return; }
   E.vista = v;
   $$(".vista").forEach(s => s.classList.toggle("on", s.id === "v-" + v));
-  $$("[data-vista]").forEach(b => b.classList.toggle("on", b.dataset.vista === v || (v === "recados" || v === "bitacora" || v === "apodos" || v === "ajustes") && b.dataset.vista === "mas"));
+  $$("[data-vista]").forEach(b => b.classList.toggle("on", b.dataset.vista === v || (EN_MAS.includes(v) && b.dataset.vista === "mas")));
   if (location.hash !== "#" + v) history.replaceState(null, "", "#" + v);
   window.scrollTo(0, 0);
-  if (v === "recados") pintaRecados(); if (v === "bitacora") pintaBitacora(); if (v === "apodos") pintaApodos(); if (v === "ajustes") pintaAjustes(); if (v === "pedidos") pintaPedidos();
+  pintaVista(v); if (esEscritorio()) pintaDetalle();
+}
+function pintaVista(v){
+  if (v === "muebles") pintaMuebles(); else if (v === "piezas") pintaPiezas(); else if (v === "listos") pintaListos(); else if (v === "pedidos") pintaPedidos();
+  else if (v === "resumen") pintaResumen(); else if (v === "material") pintaMaterial(); else if (v === "recados") pintaRecados(); else if (v === "bitacora") pintaBitacora();
+  else if (v === "catalogo") pintaCatalogo(); else if (v === "apodos") pintaApodos(); else if (v === "ajustes") pintaAjustes();
 }
 function hojaMas(){
+  const pend = E.pedidos.filter(p => p.estado !== "entregado").length, rec = E.recados.filter(r => !r.hecho).length;
   abreHoja('<h3>Más</h3><div style="display:grid;gap:8px">' +
-    '<button class="btn grande" data-ir="recados">Recados' + (E.recados.filter(r => !r.hecho).length ? ' · ' + E.recados.filter(r => !r.hecho).length + ' sin atender' : "") + '</button>' +
+    '<button class="btn grande" data-ir="pedidos">Pedidos' + (pend ? " · " + pend + " por entregar" : "") + '</button>' +
+    '<button class="btn grande" data-ir="material">Material · cubetas y tambos</button>' +
+    '<button class="btn grande" data-ir="resumen">Resumen · todo lo que hay</button>' +
+    '<button class="btn grande" data-ir="recados">Recados' + (rec ? " · " + rec + " sin atender" : "") + '</button>' +
     '<button class="btn grande" data-ir="bitacora">Bitácora · quién hizo qué</button>' +
+    '<button class="btn grande" data-ir="catalogo">Catálogo · fichas de los modelos</button>' +
     '<button class="btn grande" data-ir="apodos">Apodos y litros</button>' +
-    '<button class="btn grande" data-ir="ajustes">Ajustes · práctica · revisar aparato</button></div>',
+    '<button class="btn grande" data-ir="ajustes">Ajustes</button></div>',
     p => p.querySelectorAll("[data-ir]").forEach(b => b.onclick = () => { cierraHoja(); irA(b.dataset.ir); }));
 }
 $$("[data-vista]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); irA(b.dataset.vista); }));
-$("#fabLupa").onclick = () => { const v = (E.vista === "material") ? "material" : "muebles"; irA(v); const c = $(v === "material" ? "#buscadorMaterial [data-q]" : "#buscadorMueble [data-q]"); if (c){ c.focus(); c.scrollIntoView({block:"start", behavior:"smooth"}); } };
+$("#fabLupa").onclick = () => { const v = TEXTO_BUSCA[E.vista] ? E.vista : "muebles"; if (v !== E.vista) irA(v); abreLupa(v); };
 $("#yoLat").onclick = hojaQuienSoy; $("#yoCel").onclick = hojaQuienSoy;
-$$("[data-nuevo]").forEach(b => b.onclick = () => hojaProducto(b.dataset.nuevo));
+$$("[data-registrar]").forEach(b => b.onclick = () => b.dataset.registrar === "mueble" ? hojaRegistrarMueble() : hojaRegistrarPieza());
+$$("[data-nuevo]").forEach(b => b.onclick = () => hojaProducto());
 $$("[data-nuevo-pedido]").forEach(b => b.onclick = () => hojaPedido());
-enlazaExportar(document);
+$$("[data-barras]").forEach(b => b.onclick = hojaBarras);
 $("#btnRecado").onclick = async () => { const i = $("#recTexto"); await ponRecado(i.value); i.value = ""; };
 $("#recTexto").onkeydown = e => { if (e.key === "Enter") $("#btnRecado").click(); };
 $("#buscaApodos").oninput = pintaApodos;
@@ -731,19 +1216,20 @@ $("#salirPractica").onclick = async () => { await Almacen.setPractica(false); pi
 $("#formEntrada").onsubmit = async e => {
   e.preventDefault(); const m = $("#entMsg"); m.textContent = "Entrando…";
   try { await Almacen.entra($("#entMail").value.trim(), $("#entPass").value); m.textContent = ""; pintaPulso(); pintaTodo(); }
-  catch(err){ m.textContent = /Invalid/i.test(err.message || "") ? "Correo o contraseña incorrectos." : "No se pudo entrar: " + (err.message || "revisa tu señal"); }
+  catch(err){ m.textContent = /Invalid|wrong-password|invalid-credential|user-not-found/i.test((err.message || "") + (err.code || "")) ? "Correo o contraseña incorrectos." : "No se pudo entrar: " + (err.message || "revisa tu señal"); }
 };
 window.addEventListener("resize", () => { pintaTodo(); });
 const temaGuardado = localStorage.getItem("alm.tema"); if (temaGuardado) document.documentElement.dataset.theme = temaGuardado;
 
 function pintaTodo(){
-  pintaBuscador("mueble"); pintaBuscador("material");
-  pintaLista("mueble"); pintaLista("material");
+  VISTAS.forEach(v => { if (v !== "ajustes" || E.vista === "ajustes") pintaLupa(v); });
+  pintaVista(E.vista);
+  // Los globos de la barra lateral se calculan aunque la vista no esté abierta
+  const total = calculaListos().reduce((s,x) => s + x.listos, 0); $("#nListos").hidden = !total; $("#nListos").textContent = total;
+  const pend = E.pedidos.filter(p => p.estado !== "entregado").length; $("#nPed").hidden = !pend; $("#nPed").textContent = pend;
+  const bajos = materiales().filter(p => estado(p)).length; $("#nMat").hidden = !bajos; $("#nMat").textContent = bajos;
+  const rec = E.recados.filter(r => !r.hecho).length; $("#nRec").hidden = !rec; $("#nRec").textContent = rec;
   if (esEscritorio()) pintaDetalle();
-  if (E.vista === "recados") pintaRecados(); if (E.vista === "bitacora") pintaBitacora(); if (E.vista === "apodos") pintaApodos(); if (E.vista === "ajustes") pintaAjustes(); if (E.vista === "pedidos") pintaPedidos();
-  const mBajos = E.productos.filter(p => p.tipo === "mueble" && p.activo !== false && estado(p)).length;
-  const tBajos = E.productos.filter(p => p.tipo === "material" && p.activo !== false && estado(p)).length;
-  $("#nMue").hidden = !mBajos; $("#nMue").textContent = mBajos; $("#nMat").hidden = !tBajos; $("#nMat").textContent = tBajos;
 }
 
 /* ═══════════════ actualización de la app ═══════════════ */
@@ -759,7 +1245,6 @@ if ("serviceWorker" in navigator && location.protocol !== "file:"){
       w.addEventListener("statechange", () => { if (w.state === "installed" && navigator.serviceWorker.controller){ swNuevo = w; $("#actualiza").hidden = false; } });
     });
   }).catch(() => {});
-  // Solo se recarga cuando la persona pidió actualizar; la primera instalación no debe parpadear.
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (E.actualizando) location.reload(); });
   $("#btnActualiza").onclick = () => { E.actualizando = true; if (swNuevo) swNuevo.postMessage("activa"); else location.reload(); };
 }
@@ -767,16 +1252,19 @@ if ("serviceWorker" in navigator && location.protocol !== "file:"){
 /* ═══════════════ arranque ═══════════════ */
 $("#versionLat").textContent = "Almacén · " + ((window.CONFIG || {}).VERSION || "").split(" · ")[0];
 pintaYo();
+Almacen.mira("modelo", l => { E.modelos = l; pintaTodo(); });
+Almacen.mira("lote", l => { E.lotes = l; pintaTodo(); });
+Almacen.mira("pieza", l => { E.piezas = l; pintaTodo(); });
 Almacen.mira("producto", l => { E.productos = l; pintaTodo(); });
-Almacen.mira("movimiento", l => { E.movimientos = l; pintaTodo(); });
-Almacen.mira("recado", l => { E.recados = l; pintaRecados(); });
+Almacen.mira("movimiento", l => { E.movimientos = l; if (["bitacora"].includes(E.vista) || esEscritorio()) pintaTodo(); });
+Almacen.mira("recado", l => { E.recados = l; if (E.vista === "recados") pintaRecados(); const n = l.filter(r => !r.hecho).length; $("#nRec").hidden = !n; $("#nRec").textContent = n; });
 Almacen.mira("persona", l => { E.personas = l; });
-Almacen.mira("pedido", l => { E.pedidos = l; pintaPedidos(); });
+Almacen.mira("pedido", l => { E.pedidos = l; if (E.vista === "pedidos") pintaPedidos(); const n = l.filter(p => p.estado !== "entregado").length; $("#nPed").hidden = !n; $("#nPed").textContent = n; });
 Almacen.onEstado(pintaPulso);
 (async () => {
   await Almacen.arranca();
   pintaPulso();
   const h = (location.hash || "#muebles").slice(1);
-  irA(["muebles","material","pedidos","recados","bitacora","apodos","ajustes"].includes(h) ? h : "muebles");
+  irA(VISTAS.includes(h) ? h : "muebles");
   if (!E.yo && !Almacen.necesitaEntrar()) hojaQuienSoy();
 })();
