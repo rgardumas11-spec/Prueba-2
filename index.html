@@ -44,7 +44,7 @@
       <a href="#recados" data-vista="recados"><svg viewBox="0 0 24 24"><path d="M20.5 14.5a2 2 0 0 1-2 2H8l-4.5 4v-15a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>Recados<span class="n" id="nRec" hidden></span></a>
       <a href="#bitacora" data-vista="bitacora"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5.3l3.3 2"/></svg>Bitácora</a>
       <a href="#catalogo" data-vista="catalogo"><svg viewBox="0 0 24 24"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 0-3 3z"/><path d="M5 4v16M9 8h5M9 12h5"/></svg>Catálogo</a>
-      <a href="#apodos" data-vista="apodos"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M12.5 7.5l4 4"/></svg>Apodos y litros</a>
+      <a href="#apodos" data-vista="apodos"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/><path d="M9 12v5M15 12v5"/></svg>Catálogo de material</a>
       <a href="#ajustes" data-vista="ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/></svg>Ajustes</a>
     </nav>
     <button class="pie yo" id="yoLat"><span class="av" id="yoIniLat">?</span><span><b id="yoNomLat">¿Quién eres?</b><small id="yoEstadoLat">—</small></span></button>
@@ -134,12 +134,11 @@
     </section>
 
     <section class="vista" id="v-apodos">
-      <div class="arriba"><h1>Apodos y litros <em>solo se edita esto</em></h1>
-        <div class="der"><button class="btn" id="deshacerApodos" hidden>Deshacer</button><button class="btn vino" id="guardarApodos" disabled>Guardar cambios</button></div>
+      <div class="arriba"><h1>Catálogo de material <em id="resumenApodos"></em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="apodos" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><button class="btn vino" data-nuevo="material">＋ Material</button></div>
       </div>
-      <div class="candado"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Aquí solo se cambian los <b>apodos (hasta 3)</b> y los <b>litros por envase</b> del material.</span></div>
-      <div class="busca-caja"><label class="campo-busca"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="buscaApodos" placeholder="Buscar producto…" autocomplete="off"></label></div>
-      <div id="listaApodos"></div>
+      <div class="busca-caja" id="busca-apodos" hidden></div>
+      <div class="lista" id="listaApodos"></div>
     </section>
 
     <section class="vista" id="v-ajustes">

@@ -55,7 +55,33 @@ window.Almacen = (() => {
   const claveLote = l => ["l", l.modelo_id, slug(l.color), l.etapa, slug(l.maquilo), slug(l.armo), (l.pinto || []).map(slug).sort().join("+")].join("~");
   const clavePieza = p => ["p", p.modelo_id, slug(p.color), p.categoria].join("~");
 
-  function cargarTodoLocal(){ TABLAS.forEach(t => { memoria[t] = leerLocal(t); avisar(t); }); }
+  function cargarTodoLocal(){ TABLAS.forEach(t => { memoria[t] = leerLocal(t); }); migraPiezasViejas(); TABLAS.forEach(avisar); }
+
+  /* Las secciones de puertas cambiaron de nombre en la versión 2.1. Lo que se haya
+     capturado con el nombre viejo se pasa al nuevo (misma cantidad) y el documento
+     viejo se borra. Se hace una sola vez por documento. */
+  const migradas = new Set();
+  function migraPiezasViejas(){
+    const V = (window.Reglas || {}).PIEZAS_VIEJAS || {};
+    const viejas = lista("pieza").filter(p => V[p.categoria] && !migradas.has(p.id));
+    if (!viejas.length) return;
+    const escrituras = [], movs = [];
+    viejas.forEach(p => {
+      migradas.add(p.id);
+      const n = Number(p.cantidad || 0);
+      const nueva = { modelo_id: p.modelo_id, modelo: p.modelo, color: p.color || "", categoria: V[p.categoria], minimo: Number(p.minimo || 0) };
+      nueva.id = clavePieza(nueva);
+      delete memoria.pieza[p.id];
+      if (n > 0){
+        escrituras.push(["pieza", nueva.id, incrementaLocal("pieza", nueva, n)]);
+        movs.push({ id: uuid(), tipo: "ajuste", pieza_id: nueva.id, modelo_id: p.modelo_id, nombre: p.modelo, color: p.color || "", categoria: nueva.categoria,
+          delta: 0, resultado: memoria.pieza[nueva.id].cantidad, persona: "sistema", motivo: "sección renombrada en la versión 2.1", origen: "", creado: ahora() });
+      }
+      if (modo === "nube" && db) enCamino(db.collection("pieza").doc(p.id).delete());
+    });
+    guardarLocal("pieza"); movs.forEach(movLocal);
+    mandaBatch(escrituras, movs);
+  }
 
   function enCamino(promesa){
     pendientes++; avisarEstado();
@@ -78,6 +104,7 @@ window.Almacen = (() => {
           const mapa = {};
           snap.forEach(d => { mapa[d.id] = Object.assign({}, d.data(), {id: d.id}); });
           memoria[t] = mapa;
+          if (t === "pieza") migraPiezasViejas();
           guardarLocal(t);
           avisar(t);
           if (t === "modelo" && !Object.keys(mapa).length) sembrarModelos();
@@ -208,11 +235,11 @@ window.Almacen = (() => {
     });
     const piezas = [
       ["Monarca Midas", "Negro completo", "puertas_pintadas", 19], ["Monarca Midas", "Negro completo", "cajones_pintados", 8],
-      ["Monarca Midas", "Negro completo", "puertas_lijadas", 12], ["Monarca Midas", "Negro completo", "puertas_con_bisagras", 6],
-      ["Monarca Midas", "Negro completo", "puertas_pre_lijadas", 30],
+      ["Monarca Midas", "Negro completo", "puertas_lijadas", 12], ["Monarca Midas", "Negro completo", "puertas_lijadas_bisagras", 6],
+      ["Monarca Midas", "Negro completo", "puertas_por_lijar", 30], ["Monarca Midas", "Negro completo", "puertas_uriel", 40],
       ["Ropero Deysi", "Blanco completo", "puertas_pintadas", 6], ["Ropero Deysi", "Blanco completo", "cajones_pintados", 2],
       ["Monarca Círculo", "Negro completo", "puertas_pintadas", 20], ["Monarca Círculo", "Negro completo", "cajones_pintados", 9],
-      ["Mariana Cisne", "Negro puertas cafés", "puertas_pre_lijadas", 10]
+      ["Mariana Cisne", "Negro puertas cafés", "puertas_uriel", 10]
     ];
     piezas.forEach(([n, color, categoria, cantidad]) => {
       const m = mod(n);

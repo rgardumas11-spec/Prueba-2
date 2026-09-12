@@ -264,6 +264,24 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .resumen-fila .etapas span b{color:var(--tinta);font-weight:600}
 .resumen-fila .etapas span.ok{background:var(--verde-t);border-color:var(--verde);color:var(--verde)} .resumen-fila .etapas span.ok b{color:var(--verde)}
 
+/* ── Bloques dentro de una lista (con bisagras / sin bisagras, familias del catálogo) ── */
+.bloque-h{font:600 10.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--vino);background:var(--vino-tinte);padding:7px 14px;border-bottom:1px solid var(--linea);display:flex;align-items:center;gap:8px}
+.bloque-h.suave{color:var(--tinta3);background:var(--hoja2)}
+.bloque-h .n{margin-left:auto;font-weight:600;color:var(--tinta2);letter-spacing:0}
+.bloque-h .btn{margin-left:auto;padding:4px 10px;font-size:12.5px;text-transform:none;letter-spacing:0}
+.bloque-vacio{padding:10px 14px;color:var(--tinta3);font-size:13px;border-bottom:1px solid var(--linea)}
+
+/* ── Catálogo de material: litros · nombre · apodo ── */
+.fila-mat{display:grid;grid-template-columns:64px 1fr;grid-template-areas:"litros nombre" "litros apodo";column-gap:12px;padding:10px 14px;border-bottom:1px solid var(--linea);cursor:pointer;align-items:center}
+.fila-mat:last-child{border-bottom:0}
+.fila-mat .litros{grid-area:litros;font:600 18px var(--mono);color:var(--vino);text-align:center;background:var(--vino-tinte);border-radius:8px;padding:8px 4px;align-self:center}
+.fila-mat .litros small{display:block;font:500 9.5px var(--mono);letter-spacing:.08em;color:var(--vino-medio)}
+.fila-mat .litros.falta{background:var(--rojo-t);color:var(--rojo)}
+.fila-mat .nombre{grid-area:nombre;font-weight:600;font-size:14.5px;min-width:0;overflow-wrap:anywhere}
+.fila-mat .nombre small{display:block;font:500 11px var(--mono);color:var(--tinta3);margin-top:1px}
+.fila-mat .apodo{grid-area:apodo;font-size:13px;color:var(--tinta2);display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
+.fila-mat .apodo .chip.principal{background:var(--vino-tinte);border-color:var(--vino-medio);color:var(--vino);font-weight:600}
+
 /* ── Bitácora ── */
 .dia{font:600 10.5px var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--tinta3);margin:16px 0 6px}
 .dia:first-child{margin-top:0}
@@ -419,7 +437,8 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
   .fila .stepper .cant{display:none}
   .tecla{width:34px;height:34px;font-size:19px}
   .fila .sello{margin-left:4px}
-  .fila-apodo{grid-template-columns:minmax(260px,1.4fr) 1fr 160px;align-items:center}
+  .fila-mat{grid-template-columns:72px minmax(220px,1.2fr) 1fr;grid-template-areas:"litros nombre apodo"}
+  .fila-mat .apodo{margin-top:0}
   .tickets{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
   .telon{align-items:center}
   .panel{border-radius:18px;max-height:88vh;padding-bottom:22px}

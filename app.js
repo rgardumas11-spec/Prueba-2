@@ -54,11 +54,10 @@ const E = {
   yo: localStorage.getItem("alm.yo") || "",
   vista: "muebles",
   modelos: [], lotes: [], piezas: [], productos: [], movimientos: [], recados: [], personas: [], pedidos: [],
-  etapa: "maquilado", catPieza: "puertas_pre_lijadas", catMat: "",
+  etapa: "maquilado", catPieza: "puertas_uriel", catMat: "",
   busca: {}, buscaAbierta: {},
   sel: null,                       // {tipo, ...llaves}
   pend: new Map(), relojes: new Map(),
-  apodosCambios: new Map(),
   ordenPedidos: localStorage.getItem("alm.ordenPedidos") || "desc",
   ultimoQuien: {}
 };
@@ -108,7 +107,7 @@ function pintaPulso(){
 }
 
 /* ═══════════════ búsqueda: un icono, se despliega al tocarlo ═══════════════ */
-const TEXTO_BUSCA = { muebles:"Mueble o color…", piezas:"Mueble o color…", listos:"Mueble o color…", pedidos:"Cliente o mueble…", resumen:"Mueble o color…", material:"Nombre o apodo…", bitacora:"Mueble, persona…", catalogo:"Nombre del modelo…" };
+const TEXTO_BUSCA = { muebles:"Mueble o color…", piezas:"Mueble o color…", listos:"Mueble o color…", pedidos:"Cliente o mueble…", resumen:"Mueble o color…", material:"Nombre o apodo…", bitacora:"Mueble, persona…", catalogo:"Nombre del modelo…", apodos:"Nombre o apodo…" };
 function pintaLupa(vista){
   const caja = $("#busca-" + vista); const btn = $('[data-lupa="' + vista + '"]'); if (!caja) return;
   const abierta = !!E.buscaAbierta[vista];
@@ -168,9 +167,9 @@ function pintaMuebles(){
     if (q("muebles")){ caja.innerHTML = sinHallar("muebles", "ese mueble en " + et.nombre.toLowerCase()); return; }
     const ant = etapaAnterior(E.etapa);
     caja.innerHTML = '<div class="vacio"><b>No hay muebles en «' + esc(et.nombre) + '»</b><p>' +
-      (R.admiteAlta(E.etapa) ? "Aquí entran los muebles recién hechos. Regístralos con el botón de arriba." : "Aquí solo llegan los que pasan desde «" + esc(R.ETAPAS[ant].nombre) + "»: abre uno allá y toca «Pasar a " + esc(et.corto.toLowerCase()) + "».") + '</p>' +
-      (R.admiteAlta(E.etapa) ? '<button class="btn vino" data-registrar="mueble">＋ Registrar</button>' : '<button class="btn" data-ir-etapa="' + ant + '">Ver ' + esc(R.ETAPAS[ant].nombre.toLowerCase()) + '</button>') + '</div>';
-    const b = caja.querySelector("[data-registrar]"); if (b) b.onclick = () => hojaRegistrarMueble();
+      (R.admiteAlta(E.etapa) ? "Aquí entran los muebles recién hechos. Regístralos con el botón de arriba." : "Se registran aquí con el botón de arriba y el sistema los descuenta solo de «" + esc(R.ETAPAS[ant].nombre) + "».") + '</p>' +
+      '<button class="btn vino" data-registrar="mueble">＋ Registrar</button></div>';
+    const b = caja.querySelector("[data-registrar]"); if (b) b.onclick = registrarMueble;
     const v = caja.querySelector("[data-ir-etapa]"); if (v) v.onclick = () => { E.etapa = v.dataset.irEtapa; pintaMuebles(); };
     return;
   }
@@ -192,7 +191,7 @@ function pintaMuebles(){
   caja.querySelectorAll("[data-pasar]").forEach(b => b.onclick = e => { e.stopPropagation(); const g = gruposMueble(E.etapa).find(x => x.k === b.dataset.pasar); if (g) hojaPasar(g); });
   if (!total && !q("muebles")) return;
 }
-function etapaAnterior(etapa){ const c = R.cadenaDe(R.ETAPAS[etapa].tipo); const i = c.indexOf(etapa); return i > 0 ? c[i-1] : c[0]; }
+function etapaAnterior(etapa){ return R.anteriorEtapa(etapa) || etapa; }
 function seleccionaMueble(k, abrir){
   E.sel = { tipo: "mueble", k, etapa: E.etapa };
   pintaMuebles();
@@ -215,6 +214,28 @@ function montaDetalleMueble(caja){
   caja.querySelector("[data-corrige]").onclick = () => hojaCorregirLote(g);
 }
 
+/* El botón Registrar de Muebles: alta en maquilado / MDF; en las demás etapas se
+   registra desde el destino y el sistema descuenta de la etapa anterior. */
+function registrarMueble(){ if (R.admiteAlta(E.etapa)) hojaRegistrarMueble(); else hojaRegistrarDesdeMueble(E.etapa); }
+function hojaRegistrarDesdeMueble(etapa){
+  if (!exigeYo()) return;
+  const ant = R.anteriorEtapa(etapa); if (!ant) return;
+  const disponibles = gruposMueble(ant);
+  abreHoja('<h3>Registrar ' + esc(R.ETAPAS[etapa].nombre.toLowerCase()) + '</h3>' +
+    '<div class="paso-a"><span class="de">' + esc(R.ETAPAS[ant].nombre) + '</span> → <span class="a">' + esc(R.ETAPAS[etapa].nombre) + '</span></div>' +
+    '<p class="guia">Escoge de cuáles: solo aparecen los que hay en «' + esc(R.ETAPAS[ant].nombre.toLowerCase()) + '». Lo que registres aquí se descuenta de ahí solo.</p>' +
+    campoBuscaLista("Mueble o color…") + '<div class="sugerencias" id="rLista"></div>',
+    h => {
+      const inp = h.querySelector("#rBusca"), lista = h.querySelector("#rLista");
+      const pinta = () => {
+        const l = inp.value.trim() ? Busca.busca(inp.value, disponibles, g => g.modelo + " " + g.color) : disponibles;
+        lista.innerHTML = l.length ? l.map(g => '<button data-k="' + esc(g.k) + '">' + esc(g.modelo) + ' · ' + esc(g.color) + '<small>' + g.total + ' disponibles · ' + esc(g.lotes.map(x => R.firmaDe(x) + " " + x.cantidad).join(" · ")) + '</small></button>').join("")
+          : '<div class="sin-hallar">' + (disponibles.length ? "No encontré ese mueble ahí." : "No hay nada en «" + esc(R.ETAPAS[ant].nombre.toLowerCase()) + "» todavía.") + '</div>';
+        lista.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { const g = disponibles.find(x => x.k === b.dataset.k); if (g) hojaPasar(g); });
+      };
+      inp.oninput = pinta; pinta(); inp.focus();
+    });
+}
 /* Registrar muebles recién hechos (solo en la primera etapa) */
 function hojaRegistrarMueble(){
   if (!exigeYo()) return;
@@ -250,17 +271,18 @@ function hojaRegistrarMueble(){
 /* Campo de modelo con búsqueda tolerante: se escribe y se escoge de la lista; nunca queda texto libre */
 function campoModelo(){ return '<label class="campo"><span>Mueble</span><input id="rModelo" placeholder="Escribe el nombre, aunque sea aproximado…" autocomplete="off"></label><div class="sugerencias" id="rSug" hidden></div>'; }
 function campoColor(sel){ const grupos = CAT.gruposColor || []; return '<label class="campo"><span>Color</span><select id="rColor"><option value="">— escoge el color —</option>' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (sel === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("") + '</select></label>'; }
-function montaCampoModelo(h, alEscoger){
+function montaCampoModelo(h, alEscoger, conExtras){
   const inp = h.querySelector("#rModelo"), sug = h.querySelector("#rSug");
   let escogido = null;
+  const fuente = () => modelosActivos().filter(m => conExtras ? true : !R.esExtra(m));
   const pinta = () => {
     const t = inp.value.trim();
     if (escogido && escogido.nombre === t){ sug.hidden = true; return; }
     escogido = null; alEscoger(null);
     if (!t){ sug.hidden = true; return; }
-    const l = Busca.busca(t, modelosActivos(), m => m.nombre).slice(0, 8);
+    const l = Busca.busca(t, fuente(), m => m.nombre).slice(0, 8);
     sug.hidden = false;
-    sug.innerHTML = l.length ? l.map(m => '<button data-id="' + esc(m.id) + '">' + esc(m.nombre) + '<small>' + (m.tipo === "mdf" ? "MDF · " : "") + fichaCorta(m) + '</small></button>').join("") : '<div class="sin-hallar">No encontré ese mueble. Revisa el nombre o agrégalo en Catálogo.</div>';
+    sug.innerHTML = l.length ? l.map(m => '<button data-id="' + esc(m.id) + '">' + esc(m.nombre) + '<small>' + (R.esExtra(m) ? "pieza extra" : (m.tipo === "mdf" ? "MDF · " : "") + fichaCorta(m)) + '</small></button>').join("") : '<div class="sin-hallar">No encontré ese mueble. Revisa el nombre o agrégalo en Catálogo.</div>';
     sug.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { escogido = modeloDe(b.dataset.id); inp.value = escogido.nombre; sug.hidden = true; alEscoger(escogido); });
   };
   inp.oninput = pinta;
@@ -359,50 +381,62 @@ function gruposPieza(cat){
     .sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1);
 }
 const totalCat = cat => E.piezas.filter(p => p.categoria === cat).reduce((s,p) => s + vivoPieza(p), 0);
+const totalPestana = pest => R.categoriasDePestana(pest).reduce((s,c) => s + totalCat(c), 0);
 function pintaEtapasPieza(){
   const caja = $("#etapasPieza");
   const tabs = [];
-  R.CADENA_PUERTAS.forEach((c, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(c, R.PIEZAS[c].nombre, totalCat(c), E.catPieza === c)); });
+  R.CADENA_PUERTAS.forEach((c, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(c, R.PIEZAS[c].nombre, totalPestana(c), E.catPieza === c)); });
   tabs.push('<span class="flecha" style="margin:0 6px">|</span>');
-  ["cajones_pintados", "parches_pintados"].forEach(c => tabs.push(pestana(c, R.PIEZAS[c].nombre, totalCat(c), E.catPieza === c)));
+  ["cajones_pintados", "parches_pintados"].forEach(c => tabs.push(pestana(c, R.PIEZAS[c].nombre, totalPestana(c), E.catPieza === c)));
   caja.innerHTML = tabs.join("");
   caja.querySelectorAll("[data-etapa]").forEach(b => b.onclick = () => { E.catPieza = b.dataset.etapa; E.sel = null; pintaPiezas(); if (esEscritorio()) pintaDetalle(); });
 }
+function filaPiezaHtml(p){
+  const m = modeloDe(p.modelo_id); const n = vivoPieza(p); const cat = p.categoria;
+  const sig = R.siguientePiezaDe(cat, m); const emb = R.embisagra(cat);
+  const txt = R.textoEquivalencia(n, cat, m);
+  const eq = txt.replace(/^\d+ \w+( ·| =)?\s?/, "");
+  const sel = E.sel && E.sel.tipo === "pieza" && E.sel.id === p.id;
+  let botones;
+  if (R.admiteAltaPieza(cat) && !sig) botones = '<button class="tecla" data-menos="' + esc(p.id) + '"' + (n === 0 ? " disabled" : "") + '>−</button><span class="cant">' + n + '</span><button class="tecla" data-mas="' + esc(p.id) + '">＋</button>';
+  else {
+    botones = "";
+    if (emb) botones += '<button class="btn suave" data-emb="' + esc(p.id) + '">Embisagrar</button>';
+    if (sig) botones += '<button class="btn suave" data-pasar="' + esc(p.id) + '"' + (emb ? ' style="margin-left:6px"' : "") + '>Pasar a ' + esc(R.PIEZAS[sig].corto.toLowerCase()) + ' →</button>';
+    if (!sig && !emb) botones += '<span class="sello ver">final</span>';
+  }
+  return '<div class="fila' + (sel ? " sel" : "") + (E.pend.get(p.id) ? " pend" : "") + '" data-abre="' + esc(p.id) + '">' +
+    '<div class="nombre"><b>' + esc(p.modelo) + '</b>' + (R.esExtra(m) ? '<small>pieza extra</small>' : "") + '</div>' +
+    '<div class="sub">' + chipColor(p.color) + '</div>' +
+    '<div class="apodos">' + chipColor(p.color) + '</div>' +
+    '<div class="cifra"><b>' + n + '</b><small>' + esc(txt.replace(/^\d+ /, "").split(/ [=·] /)[0]) + '</small></div>' +
+    '<div class="ultimo"><span>' + esc(eq) + '</span></div>' +
+    '<div class="stepper">' + botones + '</div></div>';
+}
 function pintaPiezas(){
   pintaEtapasPieza();
-  const caja = $("#listaPieza"); const cat = E.catPieza; const P = R.PIEZAS[cat]; const sig = R.siguientePieza(cat);
-  let l = gruposPieza(cat);
-  if (q("piezas")) l = Busca.busca(q("piezas"), l, p => p.modelo + " " + p.color);
-  $("#resumenPieza").textContent = "";
-  if (!l.length){
+  const caja = $("#listaPieza"); const pest = E.catPieza; const P = R.PIEZAS[pest];
+  const cats = R.categoriasDePestana(pest);
+  const grupos = cats.map(c => ({ cat: c, filas: q("piezas") ? Busca.busca(q("piezas"), gruposPieza(c), p => p.modelo + " " + p.color) : gruposPieza(c) }));
+  const total = grupos.reduce((s,g) => s + g.filas.length, 0);
+  $("#resumenPieza").textContent = P.ayuda || "";
+  if (!total){
     if (q("piezas")){ caja.innerHTML = sinHallar("piezas", "eso en " + P.nombre.toLowerCase()); return; }
-    const ant = R.CADENA_PUERTAS[R.CADENA_PUERTAS.indexOf(cat) - 1];
-    caja.innerHTML = '<div class="vacio"><b>No hay ' + esc(P.nombre.toLowerCase()) + '</b><p>' + (R.admiteAltaPieza(cat) ? "Regístralas con el botón de arriba." : "Aquí solo llegan las que pasan desde «" + esc(R.PIEZAS[ant].nombre) + "».") + '</p></div>';
+    const ant = R.anteriorPieza(pest);
+    caja.innerHTML = '<div class="vacio"><b>No hay ' + esc(P.nombre.toLowerCase()) + '</b><p>' + (R.admiteAltaPieza(pest) ? "Regístralas con el botón de arriba." : "Se registran aquí con el botón de arriba y el sistema las descuenta solo de «" + esc(R.PIEZAS[ant].nombre) + "».") + '</p></div>';
     return;
   }
-  caja.innerHTML = '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="d">Hay</span><span>Equivale a</span><span></span></div>' +
-    l.map(p => {
-      const m = modeloDe(p.modelo_id); const n = vivoPieza(p);
-      const txt = R.textoEquivalencia(n, cat, m);
-      const eq = txt.replace(/^\d+ \w+( ·| =)?\s?/, "");
-      const sel = E.sel && E.sel.tipo === "pieza" && E.sel.id === p.id;
-      return '<div class="fila' + (sel ? " sel" : "") + (E.pend.get(p.id) ? " pend" : "") + '" data-abre="' + esc(p.id) + '">' +
-        '<div class="nombre"><b>' + esc(p.modelo) + '</b></div>' +
-        '<div class="sub">' + chipColor(p.color) + '</div>' +
-        '<div class="apodos">' + chipColor(p.color) + '</div>' +
-        '<div class="cifra"><b>' + n + '</b><small>' + esc(txt.replace(/^\d+ /, "").split(/ [=·] /)[0]) + '</small></div>' +
-        '<div class="ultimo"><span>' + esc(eq) + '</span></div>' +
-        '<div class="stepper">' +
-          (R.admiteAltaPieza(cat) || !sig
-            ? '<button class="tecla" data-menos="' + esc(p.id) + '"' + (n === 0 ? " disabled" : "") + '>−</button><span class="cant">' + n + '</span><button class="tecla" data-mas="' + esc(p.id) + '"' + (R.admiteAltaPieza(cat) ? "" : " disabled title='Aquí solo se llega pasando desde la sección anterior'") + '>＋</button>'
-            : '<button class="btn suave" data-pasar="' + esc(p.id) + '">' + (sig === "puertas_con_bisagras" ? "Poner bisagras" : "Pasar a " + esc(R.PIEZAS[sig].corto.toLowerCase())) + ' →</button>') +
-          (sig && R.admiteAltaPieza(cat) ? '<button class="btn suave" data-pasar="' + esc(p.id) + '" style="margin-left:6px">Pasar →</button>' : "") +
-        '</div></div>';
-    }).join("");
+  const enc = '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="d">Hay</span><span>Equivale a</span><span></span></div>';
+  caja.innerHTML = enc + grupos.map(g => {
+    const bloque = R.PIEZAS[g.cat].bloque;
+    const cab = bloque ? '<div class="bloque-h' + (bloque === "Sin bisagras" ? " suave" : "") + '">' + esc(bloque) + '<span class="n">' + g.filas.reduce((s,p) => s + vivoPieza(p), 0) + '</span></div>' : "";
+    return cab + (g.filas.length ? g.filas.map(filaPiezaHtml).join("") : (bloque ? '<div class="bloque-vacio">ninguna</div>' : ""));
+  }).join("");
   caja.querySelectorAll("[data-abre]").forEach(f => f.onclick = e => { if (e.target.closest("button")) return; seleccionaPieza(f.dataset.abre, true); });
   caja.querySelectorAll("[data-mas]").forEach(b => b.onclick = e => { e.stopPropagation(); muevePieza(b.dataset.mas, +1); });
   caja.querySelectorAll("[data-menos]").forEach(b => b.onclick = e => { e.stopPropagation(); muevePieza(b.dataset.menos, -1); });
-  caja.querySelectorAll("[data-pasar]").forEach(b => b.onclick = e => { e.stopPropagation(); const p = E.piezas.find(x => x.id === b.dataset.pasar); if (p) hojaPasarPieza(p); });
+  caja.querySelectorAll("[data-pasar]").forEach(b => b.onclick = e => { e.stopPropagation(); const p = E.piezas.find(x => x.id === b.dataset.pasar); if (p) hojaPasarPieza(p, R.siguientePiezaDe(p.categoria, modeloDe(p.modelo_id))); });
+  caja.querySelectorAll("[data-emb]").forEach(b => b.onclick = e => { e.stopPropagation(); const p = E.piezas.find(x => x.id === b.dataset.emb); if (p) hojaPasarPieza(p, R.embisagra(p.categoria)); });
 }
 function seleccionaPieza(id, abrir){
   E.sel = { tipo:"pieza", id }; pintaPiezas();
@@ -410,18 +444,19 @@ function seleccionaPieza(id, abrir){
 }
 function htmlDetallePieza(){
   const p = E.piezas.find(x => x.id === (E.sel || {}).id); if (!p) return '<div class="detalle-vacio">Esa pieza ya no está</div>';
-  const m = modeloDe(p.modelo_id); const n = vivoPieza(p); const cat = p.categoria; const sig = R.siguientePieza(cat);
+  const m = modeloDe(p.modelo_id); const n = vivoPieza(p); const cat = p.categoria; const sig = R.siguientePiezaDe(cat, m); const emb = R.embisagra(cat);
   const movs = E.movimientos.filter(x => x.pieza_id === p.id || (x.modelo_id === p.modelo_id && (x.color || "") === (p.color || "") && x.categoria === cat)).sort((a,b) => a.creado < b.creado ? 1 : -1).slice(0,10);
   const e = R.equivalencia(n, R.piezasPorMueble(m, cat));
   return '<h2>' + esc(p.modelo) + '</h2><div class="sub">' + chipColor(p.color) + ' &nbsp;' + esc(R.PIEZAS[cat].nombre) + '</div>' +
-    '<div class="grande-cant"><b>' + n + '</b><span>' + esc(R.PIEZAS[cat].unidad) + (cat !== "parches_pintados" ? "<br>" + (e.sinFicha ? "sin ficha: no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad : "= <b style='font-size:13px;color:var(--tinta2)'>" + plural(e.muebles, "mueble", "muebles") + "</b>" + (e.faltan ? "<br>falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para el siguiente" : "")) : "") + '</span></div>' +
-    '<dl class="ficha">' + (m ? '<dt>Por mueble</dt><dd>' + esc(fichaCorta(m)) + '</dd>' : '<dt>Ficha</dt><dd style="color:var(--rojo)">este modelo no está en el catálogo</dd>') + '</dl>' +
-    '<div class="acciones">' + (sig ? '<button class="btn vino" data-pasar>' + (sig === "puertas_con_bisagras" ? "Poner bisagras" : "Pasar a " + esc(R.PIEZAS[sig].corto.toLowerCase())) + ' →</button>' : "") + '<button class="btn" data-corrige>Corregir cantidad</button>' + (e.sinFicha && m ? '<button class="btn" data-ficha>Completar ficha</button>' : "") + '</div>' +
+    '<div class="grande-cant"><b>' + n + '</b><span>' + esc(R.PIEZAS[cat].unidad) + (cat !== "parches_pintados" && !R.esExtra(m) ? "<br>" + (e.sinFicha ? "sin ficha: no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad : "= <b style='font-size:13px;color:var(--tinta2)'>" + plural(e.muebles, "mueble", "muebles") + "</b>" + (e.faltan ? "<br>falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para el siguiente" : "")) : R.esExtra(m) ? "<br>pieza extra" : "") + '</span></div>' +
+    '<dl class="ficha">' + (m ? (R.esExtra(m) ? '<dt>Qué es</dt><dd>pieza extra del catálogo (sin ficha de mueble)</dd>' : '<dt>Por mueble</dt><dd>' + esc(fichaCorta(m)) + '</dd>') : '<dt>Ficha</dt><dd style="color:var(--rojo)">este modelo no está en el catálogo</dd>') + '</dl>' +
+    '<div class="acciones">' + (emb ? '<button class="btn vino" data-emb>Embisagrar</button>' : "") + (sig ? '<button class="btn' + (emb ? "" : " vino") + '" data-pasar>Pasar a ' + esc(R.PIEZAS[sig].corto.toLowerCase()) + ' →</button>' : "") + '<button class="btn" data-corrige>Corregir cantidad</button>' + (e.sinFicha && m && !R.esExtra(m) ? '<button class="btn" data-ficha>Completar ficha</button>' : "") + '</div>' +
     '<h3>Últimos movimientos</h3>' + (movs.length ? movs.map(lineaMov).join("") : '<div class="vacio" style="padding:14px"><p style="margin:0">Todavía nada.</p></div>');
 }
 function montaDetallePieza(caja){
   const p = E.piezas.find(x => x.id === (E.sel || {}).id); if (!p) return;
-  const b = caja.querySelector("[data-pasar]"); if (b) b.onclick = () => hojaPasarPieza(p);
+  const b = caja.querySelector("[data-pasar]"); if (b) b.onclick = () => hojaPasarPieza(p, R.siguientePiezaDe(p.categoria, modeloDe(p.modelo_id)));
+  const eb = caja.querySelector("[data-emb]"); if (eb) eb.onclick = () => hojaPasarPieza(p, R.embisagra(p.categoria));
   caja.querySelector("[data-corrige]").onclick = () => hojaCorregirPieza(p);
   const f = caja.querySelector("[data-ficha]"); if (f) f.onclick = () => hojaModelo(modeloDe(p.modelo_id));
 }
@@ -448,48 +483,77 @@ async function confirmaPieza(id){
   }
   await Almacen.ajustaPieza(p, d, E.yo, "", origen(), hechoPor);
 }
+/* El botón Registrar de Piezas: alta en Uriel / cajones / parches; en las demás
+   secciones registra desde el destino y el sistema descuenta de la anterior. */
+function registrarPieza(){ if (R.admiteAltaPieza(E.catPieza)) hojaRegistrarPieza(); else hojaRegistrarDesdePieza(E.catPieza); }
 function hojaRegistrarPieza(){
   if (!exigeYo()) return;
   let modelo = null, color = "", quien = [];
-  const cats = ["puertas_pre_lijadas", "cajones_pintados", "parches_pintados"];
-  let cat = cats.includes(E.catPieza) ? E.catPieza : "puertas_pre_lijadas";
+  const cats = ["puertas_uriel", "cajones_pintados", "parches_pintados"];
+  let cat = cats.includes(E.catPieza) ? E.catPieza : "puertas_uriel";
   const pinta = () => {
     const h = $("#panel"); const regla = R.responsables(cat);
-    h.querySelectorAll("[data-cat]").forEach(b => b.classList.toggle("on", b.dataset.cat === cat));
+    if (R.esExtra(modelo)) cat = "puertas_uriel";
+    h.querySelectorAll("[data-cat]").forEach(b => { b.classList.toggle("on", b.dataset.cat === cat); b.disabled = R.esExtra(modelo) && b.dataset.cat !== "puertas_uriel"; });
     h.querySelector("#rQuien").innerHTML = regla ? '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>' : "";
     h.querySelectorAll("#rQuien [data-n]").forEach(b => b.onclick = () => { quien = quien.includes(b.dataset.n) ? [] : [b.dataset.n]; pinta(); });
     h.querySelector("#rEq").textContent = modelo && Number(h.querySelector("#rCant").value) > 0 ? R.textoEquivalencia(Math.floor(Number(h.querySelector("#rCant").value)), cat, modelo) : "";
     h.querySelector("#rOk").disabled = !(modelo && color && Number(h.querySelector("#rCant").value) > 0 && (!regla || quien.length));
   };
-  abreHoja('<h3>Registrar piezas</h3><p class="guia">Las puertas entran como «pre lijadas» y de ahí se van pasando (lijadas → con bisagras → pintadas). Cajones y parches entran ya pintados.</p>' +
+  abreHoja('<h3>Registrar piezas</h3><p class="guia">Las puertas entran a «Puertas Uriel» y de ahí se van pasando (por lijar → lijadas → con bisagras → pintadas). Cajones y parches entran ya pintados.</p>' +
     '<div class="grupo-h">Qué son</div><div class="cats" style="margin-bottom:12px">' + cats.map(c => '<button class="cat" data-cat="' + c + '">' + esc(R.PIEZAS[c].nombre) + '</button>').join("") + '</div>' +
     campoModelo() + campoColor() +
     '<label class="campo"><span>Cuántas</span><input id="rCant" type="number" inputmode="numeric" min="1" value="1"></label><p class="guia" id="rEq"></p>' +
     '<div id="rQuien"></div><button class="btn vino grande" id="rOk" disabled style="margin-top:14px">Registrar</button>',
     h => {
       h.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { cat = b.dataset.cat; quien = []; pinta(); });
-      montaCampoModelo(h, m => { modelo = m; pinta(); });
+      montaCampoModelo(h, m => { modelo = m; pinta(); }, true);
       h.querySelector("#rColor").onchange = e => { color = e.target.value; pinta(); };
       h.querySelector("#rCant").oninput = pinta;
       pinta();
       h.querySelector("#rOk").onclick = async () => {
         const n = Math.floor(Number(h.querySelector("#rCant").value || 0)); if (!modelo || !color || n <= 0) return;
         await Almacen.ajustaPieza({ modelo_id: modelo.id, modelo: modelo.nombre, color, categoria: cat }, n, E.yo, "", origen(), quien.join(" y "), "alta");
-        cierraHoja(); E.catPieza = cat; E.sel = { tipo:"pieza", id: Almacen.clavePieza({ modelo_id: modelo.id, color, categoria: cat }) }; irA("piezas"); pintaTodo();
+        cierraHoja(); E.catPieza = R.pestanaDe(cat); E.sel = { tipo:"pieza", id: Almacen.clavePieza({ modelo_id: modelo.id, color, categoria: cat }) }; irA("piezas"); pintaTodo();
         grita("Listo: " + n + " " + R.PIEZAS[cat].unidad);
       };
     });
 }
-function hojaPasarPieza(p){
+/* Registrar desde la sección destino: se escoge entre lo que hay en la sección anterior
+   y el sistema lo descuenta de ahí. Nada se puede "inventar" en una sección intermedia. */
+function hojaRegistrarDesdePieza(pest){
   if (!exigeYo()) return;
-  const sig = R.siguientePieza(p.categoria); if (!sig) return;
-  const regla = R.responsables(sig); let quien = [];
-  const rec = E.ultimoQuien[sig]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
+  const destino = pest === "puertas_lijadas" ? "puertas_lijadas" : pest;
+  const ant = R.anteriorPieza(destino); if (!ant) return;
+  const disponibles = gruposPieza(ant);
+  abreHoja('<h3>Registrar ' + esc(R.PIEZAS[destino].nombre.toLowerCase()) + '</h3>' +
+    '<div class="paso-a"><span class="de">' + esc(R.PIEZAS[ant].nombre) + '</span> → <span class="a">' + esc(R.PIEZAS[destino].nombre) + '</span></div>' +
+    '<p class="guia">Escoge de cuáles: solo aparecen las que hay en «' + esc(R.PIEZAS[ant].nombre.toLowerCase()) + '». Lo que registres aquí se descuenta de ahí solo.</p>' +
+    campoBuscaLista("Mueble o color…") +
+    '<div class="sugerencias" id="rLista"></div>',
+    h => {
+      const inp = h.querySelector("#rBusca"), lista = h.querySelector("#rLista");
+      const pinta = () => {
+        const l = inp.value.trim() ? Busca.busca(inp.value, disponibles, p => p.modelo + " " + p.color) : disponibles;
+        lista.innerHTML = l.length ? l.map(p => '<button data-id="' + esc(p.id) + '">' + esc(p.modelo) + ' · ' + esc(p.color) + '<small>' + p.cantidad + ' disponibles</small></button>').join("")
+          : '<div class="sin-hallar">' + (disponibles.length ? "No encontré ese mueble ahí." : "No hay nada en «" + esc(R.PIEZAS[ant].nombre.toLowerCase()) + "» todavía.") + '</div>';
+        lista.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { const p = E.piezas.find(x => x.id === b.dataset.id); if (p) hojaPasarPieza(p, destino); });
+      };
+      inp.oninput = pinta; pinta(); inp.focus();
+    });
+}
+const campoBuscaLista = ph => '<label class="campo-busca" style="margin-bottom:8px"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="rBusca" placeholder="' + esc(ph) + '" autocomplete="off"></label>';
+/* Pasar piezas a otra sección (siguiente, o "con bisagras" al embisagrar) */
+function hojaPasarPieza(p, destino){
+  if (!exigeYo() || !destino) return;
+  const regla = R.responsables(destino); let quien = [];
+  const rec = E.ultimoQuien[destino]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
   const n = vivoPieza(p);
-  abreHoja('<h3>' + (sig === "puertas_con_bisagras" ? "Poner bisagras" : "Pasar a " + esc(R.PIEZAS[sig].corto.toLowerCase())) + '</h3>' +
-    '<div class="paso-a"><span class="de">' + esc(R.PIEZAS[p.categoria].nombre) + '</span> → <span class="a">' + esc(R.PIEZAS[sig].nombre) + '</span></div>' +
+  const esEmb = destino === "puertas_lijadas_bisagras";
+  abreHoja('<h3>' + (esEmb ? "Embisagrar" : "Pasar a " + esc(R.PIEZAS[destino].corto.toLowerCase())) + '</h3>' +
+    '<div class="paso-a"><span class="de">' + esc(R.PIEZAS[p.categoria].nombre) + '</span> → <span class="a">' + esc(R.PIEZAS[destino].nombre) + '</span></div>' +
     '<p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(p.color) + ' · hay <b>' + n + '</b> disponibles.</p>' +
-    '<div class="lote"><div class="quien">Cuántas pasan</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="1" max="' + n + '" value="' + n + '"><button class="tecla" data-mas>＋</button></div></div>' +
+    '<div class="lote"><div class="quien">Cuántas ' + (esEmb ? "se embisagraron" : "pasan") + '</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="1" max="' + n + '" value="' + n + '"><button class="tecla" data-mas>＋</button></div></div>' +
     (regla ? '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats" id="pQuien">' + regla.opciones.map(x => '<button class="cat' + (quien.includes(x) ? " on" : "") + '" data-n="' + esc(x) + '">' + esc(x) + '</button>').join("") + '</div>' : "") +
     '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" style="margin-top:12px">Confirmar</button>',
     h => {
@@ -502,10 +566,10 @@ function hojaPasarPieza(p){
       revisa();
       h.querySelector("#pOk").onclick = async () => {
         try {
-          if (regla) E.ultimoQuien[sig] = { nombres: quien.slice(), t: Date.now() };
-          const mov = await Almacen.trasladaPieza({ pieza_id: p.id, cantidad: Number(inp.value), categoria_a: sig, hecho_por: quien.join(" y ") }, E.yo, origen());
-          cierraHoja(); grita(mov.delta + " " + R.PIEZAS[sig].unidad + " → " + R.PIEZAS[sig].nombre.toLowerCase());
-          E.catPieza = sig; E.sel = { tipo:"pieza", id: mov.pieza_id }; pintaTodo();
+          if (regla) E.ultimoQuien[destino] = { nombres: quien.slice(), t: Date.now() };
+          const mov = await Almacen.trasladaPieza({ pieza_id: p.id, cantidad: Number(inp.value), categoria_a: destino, hecho_por: quien.join(" y ") }, E.yo, origen());
+          cierraHoja(); grita(mov.delta + " " + R.PIEZAS[destino].unidad + " → " + R.PIEZAS[destino].nombre.toLowerCase());
+          E.catPieza = R.pestanaDe(destino); E.sel = { tipo:"pieza", id: mov.pieza_id }; irA("piezas"); pintaTodo();
         } catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; }
       };
     });
@@ -704,38 +768,44 @@ function montaDetalleMaterial(caja){
   });
 }
 function hojaProducto(p){
-  p = p || {}; const nuevo = !p.id; const pres = CAT.presentaciones || [];
-  abreHoja('<h3>' + (nuevo ? "Agregar producto" : "Editar") + '</h3>' +
+  p = p || {}; const nuevo = !p.id; const pres = CAT.presentaciones || []; const ap = p.apodos || [];
+  abreHoja('<h3>' + (nuevo ? "Material nuevo" : "Ficha del material") + '</h3><p class="guia">Litros por envase, nombre de la etiqueta y el apodo con el que se le dice en el taller (así se ve en Material).</p>' +
+    '<div class="dupla"><label class="campo"><span>Litros por envase</span><input id="fLitros" type="number" inputmode="decimal" min="0" step="0.5" value="' + (p.litros != null ? p.litros : "") + '" placeholder="19"></label>' +
+    '<label class="campo"><span>Presentación</span><select id="fPres">' + pres.map(x => '<option value="' + esc(x.n) + '|' + x.l + '"' + (p.presentacion === x.n && Number(p.litros) === x.l ? " selected" : "") + '>' + esc(x.n) + ' ' + x.l + ' L</option>').join("") + '<option value="|"' + (!p.presentacion ? " selected" : "") + '>Otra / no sé</option></select></label></div>' +
     '<label class="campo"><span>Nombre de la etiqueta</span><input id="fNombre" value="' + esc(p.nombre || "") + '" placeholder="LACA INDUSTRIAL NITRO…"></label>' +
-    '<label class="campo"><span>Cómo le dicen (apodo principal)</span><input id="fApodo" value="' + esc((p.apodos || [])[0] || "") + '" placeholder="laca amarilla"></label>' +
+    '<label class="campo"><span>Apodo (cómo le dicen)</span><input id="fApodo" value="' + esc(ap[0] || "") + '" placeholder="laca amarilla"></label>' +
+    '<div class="dupla"><label class="campo"><span>Otro apodo</span><input id="fApodo2" value="' + esc(ap[1] || "") + '"></label><label class="campo"><span>Otro apodo</span><input id="fApodo3" value="' + esc(ap[2] || "") + '"></label></div>' +
     '<label class="campo"><span>Marca</span><input id="fMarca" value="' + esc(p.marca || "") + '" placeholder="HiCoat"></label>' +
-    '<div class="dupla"><label class="campo"><span>Presentación</span><select id="fPres">' + pres.map(x => '<option value="' + esc(x.n) + '|' + x.l + '"' + (p.presentacion === x.n && Number(p.litros) === x.l ? " selected" : "") + '>' + esc(x.n) + ' ' + x.l + ' L</option>').join("") + '<option value="|"' + (!p.presentacion ? " selected" : "") + '>Otra / no sé</option></select></label>' +
-    '<label class="campo"><span>Litros por envase</span><input id="fLitros" type="number" inputmode="decimal" min="0" step="0.5" value="' + (p.litros != null ? p.litros : "") + '"></label></div>' +
     '<div class="dupla"><label class="campo"><span>Código del fabricante</span><input id="fCodigo" value="' + esc(p.codigo || "") + '" placeholder="13261"></label>' +
     '<label class="campo"><span>Código de barras</span><input id="fBarras" inputmode="numeric" value="' + esc(p.barras || "") + '" placeholder="7506180720880"></label></div>' +
     '<div class="dupla"><label class="campo"><span>Envases que hay</span><input id="fCant" type="number" inputmode="numeric" min="0" value="' + (nuevo ? 0 : vivo(p)) + '"' + (nuevo ? "" : " disabled") + '></label>' +
     '<label class="campo"><span>Avisar cuando baje a</span><input id="fMin" type="number" inputmode="numeric" min="0" value="' + Number(p.minimo || 0) + '"></label></div>' +
-    '<button class="btn vino grande" id="fOk">' + (nuevo ? "Agregar" : "Guardar cambios") + '</button>',
+    '<button class="btn vino grande" id="fOk">' + (nuevo ? "Agregar" : "Guardar cambios") + '</button>' + (nuevo ? "" : '<button class="btn fantasma grande" id="fQuita" style="margin-top:8px">Quitar del catálogo</button>'),
     h => {
       const g = id => h.querySelector(id);
       g("#fPres").onchange = () => { const [,l] = g("#fPres").value.split("|"); if (l) g("#fLitros").value = l; };
-      g("#fNombre").focus();
+      g(nuevo ? "#fLitros" : "#fNombre").focus();
       g("#fOk").onclick = async () => {
         if (!exigeYo()) return;
         const nombre = g("#fNombre").value.trim(); if (!nombre) return grita("Falta el nombre");
-        const ap = g("#fApodo").value.trim();
-        const datos = { tipo:"material", nombre, minimo: Math.max(0, Number(g("#fMin").value || 0)), por_quien: E.yo, color:"",
-          apodos: ap ? [ap].concat((p.apodos || []).filter(a => a !== ap)).slice(0,3) : (p.apodos || []),
+        const apodos = ["#fApodo", "#fApodo2", "#fApodo3"].map(id => g(id).value.trim()).filter(Boolean).filter((a, i, arr) => arr.indexOf(a) === i).slice(0, 3);
+        const datos = { tipo:"material", nombre, minimo: Math.max(0, Number(g("#fMin").value || 0)), por_quien: E.yo, color:"", apodos,
           marca: g("#fMarca").value.trim(), codigo: g("#fCodigo").value.trim(), barras: g("#fBarras").value.trim().replace(/\s+/g, ""),
           presentacion: g("#fPres").value.split("|")[0] || (p.presentacion || ""), litros: g("#fLitros").value === "" ? null : Number(g("#fLitros").value) };
         datos.categoria = datos.presentacion === "Tambo" ? "Tambos" : datos.presentacion === "Cubeta" ? "Cubetas" : "";
         if (nuevo){
           datos.cantidad = Math.max(0, Number(g("#fCant").value || 0));
           const f = await Almacen.pon("producto", datos);
-          await Almacen.anota({producto_id:f.id, nombre:f.nombre, tipo:"alta", delta:f.cantidad, resultado:f.cantidad, persona:E.yo, motivo:"producto nuevo", origen:origen()});
+          await Almacen.anota({producto_id:f.id, nombre:f.nombre, tipo:"alta", delta:f.cantidad, resultado:f.cantidad, persona:E.yo, motivo:"material nuevo", origen:origen()});
           E.sel = { tipo:"material", id: f.id }; grita("Agregado");
         } else { await Almacen.parcha("producto", p.id, datos); grita("Guardado"); }
         cierraHoja(); pintaTodo();
+      };
+      const qb = g("#fQuita"); if (qb) qb.onclick = async () => {
+        if (!confirm("¿Quitar «" + titulo(p) + "» del catálogo de material?")) return;
+        await Almacen.parcha("producto", p.id, {activo:false});
+        await Almacen.anota({producto_id:p.id, nombre:p.nombre, tipo:"baja", persona:E.yo, motivo:"quitado del catálogo de material", origen:origen()});
+        E.sel = null; cierraHoja(); pintaTodo(); grita("Quitado");
       };
     });
 }
@@ -886,22 +956,63 @@ function hojaPedido(p){
 }
 
 /* ═══════════════ CATÁLOGO (editable) ═══════════════ */
+const FAMILIAS = ["Mariana", "Monarca", "Petaquero", "Ropero", "Cómoda", "Vitrina", "Cajonera"];
 function pintaCatalogo(){
   const caja = $("#listaCatalogo");
   let l = modelosActivos();
-  $("#resumenCatalogo").textContent = l.length ? plural(l.length, "modelo", "modelos") + " · " + l.filter(m => !R.ficha(m).completa).length + " con datos faltantes" : "";
-  if (q("catalogo")) l = Busca.busca(q("catalogo"), l, m => m.nombre + " " + m.familia);
+  const modelos = l.filter(m => !R.esExtra(m));
+  $("#resumenCatalogo").textContent = modelos.length ? plural(modelos.length, "modelo", "modelos") + " · " + modelos.filter(m => !R.ficha(m).completa).length + " con datos faltantes" : "";
+  if (q("catalogo")) l = Busca.busca(q("catalogo"), l, m => m.nombre + " " + (m.familia || ""));
   if (!l.length){ caja.innerHTML = q("catalogo") ? sinHallar("catalogo", "ese modelo") + '<div style="text-align:center;margin-top:-10px"><button class="btn vino" id="agregaDesde">Agregarlo al catálogo</button></div>' : '<div class="vacio"><b>El catálogo está vacío</b></div>'; const b = caja.querySelector("#agregaDesde"); if (b) b.onclick = () => hojaModelo(null, q("catalogo")); return; }
-  caja.innerHTML = l.map(m => {
-    const f = R.ficha(m);
-    const chips = [(m.tipo === "mdf" ? '<span class="chip mdf">MDF</span>' : '<span class="chip">madera</span>'),
-      m.cajones == null ? '<span class="chip falta">cajones: falta dato</span>' : '<span class="chip">' + plural(m.cajones, "cajón", "cajones") + '</span>',
-      m.total_puertas == null ? '<span class="chip falta">puertas: falta dato</span>' : '<span class="chip">' + plural(m.total_puertas, "puerta", "puertas") + '</span>',
-      m.lleva_parches == null ? '<span class="chip falta">¿parches?: falta dato</span>' : m.lleva_parches ? '<span class="chip">lleva parches</span>' : "",
-      m.lleva_respaldo === true ? '<span class="chip">lleva respaldo</span>' : ""].filter(Boolean).join("");
-    return '<div class="fila" data-id="' + esc(m.id) + '"><div class="nombre"><b>' + esc(m.nombre) + '</b><small>' + esc(m.familia || "") + '</small></div><div class="sub ficha-chips">' + chips + '</div><div class="apodos ficha-chips">' + chips + '</div><div class="cifra"></div><div class="ultimo"><span>' + (m.editado_por ? esc(m.editado_por) + " · " + esc(cuando(m.actualizado || m.creado)) : "") + '</span></div><div class="stepper"><button class="btn" data-edita="' + esc(m.id) + '">Editar</button></div></div>';
-  }).join("");
-  caja.querySelectorAll("[data-id]").forEach(f => f.onclick = () => hojaModelo(modeloDe(f.dataset.id)));
+  // Grupos: familias de madera en el orden del catálogo, luego MDF, hasta abajo las piezas extras
+  const grupos = [];
+  const madera = l.filter(m => m.tipo !== "mdf" && !R.esExtra(m));
+  const fams = FAMILIAS.slice(); madera.forEach(m => { if (!fams.includes(m.familia || "Otros")) fams.push(m.familia || "Otros"); });
+  fams.forEach(f => { const ms = madera.filter(m => (m.familia || "Otros") === f); if (ms.length) grupos.push({ titulo: f, ms }); });
+  const mdf = l.filter(m => m.tipo === "mdf"); if (mdf.length) grupos.push({ titulo: "MDF", ms: mdf });
+  const extras = l.filter(R.esExtra); if (extras.length || !q("catalogo")) grupos.push({ titulo: "Piezas extras", ms: extras, extra: true });
+  caja.innerHTML = grupos.map(g => '<div class="bloque-h' + (g.extra ? "" : "") + '">' + esc(g.titulo) + (g.extra ? '<button class="btn" id="nuevaExtra">＋ Pieza extra</button>' : '<span class="n">' + g.ms.length + '</span>') + '</div>' +
+    (g.ms.length ? g.ms.map(m => g.extra ? filaExtraHtml(m) : filaModeloHtml(m)).join("") : '<div class="bloque-vacio">Aquí van piezas que no son de un modelo (se registran por nombre y entran a «Puertas Uriel»).</div>')).join("");
+  caja.querySelectorAll("[data-id]").forEach(f => f.onclick = () => { const m = modeloDe(f.dataset.id); if (R.esExtra(m)) hojaExtra(m); else hojaModelo(m); });
+  const ne = caja.querySelector("#nuevaExtra"); if (ne) ne.onclick = e => { e.stopPropagation(); hojaExtra(null); };
+}
+function filaModeloHtml(m){
+  const chips = [(m.tipo === "mdf" ? '<span class="chip mdf">MDF</span>' : ""),
+    m.cajones == null ? '<span class="chip falta">cajones: falta dato</span>' : '<span class="chip">' + plural(m.cajones, "cajón", "cajones") + '</span>',
+    m.total_puertas == null ? '<span class="chip falta">puertas: falta dato</span>' : '<span class="chip">' + plural(m.total_puertas, "puerta", "puertas") + '</span>',
+    m.lleva_parches == null ? '<span class="chip falta">¿parches?: falta dato</span>' : m.lleva_parches ? '<span class="chip">lleva parches</span>' : "",
+    m.lleva_respaldo === true ? '<span class="chip">lleva respaldo</span>' : ""].filter(Boolean).join("");
+  return '<div class="fila" data-id="' + esc(m.id) + '"><div class="nombre"><b>' + esc(m.nombre) + '</b></div><div class="sub ficha-chips">' + chips + '</div><div class="apodos ficha-chips">' + chips + '</div><div class="cifra"></div><div class="ultimo"><span>' + (m.editado_por ? esc(m.editado_por) + " · " + esc(cuando(m.actualizado || m.creado)) : "") + '</span></div><div class="stepper"><button class="btn" data-edita="' + esc(m.id) + '">Editar</button></div></div>';
+}
+function filaExtraHtml(m){
+  return '<div class="fila" data-id="' + esc(m.id) + '"><div class="nombre"><b>' + esc(m.nombre) + '</b><small>pieza extra</small></div><div class="sub"><span class="chip">entra a Puertas Uriel · llega hasta lijadas</span></div><div class="apodos"><span class="chip">Puertas Uriel → lijadas</span></div><div class="cifra"></div><div class="ultimo"><span>' + (m.editado_por ? esc(m.editado_por) + " · " + esc(cuando(m.actualizado || m.creado)) : "") + '</span></div><div class="stepper"><button class="btn">Editar</button></div></div>';
+}
+/* Pieza extra: solo el nombre. Entra a Puertas Uriel y llega hasta lijadas. */
+function hojaExtra(m){
+  if (!exigeYo()) return;
+  const nuevo = !m; m = m || { nombre: "" };
+  abreHoja('<h3>' + (nuevo ? "Pieza extra nueva" : "Pieza extra") + '</h3><p class="guia">Solo el nombre. Se registra en «Puertas Uriel» con su color, se pasa a por lijar y a lijadas (con o sin bisagras). No se pinta ni cuenta para muebles listos.</p>' +
+    '<label class="campo"><span>Nombre</span><input id="xNombre" value="' + esc(m.nombre) + '" placeholder="Copete, tapa, cajón suelto…"></label>' +
+    '<button class="btn vino grande" id="xOk">' + (nuevo ? "Agregar" : "Guardar") + '</button>' + (nuevo ? "" : '<button class="btn fantasma grande" id="xQuita" style="margin-top:8px">Quitar del catálogo</button>'),
+    h => {
+      const inp = h.querySelector("#xNombre"); inp.focus();
+      const ok = async () => {
+        const nombre = inp.value.trim(); if (!nombre) return grita("Falta el nombre");
+        if (E.modelos.find(x => x.id !== m.id && x.activo !== false && sinAcento(x.nombre) === sinAcento(nombre))) return grita("Ya existe algo con ese nombre");
+        let id = m.id;
+        if (nuevo){ const f = await Almacen.pon("modelo", { id: "X" + Date.now().toString(36), nombre, familia: "Piezas extras", tipo: "extra", activo: true, editado_por: E.yo }); id = f.id; }
+        else { await Almacen.parcha("modelo", id, { nombre, editado_por: E.yo }); if (nombre !== m.nombre) renombraEnTodo(id, nombre); }
+        await Almacen.anota({ tipo: "catalogo", modelo_id: id, nombre, persona: E.yo, motivo: nuevo ? "pieza extra nueva" : "pieza extra: " + m.nombre + " → " + nombre, origen: origen() });
+        cierraHoja(); grita(nuevo ? "Pieza extra agregada" : "Guardado"); pintaTodo();
+      };
+      h.querySelector("#xOk").onclick = ok; inp.onkeydown = e => { if (e.key === "Enter") ok(); };
+      const qb = h.querySelector("#xQuita"); if (qb) qb.onclick = async () => {
+        if (!confirm("¿Quitar «" + m.nombre + "» del catálogo? Las existencias que ya tenga se conservan.")) return;
+        await Almacen.parcha("modelo", m.id, { activo:false, editado_por: E.yo });
+        await Almacen.anota({ tipo:"catalogo", modelo_id: m.id, nombre: m.nombre, persona: E.yo, motivo: "pieza extra quitada", origen: origen() });
+        cierraHoja(); pintaTodo();
+      };
+    });
 }
 function hojaModelo(m, nombreSugerido){
   if (!exigeYo()) return;
@@ -957,6 +1068,7 @@ function renombraEnTodo(id, nombre){
 }
 $("#nuevoModelo").onclick = () => hojaModelo(null);
 
+
 /* ═══════════════ recados ═══════════════ */
 function pintaRecados(){
   const caja = $("#listaRecados");
@@ -1001,7 +1113,7 @@ function descMov(m){
   const et = k => (R.ETAPAS[k] || R.PIEZAS[k] || {}).nombre || k;
   let titulo_ = esc(m.nombre || m.tipo) + (m.color ? " · " + esc(m.color) : "");
   let sub = "";
-  if (m.tipo === "traslado") sub = esc(et(m.etapa_de)) + " → " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.categoria === "puertas_con_bisagras" ? "bisagras: " : m.etapa_a === "armado" ? "armó " : "pintó ") + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · de: " + m.desglose.map(d => esc(d.de) + " " + d.cantidad).join(", ") : "");
+  if (m.tipo === "traslado") sub = esc(et(m.etapa_de)) + " → " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "puertas_lijadas_bisagras" ? "bisagras: " : m.etapa_a === "armado" ? "armó " : "pintó ") + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · de: " + m.desglose.map(d => esc(d.de) + " " + d.cantidad).join(", ") : "");
   else if (m.tipo === "alta" && m.etapa_a) sub = "entró a " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "mdf" ? "hizo " : "maquiló ") + esc(m.hecho_por) : "");
   else if (m.tipo === "alta" && m.categoria) sub = "entró a " + esc(et(m.categoria)) + (m.hecho_por ? " · pintó " + esc(m.hecho_por) : "");
   else if (m.tipo === "ajuste" && (m.etapa_a || m.categoria)) sub = "corrección en " + esc(et(m.etapa_a || m.categoria)) + (m.motivo ? " · " + esc(m.motivo) : "");
@@ -1029,47 +1141,22 @@ function pintaBitacora(){
   }).join("")).join("");
 }
 
-/* ═══════════════ apodos y litros (material) ═══════════════ */
-function pintaApodos(){
+/* ═══════════════ catálogo de material: litros · nombre · apodo ═══════════════ */
+function pintaCatMaterial(){
   const caja = $("#listaApodos");
-  const qq = $("#buscaApodos").value;
   let l = materiales();
-  if (qq.trim()) l = Busca.busca(qq, l, p => [p.nombre, ...(p.apodos || [])].join(" "));
+  $("#resumenApodos").textContent = l.length ? plural(l.length, "producto", "productos") : "";
+  if (q("apodos")) l = Busca.busca(q("apodos"), l, p => [p.nombre, ...(p.apodos || []), p.marca].filter(Boolean).join(" "));
   l.sort((a,b) => sinAcento(titulo(a)) > sinAcento(titulo(b)) ? 1 : -1);
-  caja.innerHTML = l.length ? l.map(p => {
-    const c = E.apodosCambios.get(p.id) || {};
-    const apodos = c.apodos || p.apodos || [];
-    const litros = c.litros !== undefined ? c.litros : p.litros;
-    return '<div class="fila-apodo' + (E.apodosCambios.has(p.id) ? " cambiada" : "") + '" data-id="' + p.id + '">' +
-      '<div class="nom"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>' + esc(p.nombre) + '</div>' +
-      '<div class="apodos">' + apodos.map((a,i) => '<span class="chip edit" data-quita="' + i + '" title="Quitar">' + esc(a) + ' ×</span>').join("") +
-        (apodos.length < 3 ? '<span class="chip mas" data-agrega>＋ apodo</span>' : '<span style="font-size:11px;color:var(--tinta3)">ya tiene 3</span>') + '</div>' +
-      '<div class="litros"><input type="number" inputmode="decimal" min="0" step="0.5" data-litros value="' + (litros != null ? litros : "") + '" placeholder="?"> L por ' + esc((p.presentacion || "envase").toLowerCase()) + '</div></div>';
-  }).join("") : '<div class="vacio"><b>Nada que mostrar</b><p>Agrega productos en Material primero.</p></div>';
-  caja.querySelectorAll(".fila-apodo").forEach(f => {
-    const id = f.dataset.id; const p = E.productos.find(x => x.id === id);
-    const actual = () => (E.apodosCambios.get(id) || {}).apodos || p.apodos || [];
-    f.querySelectorAll("[data-quita]").forEach(ch => ch.onclick = () => { const a = actual().slice(); a.splice(Number(ch.dataset.quita), 1); cambiaApodo(id, {apodos:a}); });
-    const mas = f.querySelector("[data-agrega]");
-    if (mas) mas.onclick = () => {
-      mas.outerHTML = '<span class="chip edit"><input data-nuevo placeholder="nuevo apodo" maxlength="30"></span>';
-      const inp = f.querySelector("[data-nuevo]"); inp.focus();
-      const ok = () => { const v = inp.value.trim(); if (v && !actual().includes(v)) cambiaApodo(id, {apodos: actual().concat([v]).slice(0,3)}); else pintaApodos(); };
-      inp.onkeydown = e => { if (e.key === "Enter") ok(); if (e.key === "Escape") pintaApodos(); };
-      inp.onblur = ok;
-    };
-    const lit = f.querySelector("[data-litros]");
-    if (lit) lit.onchange = () => cambiaApodo(id, {litros: lit.value === "" ? null : Number(lit.value)});
-  });
-  const n = E.apodosCambios.size;
-  $("#guardarApodos").disabled = !n; $("#guardarApodos").textContent = n ? "Guardar " + n + " cambio" + (n === 1 ? "" : "s") : "Guardar cambios";
-  $("#deshacerApodos").hidden = !n;
-}
-function cambiaApodo(id, cambio){ E.apodosCambios.set(id, Object.assign({}, E.apodosCambios.get(id) || {}, cambio)); pintaApodos(); }
-async function guardarApodos(){
-  if (!exigeYo()) return;
-  for (const [id, c] of E.apodosCambios){ if (!E.productos.find(x => x.id === id)) continue; await Almacen.parcha("producto", id, Object.assign({}, c, {por_quien:E.yo})); }
-  const n = E.apodosCambios.size; E.apodosCambios.clear(); pintaApodos(); grita("Guardado: " + n + " cambio" + (n === 1 ? "" : "s"));
+  if (!l.length){ caja.innerHTML = q("apodos") ? sinHallar("apodos", "ese producto") : '<div class="vacio"><b>Todavía no hay material</b><p>Agrega el primero con el botón de arriba.</p></div>'; return; }
+  caja.innerHTML = '<div class="bloque-h suave">Litros · nombre · apodo<span class="n">toca uno para editarlo</span></div>' + l.map(p => {
+    const ap = p.apodos || [];
+    return '<div class="fila-mat" data-id="' + p.id + '">' +
+      '<div class="litros' + (p.litros == null ? " falta" : "") + '">' + (p.litros != null ? p.litros : "?") + '<small>' + (p.litros != null ? "L" : "litros") + '</small></div>' +
+      '<div class="nombre">' + esc(p.nombre) + '<small>' + esc([p.presentacion, p.marca, p.codigo].filter(Boolean).join(" · ") || "sin presentación") + '</small></div>' +
+      '<div class="apodo">' + (ap.length ? ap.map((a, i) => '<span class="chip' + (i === 0 ? " principal" : "") + '">' + esc(a) + '</span>').join("") : '<span class="chip falta" style="background:var(--rojo-t);border-color:var(--rojo);color:var(--rojo)">sin apodo</span>') + '</div></div>';
+  }).join("");
+  caja.querySelectorAll(".fila-mat").forEach(f => f.onclick = () => hojaProducto(E.productos.find(x => x.id === f.dataset.id)));
 }
 
 /* ═══════════════ ajustes ═══════════════ */
@@ -1097,7 +1184,7 @@ function pintaAjustes(){
 function hojaMigrar(){
   if (!exigeYo()) return;
   const viejos = Almacen.viejos();
-  const MAPA = { "Mueble maquilado":"maquilado", "Mueble armado":"armado", "Mueble pintado":"pintado", "Mueble de MDF":"mdf", "Mueble de MDF pintado":"mdf_pintado", "Puertas pre lijadas":"puertas_pre_lijadas", "Puertas lijadas":"puertas_lijadas", "Puertas pintadas":"puertas_pintadas", "Cajones pintados":"cajones_pintados" };
+  const MAPA = { "Mueble maquilado":"maquilado", "Mueble armado":"armado", "Mueble pintado":"pintado", "Mueble de MDF":"mdf", "Mueble de MDF pintado":"mdf_pintado", "Puertas pre lijadas":"puertas_por_lijar", "Puertas lijadas":"puertas_lijadas", "Puertas pintadas":"puertas_pintadas", "Cajones pintados":"cajones_pintados" };
   const opciones = '<option value="">— no pasar —</option><optgroup label="Muebles">' + Object.keys(R.ETAPAS).map(e => '<option value="' + e + '">' + esc(R.ETAPAS[e].nombre) + '</option>').join("") + '</optgroup><optgroup label="Piezas">' + Object.keys(R.PIEZAS).map(c => '<option value="' + c + '">' + esc(R.PIEZAS[c].nombre) + '</option>').join("") + '</optgroup>';
   abreHoja('<h3>Acomodar lo de antes</h3><p class="guia">Cada renglón dice cuántos había y en qué sección estaba. Escoge a dónde va en el sistema nuevo. Como antes no se anotaba quién los hizo, quedan «sin responsable registrado».</p>' +
     viejos.map(p => { const m = Busca.busca(p.nombre, modelosActivos(), x => x.nombre)[0]; return '<div class="lote" data-vid="' + p.id + '" data-mid="' + (m ? esc(m.id) : "") + '" style="grid-template-columns:1fr;gap:6px"><div class="quien">' + esc(p.nombre) + ' · ' + esc(p.color || "sin color") + '<small>' + p.cantidad + ' en «' + esc(p.categoria || "?") + '»' + (m ? (m.nombre !== p.nombre ? " · se toma como " + esc(m.nombre) : "") : ' · <span style="color:var(--rojo)">no está en el catálogo: agrégalo primero</span>') + '</small></div><select class="dest" ' + (m ? "" : "disabled") + '>' + opciones.replace('value="' + (MAPA[p.categoria] || "—") + '"', 'value="' + (MAPA[p.categoria] || "—") + '" selected') + '</select></div>'; }).join("") +
@@ -1185,7 +1272,7 @@ function irA(v){
 function pintaVista(v){
   if (v === "muebles") pintaMuebles(); else if (v === "piezas") pintaPiezas(); else if (v === "listos") pintaListos(); else if (v === "pedidos") pintaPedidos();
   else if (v === "resumen") pintaResumen(); else if (v === "material") pintaMaterial(); else if (v === "recados") pintaRecados(); else if (v === "bitacora") pintaBitacora();
-  else if (v === "catalogo") pintaCatalogo(); else if (v === "apodos") pintaApodos(); else if (v === "ajustes") pintaAjustes();
+  else if (v === "catalogo") pintaCatalogo(); else if (v === "apodos") pintaCatMaterial(); else if (v === "ajustes") pintaAjustes();
 }
 function hojaMas(){
   const pend = E.pedidos.filter(p => p.estado !== "entregado").length, rec = E.recados.filter(r => !r.hecho).length;
@@ -1196,22 +1283,19 @@ function hojaMas(){
     '<button class="btn grande" data-ir="recados">Recados' + (rec ? " · " + rec + " sin atender" : "") + '</button>' +
     '<button class="btn grande" data-ir="bitacora">Bitácora · quién hizo qué</button>' +
     '<button class="btn grande" data-ir="catalogo">Catálogo · fichas de los modelos</button>' +
-    '<button class="btn grande" data-ir="apodos">Apodos y litros</button>' +
+    '<button class="btn grande" data-ir="apodos">Catálogo de material · litros, nombres y apodos</button>' +
     '<button class="btn grande" data-ir="ajustes">Ajustes</button></div>',
     p => p.querySelectorAll("[data-ir]").forEach(b => b.onclick = () => { cierraHoja(); irA(b.dataset.ir); }));
 }
 $$("[data-vista]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); irA(b.dataset.vista); }));
 $("#fabLupa").onclick = () => { const v = TEXTO_BUSCA[E.vista] ? E.vista : "muebles"; if (v !== E.vista) irA(v); abreLupa(v); };
 $("#yoLat").onclick = hojaQuienSoy; $("#yoCel").onclick = hojaQuienSoy;
-$$("[data-registrar]").forEach(b => b.onclick = () => b.dataset.registrar === "mueble" ? hojaRegistrarMueble() : hojaRegistrarPieza());
+$$("[data-registrar]").forEach(b => b.onclick = () => b.dataset.registrar === "mueble" ? registrarMueble() : registrarPieza());
 $$("[data-nuevo]").forEach(b => b.onclick = () => hojaProducto());
 $$("[data-nuevo-pedido]").forEach(b => b.onclick = () => hojaPedido());
 $$("[data-barras]").forEach(b => b.onclick = hojaBarras);
 $("#btnRecado").onclick = async () => { const i = $("#recTexto"); await ponRecado(i.value); i.value = ""; };
 $("#recTexto").onkeydown = e => { if (e.key === "Enter") $("#btnRecado").click(); };
-$("#buscaApodos").oninput = pintaApodos;
-$("#guardarApodos").onclick = guardarApodos;
-$("#deshacerApodos").onclick = () => { E.apodosCambios.clear(); pintaApodos(); };
 $("#salirPractica").onclick = async () => { await Almacen.setPractica(false); pintaPulso(); pintaTodo(); };
 $("#formEntrada").onsubmit = async e => {
   e.preventDefault(); const m = $("#entMsg"); m.textContent = "Entrando…";

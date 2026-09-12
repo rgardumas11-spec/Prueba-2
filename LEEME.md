@@ -24,15 +24,16 @@ Cuando se publica una versión nueva, la app avisa arriba en verde y se actualiz
 
 | Pantalla | Para qué |
 |---|---|
-| **Muebles** | Pestañas por etapa. Se **registra** solo en la primera etapa (maquilado o MDF); a las siguientes se llega con **Pasar a…**, escogiendo de qué lotes salen ("Daniel: 5 disponibles"). Nunca se puede tomar más de lo que hay. Cada lote recuerda quién lo maquiló, armó y pintó. |
-| **Piezas** | Puertas (pre lijadas → lijadas → con bisagras → pintadas), cajones pintados y parches pintados, por mueble y color. Cada renglón dice a cuántos muebles equivale según la ficha del modelo: "19 puertas = 1 mueble · falta 1 para el siguiente". |
+| **Muebles** | Pestañas por etapa. En la primera etapa (maquilado o MDF) se **registra** lo recién hecho. En las demás, **Registrar** escoge entre lo que hay en la etapa anterior y lo descuenta de ahí solo ("Daniel: 5 disponibles"); también se puede **Pasar a…** desde la etapa de origen. Nunca se puede tomar más de lo que hay. Cada lote recuerda quién lo maquiló, armó y pintó. |
+| **Piezas** | Puertas por mueble y color en cadena: **Puertas Uriel** (disponibles para que Uriel las pre lije) → **Puertas por lijar** → **Puertas lijadas** (arriba las que ya tienen bisagras, abajo las que no; botón **Embisagrar**) → **Puertas pintadas** (solo desde las que tienen bisagras). Cajones y parches pintados aparte. Cada renglón dice a cuántos muebles equivale según la ficha: "19 puertas = 1 mueble · falta 1 para el siguiente". |
 | **Listos para preparar** | Se calcula solo: muebles pintados que ya tienen sus puertas y cajones pintados. Avisa "faltan parches" y "sin ficha completa". |
 | **Pedidos** | Ticket por cliente con fecha (día/mes/año), lo pedido y cuántos van entregados por renglón, con barra de avance. Más nuevos primero (se puede invertir). |
 | **Resumen** | Solo consulta: todo lo que hay de cada mueble y color, por etapa y piezas. No se captura nada aquí. |
 | **Material** | Cubetas y tambos con **−** y **+**, hasta 3 apodos y litros por envase. Código de barras opcional. |
 | **Recados** | Avisos para el equipo, con quién ya los vio y quién los cerró. |
 | **Bitácora** | Se escribe sola: cada registro, paso de etapa o corrección con fecha, hora, quién lo capturó y quién hizo el trabajo. |
-| **Catálogo** | La ficha de cada modelo (madera o MDF, cajones, puertas, parches, respaldo). Se edita aquí; si falta un dato se marca en rojo y el sistema no lo inventa. |
+| **Catálogo** | La ficha de cada modelo agrupada por familia (Mariana, Monarca… y MDF hasta abajo). Se edita aquí; si falta un dato se marca en rojo y el sistema no lo inventa. Al final, **Piezas extras**: piezas que se agregan solo por nombre, entran a Puertas Uriel y llegan hasta lijadas. |
+| **Catálogo de material** | Todo el material con **litros · nombre · apodo**, editable al tocarlo. El apodo es el nombre con el que se ve en Material. |
 | **Ajustes** | Quién soy, modo práctica, hojas de conteo para imprimir, revisar el aparato, versión. |
 
 La búsqueda está detrás de la lupa de cada pantalla y perdona faltas de ortografía
@@ -46,8 +47,8 @@ La búsqueda está detrás de la lupa de cada pantalla y perdona faltas de ortog
 | Mueble armado | Giovanni · Rafael (uno) |
 | Mueble pintado | Brandon · Antelmo · Raúl · Juan (hasta dos) |
 | Mueble de MDF | Fernando (maquila y arma); al pintarlo no se pregunta |
-| Puertas con bisagras | Miguel · Luis · Daniel (uno) |
-| Puertas y cajones pintados | Brandon · Juan · Antelmo · Raúl · Ángel · Daniel · Jorge (uno) |
+| Embisagrar puertas | Miguel · Daniel · Luis (uno). Ningún otro paso de puertas pregunta |
+| Cajones pintados | Brandon · Juan · Antelmo · Raúl · Ángel · Daniel · Jorge (uno) |
 
 ## Archivos
 
