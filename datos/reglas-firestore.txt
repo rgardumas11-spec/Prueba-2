@@ -27,6 +27,7 @@ service cloud.firestore {
     match /recado/{id}     { allow read, write: if delTaller(); }
     match /pedido/{id}     { allow read, write: if delTaller(); }
     match /persona/{id}    { allow read, write: if delTaller(); }
+    match /meta/{id}       { allow read, write: if delTaller(); }
 
     // Todo lo demás, cerrado.
     match /{document=**}   { allow read, write: if false; }
@@ -70,6 +71,7 @@ movimiento   la bitácora. tipo (alta | traslado | ajuste | entrada |
 pedido       cliente, fecha, lineas[] ({modelo, color, cantidad,
              entregado}), notas, estado (pendiente | entregado), de, creado
 
+meta         marcas del sistema (por ejemplo, que la carga inicial ya se hizo)
 recado       texto, de, para, hecho, urgente, vistos{}, creado
 persona      nombre (es el propio id), creado
 

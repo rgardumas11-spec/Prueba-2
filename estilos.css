@@ -251,6 +251,9 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 /* ── Catálogo ── */
 .ficha-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
 .ficha-chips .chip.falta{background:var(--rojo-t);border-color:var(--rojo);color:var(--rojo)}
+.chip.sin-color{color:var(--tinta3);border-style:dashed;background:none}
+.chip.revisar{background:var(--ambar-t);border-color:var(--ambar);color:var(--ambar);font-weight:600}
+.fila.revisar{background:var(--ambar-t)}
 .ficha-chips .chip.mdf{background:var(--ambar-t);border-color:var(--ambar);color:var(--ambar)}
 .trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 .opcion-si-no{display:flex;gap:6px}

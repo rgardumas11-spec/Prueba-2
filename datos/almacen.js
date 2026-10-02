@@ -21,8 +21,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 window.Almacen = (() => {
   "use strict";
-  const TABLAS = ["modelo", "lote", "pieza", "producto", "movimiento", "recado", "persona", "pedido"];
-  const LIMITE = { movimiento: 600, recado: 200, pedido: 400, persona: 200, producto: 2000, modelo: 600, lote: 4000, pieza: 4000 };
+  const TABLAS = ["modelo", "lote", "pieza", "producto", "movimiento", "recado", "persona", "pedido", "meta"];
+  const LIMITE = { movimiento: 600, recado: 200, pedido: 400, persona: 200, producto: 2000, modelo: 600, lote: 4000, pieza: 4000, meta: 50 };
   let fb = null;
   let db = null, auth = null;
   let modo = "local";
@@ -92,7 +92,7 @@ window.Almacen = (() => {
   function consulta(t){
     let q = db.collection(t);
     if (t === "producto") return q.where("activo", "==", true).limit(LIMITE.producto);
-    if (t === "persona" || t === "modelo" || t === "pieza") return q.limit(LIMITE[t]);
+    if (t === "persona" || t === "modelo" || t === "pieza" || t === "meta") return q.limit(LIMITE[t]);
     if (t === "lote") return q.where("cantidad", ">", 0).limit(LIMITE.lote);
     return q.orderBy("creado", "desc").limit(LIMITE[t] || 300);
   }
@@ -361,7 +361,7 @@ window.Almacen = (() => {
     for (const t of tomas){
       const o = memoria.lote[t.lote_id];
       ejemplo = o;
-      const destino = { modelo_id: o.modelo_id, modelo: o.modelo, color: o.color, etapa: d.etapa_a,
+      const destino = { modelo_id: o.modelo_id, modelo: o.modelo, color: d.color_a != null ? d.color_a : (o.color || ""), etapa: d.etapa_a,
         maquilo: o.maquilo || "", armo: d.armo != null ? d.armo : (o.armo || ""), pinto: d.pinto ? d.pinto.slice(0, 2) : (o.pinto || []) };
       destino.id = claveLote(destino);
       const origenBase = { modelo_id: o.modelo_id, modelo: o.modelo, color: o.color, etapa: o.etapa, maquilo: o.maquilo || "", armo: o.armo || "", pinto: o.pinto || [], id: o.id };
@@ -371,7 +371,7 @@ window.Almacen = (() => {
       total += t.cantidad; resultado = memoria.lote[destino.id].cantidad;
     }
     const firma = [d.armo, ...(d.pinto || [])].filter(Boolean).join(" y ");
-    const mov = { id: uuid(), tipo: "traslado", modelo_id: ejemplo.modelo_id, nombre: ejemplo.modelo, color: ejemplo.color,
+    const mov = { id: uuid(), tipo: "traslado", modelo_id: ejemplo.modelo_id, nombre: ejemplo.modelo, color: d.color_a != null ? d.color_a : (ejemplo.color || ""),
       etapa_de: ejemplo.etapa, etapa_a: d.etapa_a, delta: total, resultado, desglose, hecho_por: firma, persona, origen: origen || "", motivo: d.motivo || "", creado: ahora() };
     guardarLocal("lote"); avisar("lote"); movLocal(mov);
     mandaBatch(escrituras, [mov]);
@@ -419,10 +419,10 @@ window.Almacen = (() => {
     if (n <= 0) throw new Error("Pon cuántas pasan");
     if (n > Number(o.cantidad || 0)) throw new Error("Solo hay " + o.cantidad + " disponibles");
     const origenBase = basePieza(o); origenBase.minimo = Number(o.minimo || 0);
-    const destino = basePieza({ modelo_id: o.modelo_id, modelo: o.modelo, color: o.color, categoria: d.categoria_a });
+    const destino = basePieza({ modelo_id: o.modelo_id, modelo: o.modelo, color: d.color_a != null ? d.color_a : (o.color || ""), categoria: d.categoria_a });
     const exd = (memoria.pieza || {})[destino.id]; if (exd) destino.minimo = Number(exd.minimo || 0);
     const escrituras = [["pieza", o.id, incrementaLocal("pieza", origenBase, -n)], ["pieza", destino.id, incrementaLocal("pieza", destino, n)]];
-    const mov = { id: uuid(), tipo: "traslado", pieza_id: destino.id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color,
+    const mov = { id: uuid(), tipo: "traslado", pieza_id: destino.id, modelo_id: o.modelo_id, nombre: o.modelo, color: destino.color,
       categoria: d.categoria_a, etapa_de: o.categoria, etapa_a: d.categoria_a, delta: n, resultado: memoria.pieza[destino.id].cantidad,
       hecho_por: d.hecho_por || "", persona, origen: origen || "", motivo: d.motivo || "", creado: ahora() };
     guardarLocal("pieza"); avisar("pieza"); movLocal(mov);
@@ -452,6 +452,80 @@ window.Almacen = (() => {
     return nuevo;
   }
 
+  /* ── Carga inicial: borra TODO el inventario de muebles y piezas y pone la lista.
+     Va en lotes de 400 escrituras (tope de Firestore). Material no se toca. ── */
+  async function manda(escrituras, movs){
+    if (!(modo === "nube" && db)) return;
+    const ops = [];
+    escrituras.forEach(([t, id, doc]) => ops.push(b => doc === null ? b.delete(db.collection(t).doc(id)) : b.set(db.collection(t).doc(id), doc, {merge:true})));
+    movs.forEach(m => ops.push(b => b.set(db.collection("movimiento").doc(m.id), m)));
+    for (let i = 0; i < ops.length; i += 400){
+      const b = db.batch(); ops.slice(i, i + 400).forEach(f => f(b));
+      await enCamino(b.commit());
+    }
+  }
+  /* Convierte el archivo de carga (nombres y juegos) a renglones con modelo_id y puertas.
+     Devuelve también lo que NO se pudo resolver, para decirlo en vez de inventar. */
+  function preparaCarga(carga){
+    const porNombre = {};
+    lista("modelo").concat(carga.modelos || []).forEach(m => { porNombre[m.nombre] = m; });
+    const fuera = [], muebles = [], piezas = [];
+    (carga.muebles || []).forEach(([nombre, etapa, cantidad, color, maquilo, armo]) => {
+      const m = porNombre[nombre]; if (!m){ fuera.push(nombre + " (" + etapa + ")"); return; }
+      muebles.push({ modelo_id: m.id, etapa, cantidad, color: color || "", maquilo: maquilo || "", armo: armo || "" });
+    });
+    (carga.juegos || []).forEach(([nombre, categoria, juegos, color]) => {
+      const m = porNombre[nombre]; if (!m){ fuera.push(nombre + " (" + categoria + ")"); return; }
+      const por = m.total_puertas;
+      if (por == null || por === 0){ fuera.push(nombre + ": " + juegos + " juegos, pero la ficha no dice cuántas puertas lleva"); return; }
+      piezas.push({ modelo_id: m.id, categoria, cantidad: juegos * por, color: color || "", juegos });
+    });
+    (carga.piezas || []).forEach(x => piezas.push(x));
+    return { modelos: carga.modelos || [], muebles, piezas, fuera, id: carga.id, motivo: carga.motivo };
+  }
+  async function cargaInicial(cargaCruda, persona, origen){
+    const carga = preparaCarga(cargaCruda);
+    const t0 = ahora();
+    const escrituras = [], movs = [];
+    // 1) modelos nuevos (en amarillo: pendiente de revisar)
+    memoria.modelo = memoria.modelo || {};
+    (carga.modelos || []).forEach(m => {
+      if (memoria.modelo[m.id]) return;
+      const f = Object.assign({ activo: true, creado: t0, actualizado: t0, editado_por: "carga inicial", pendiente: true }, m);
+      memoria.modelo[f.id] = f; escrituras.push(["modelo", f.id, f]);
+    });
+    // 2) borrar lotes y piezas
+    Object.keys(memoria.lote || {}).forEach(id => escrituras.push(["lote", id, null]));
+    Object.keys(memoria.pieza || {}).forEach(id => escrituras.push(["pieza", id, null]));
+    memoria.lote = {}; memoria.pieza = {};
+    // 3) muebles
+    (carga.muebles || []).forEach(x => {
+      const m = memoria.modelo[x.modelo_id]; if (!m) return;
+      const l = { modelo_id: m.id, modelo: m.nombre, color: x.color || "", etapa: x.etapa, maquilo: x.maquilo || "", armo: x.armo || "", pinto: x.pinto || [] };
+      l.id = claveLote(l);
+      escrituras.push(["lote", l.id, incrementaLocal("lote", l, x.cantidad)]);
+      movs.push({ id: uuid(), tipo: "alta", lote_id: l.id, modelo_id: m.id, nombre: m.nombre, color: l.color, etapa_a: l.etapa, delta: x.cantidad,
+        resultado: memoria.lote[l.id].cantidad, persona, origen: origen || "", hecho_por: [l.maquilo, l.armo].filter(Boolean).filter((a, i, arr) => arr.indexOf(a) === i).join(" y "), motivo: carga.motivo || "carga inicial", creado: ahora() });
+    });
+    // 4) piezas
+    (carga.piezas || []).forEach(x => {
+      const m = memoria.modelo[x.modelo_id]; if (!m) return;
+      const p = { modelo_id: m.id, modelo: m.nombre, color: x.color || "", categoria: x.categoria, minimo: 0 };
+      p.id = clavePieza(p);
+      escrituras.push(["pieza", p.id, incrementaLocal("pieza", p, x.cantidad)]);
+      movs.push({ id: uuid(), tipo: "alta", pieza_id: p.id, modelo_id: m.id, nombre: m.nombre, color: p.color, categoria: p.categoria, delta: x.cantidad,
+        resultado: memoria.pieza[p.id].cantidad, persona, origen: origen || "", hecho_por: "", motivo: carga.motivo || "carga inicial", creado: ahora() });
+    });
+    // 5) marca para no repetir
+    const meta = { id: carga.id, hecho: t0, por: persona, renglones: movs.length };
+    memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; escrituras.push(["meta", meta.id, meta]);
+    ["modelo", "lote", "pieza", "meta"].forEach(t => { guardarLocal(t); avisar(t); });
+    movs.forEach(movLocal);
+    await manda(escrituras, movs);
+    return { renglones: movs.length, fuera: carga.fuera };
+  }
+  const cargaHecha = id => !!(memoria.meta || {})[id];
+
   /* ── Lo que quedó de la versión anterior (artículos de mueble sueltos) ── */
   const viejos = () => lista("producto").filter(p => p.tipo === "mueble" && p.activo !== false);
 
@@ -478,6 +552,6 @@ window.Almacen = (() => {
     lista, dame(t, id){ return (memoria[t] || {})[id] || null; },
     pon, parcha, borra, anota, ajusta,
     registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, viejos,
-    claveLote, clavePieza
+    cargaInicial, cargaHecha, preparaCarga, claveLote, clavePieza
   };
 })();
