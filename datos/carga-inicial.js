@@ -12,6 +12,45 @@
    · Muebles armados "genéricos" (Monarca normal, Mariana de 3 cajones…) se
      cargan con ese nombre, en amarillo.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* Hoja de pintura del mismo día. Se carga con su propio botón; SUMA a lo que haya
+   (no borra material). Los nombres nuevos van tal cual los escribió el taller;
+   los que ya existían (confirmado por el taller) se suman al mismo producto. */
+window.CARGA_PINTURA = {
+  id: "carga-pintura-2026-10-02",
+  titulo: "Pintura del 2 de octubre",
+  motivo: "pintura del 2 de octubre (libreta)",
+  /* {nombre, presentacion, cantidad (almacén), cabina (abiertos en cabina), apodos} */
+  material: [
+    // Tambos sellados en el almacén + tambos abiertos en cabina (1 cada uno)
+    { nombre: "Rojo bermellón",      presentacion: "Tambo", cantidad: 1, cabina: 1, apodos: ["rojo bermellón"] },
+    { nombre: "Gris",                presentacion: "Tambo", cantidad: 3, cabina: 1, apodos: ["gris"] },
+    { nombre: "DIM NEGRO",           presentacion: "Tambo", cantidad: 2, cabina: 0 },
+    { nombre: "Nogal rojizo (café)", presentacion: "Tambo", cantidad: 1, cabina: 1, apodos: ["nogal rojizo"] },
+    { nombre: "Blanco",              presentacion: "Tambo", cantidad: 1, cabina: 1, apodos: ["blanco"] },
+    { nombre: "Solvente",            presentacion: "Tambo", cantidad: 1, cabina: 0, apodos: ["solvente"] },
+    { nombre: "MEZCLA DIM-500",      presentacion: "Tambo", cantidad: 3, cabina: 1 },
+    { nombre: "Fondo negro",         presentacion: "Tambo", cantidad: 0, cabina: 1, apodos: ["fondo negro"] },
+    { nombre: "Sellador",            presentacion: "Tambo", cantidad: 0, cabina: 1, apodos: ["sellador"] },
+    { nombre: "Laca negra",          presentacion: "Tambo", cantidad: 0, cabina: 1, apodos: ["laca negra"] },
+    // Cubetas (brillos, fondos, selladores)
+    { nombre: "Laca industrial TRO naranja",            presentacion: "Cubeta", cantidad: 1,  apodos: ["laca naranja"] },
+    { nombre: "HICEL FONDO TRANSPARENTE DELICIAS",     presentacion: "Cubeta", cantidad: 21 },
+    { nombre: "Acabado PU Versátil B010",               presentacion: "Cubeta", cantidad: 18, apodos: ["acabado PU"] },
+    { nombre: "Aguarrás sintético",                     presentacion: "Cubeta", cantidad: 1,  apodos: ["aguarrás"] },
+    { nombre: "BARNIZ PU BLANCO ESTABLE ALTO BRILLO",   presentacion: "Cubeta", cantidad: 3 },
+    { nombre: "Laca ultrable Hipol 1768",               presentacion: "Cubeta", cantidad: 6,  apodos: ["laca ultrable"] },
+    { nombre: "Barniz de poliuretano mate",             presentacion: "Cubeta", cantidad: 1,  apodos: ["barniz mate"] },
+    { nombre: "Catalizador para poliuretano",           presentacion: "Cubeta", cantidad: 13, apodos: ["catalizador poliuretano"] },
+    { nombre: "Laca blanca Hicel Amozoc",               presentacion: "Cubeta", cantidad: 1,  apodos: ["laca blanca"] },
+    { nombre: "Hipol 5004 laca X-Mate A.D.",            presentacion: "Cubeta", cantidad: 1,  apodos: ["laca X-Mate"] },
+    { nombre: "PUP-015 Polyprimer negro",               presentacion: "Cubeta", cantidad: 1,  apodos: ["polyprimer negro"] },
+    { nombre: "LACA INDUSTRIAL NITRO AMARILLO OXIDO",   presentacion: "Cubeta", cantidad: 1 },
+    { nombre: "Sellador S-270",                         presentacion: "Cubeta", cantidad: 1,  apodos: ["sellador S-270"] },
+    { nombre: "Laca industrial de nitro azul CL",       presentacion: "Cubeta", cantidad: 1,  apodos: ["laca azul"] },
+    { nombre: "CF-6040 CATALIZADOR",                    presentacion: "Cubeta", cantidad: 4 }
+  ]
+};
+
 window.CARGA_INICIAL = {
   id: "carga-2026-10-02",
   titulo: "Stock del 2 de octubre",

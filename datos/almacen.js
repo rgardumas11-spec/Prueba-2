@@ -431,21 +431,23 @@ window.Almacen = (() => {
   }
 
   /* ── MATERIAL: sumar o restar envases ── */
-  async function ajusta(id, delta, persona, motivo, origen, hechoPor){
+  async function ajusta(id, delta, persona, motivo, origen, hechoPor, donde){
     const p = (memoria.producto || {})[id];
     if (!p) return null;
-    const antes = Number(p.cantidad || 0);
+    const campo = donde === "cabina" ? "cabina" : "cantidad";
+    const antes = Number(p[campo] || 0);
     const nuevo = Math.max(0, antes + delta);
     const real = nuevo - antes;
-    p.cantidad = nuevo; p.tocado = ahora(); p.por_quien = persona;
+    p[campo] = nuevo; p.tocado = ahora(); p.por_quien = persona;
     guardarLocal("producto"); avisar("producto");
     const mov = { id: uuid(), producto_id:id, nombre:p.nombre, color:p.color || "",
-      tipo: real > 0 ? "entrada" : "salida", delta: real, resultado: nuevo,
+      tipo: real > 0 ? "entrada" : "salida", delta: real, resultado: nuevo, donde: campo === "cabina" ? "cabina" : "almacén",
       persona, motivo: motivo || "", origen: origen || "", hecho_por: hechoPor || "", creado: ahora() };
     if (real === 0) return nuevo;
     if (modo === "nube" && db){
       const lote = db.batch();
-      lote.update(db.collection("producto").doc(id), { cantidad: firebaseInc(real), tocado: ahora(), por_quien: persona });
+      const cambio = { tocado: ahora(), por_quien: persona }; cambio[campo] = firebaseInc(real);
+      lote.update(db.collection("producto").doc(id), cambio);
       lote.set(db.collection("movimiento").doc(mov.id), mov);
       enCamino(lote.commit());
     } else movLocal(mov);
@@ -526,8 +528,56 @@ window.Almacen = (() => {
   }
   const cargaHecha = id => !!(memoria.meta || {})[id];
 
-  /* ── Lo que quedó de la versión anterior (artículos de mueble sueltos) ── */
-  const viejos = () => lista("producto").filter(p => p.tipo === "mueble" && p.activo !== false);
+  /* ── Tambos: del almacén a la cabina de pintura (un solo batch) ── */
+  async function aCabina(id, n, persona, origen){
+    const p = (memoria.producto || {})[id]; if (!p) throw new Error("Ese producto ya no está");
+    n = Math.floor(Number(n || 0));
+    if (n <= 0) throw new Error("Pon cuántos pasan");
+    if (n > Number(p.cantidad || 0)) throw new Error("Solo hay " + Number(p.cantidad || 0) + " en el almacén");
+    p.cantidad = Number(p.cantidad || 0) - n; p.cabina = Number(p.cabina || 0) + n; p.tocado = ahora(); p.por_quien = persona;
+    guardarLocal("producto"); avisar("producto");
+    const mov = { id: uuid(), tipo: "traslado", producto_id: id, nombre: p.nombre, color: "", etapa_de: "almacén", etapa_a: "cabina",
+      delta: n, resultado: p.cabina, persona, origen: origen || "", motivo: "", creado: ahora() };
+    movLocal(mov);
+    if (modo === "nube" && db){
+      const b = db.batch();
+      b.update(db.collection("producto").doc(id), { cantidad: firebaseInc(-n), cabina: firebaseInc(n), tocado: ahora(), por_quien: persona });
+      b.set(db.collection("movimiento").doc(mov.id), mov);
+      enCamino(b.commit());
+    }
+    return mov;
+  }
+
+  /* ── Carga de pintura: suma a los que existen (por nombre) y crea los nuevos ── */
+  async function cargaMaterial(carga, persona, origen){
+    const t0 = ahora();
+    const porNombre = {}; lista("producto").filter(p => p.tipo === "material" && p.activo !== false).forEach(p => { porNombre[p.nombre.trim().toUpperCase()] = p; });
+    const escrituras = [], movs = [];
+    memoria.producto = memoria.producto || {};
+    (carga.material || []).forEach(x => {
+      let p = porNombre[x.nombre.trim().toUpperCase()];
+      const nuevo = !p;
+      if (nuevo){
+        p = { id: uuid(), tipo: "material", nombre: x.nombre, apodos: x.apodos || [], marca: x.marca || "", codigo: "", barras: "", presentacion: x.presentacion || "",
+          categoria: x.presentacion === "Tambo" ? "Tambos" : "Cubetas", litros: x.litros == null ? null : x.litros, cantidad: 0, cabina: 0, minimo: 0, activo: true, creado: t0, tocado: t0, por_quien: persona, color: "" };
+        memoria.producto[p.id] = p; porNombre[p.nombre.trim().toUpperCase()] = p;
+      }
+      const alm = Number(x.cantidad || 0), cab = Number(x.cabina || 0);
+      p.cantidad = Number(p.cantidad || 0) + alm; p.cabina = Number(p.cabina || 0) + cab; p.tocado = t0;
+      const doc = nuevo ? Object.assign({}, p) : { cantidad: firebaseInc(alm), cabina: firebaseInc(cab), tocado: t0, por_quien: persona };
+      // La hoja dice en qué envase viene (tambo o cubeta); si el producto ya existía con otro, se corrige.
+      if (!nuevo && x.presentacion && p.presentacion !== x.presentacion){ p.presentacion = x.presentacion; p.categoria = x.presentacion === "Tambo" ? "Tambos" : "Cubetas"; doc.presentacion = p.presentacion; doc.categoria = p.categoria; }
+      escrituras.push(["producto", p.id, doc]);
+      if (alm) movs.push({ id: uuid(), tipo: "entrada", producto_id: p.id, nombre: p.nombre, color: "", delta: alm, resultado: p.cantidad, donde: "almacén", persona, origen: origen || "", motivo: carga.motivo || "carga", creado: ahora() });
+      if (cab) movs.push({ id: uuid(), tipo: "entrada", producto_id: p.id, nombre: p.nombre, color: "", delta: cab, resultado: p.cabina, donde: "cabina", persona, origen: origen || "", motivo: carga.motivo || "carga", creado: ahora() });
+    });
+    const meta = { id: carga.id, hecho: t0, por: persona, renglones: movs.length };
+    memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; escrituras.push(["meta", meta.id, meta]);
+    guardarLocal("producto"); avisar("producto"); guardarLocal("meta"); avisar("meta");
+    movs.forEach(movLocal);
+    await manda(escrituras, movs);
+    return { renglones: movs.length };
+  }
 
   function falla(e){
     console.warn("almacén:", e);
@@ -551,7 +601,7 @@ window.Almacen = (() => {
     onEstado(cb){ estadoCb.push(cb); },
     lista, dame(t, id){ return (memoria[t] || {})[id] || null; },
     pon, parcha, borra, anota, ajusta,
-    registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, viejos,
-    cargaInicial, cargaHecha, preparaCarga, claveLote, clavePieza
+    registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, aCabina,
+    cargaInicial, cargaMaterial, cargaHecha, preparaCarga, claveLote, clavePieza
   };
 })();

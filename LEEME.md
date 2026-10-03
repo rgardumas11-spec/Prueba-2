@@ -29,7 +29,8 @@ Cuando se publica una versión nueva, la app avisa arriba en verde y se actualiz
 | **Listos para preparar** | Se calcula solo: muebles pintados que ya tienen sus puertas y cajones pintados. Avisa "faltan parches" y "sin ficha completa". |
 | **Pedidos** | Ticket por cliente con fecha (día/mes/año), lo pedido y cuántos van entregados por renglón, con barra de avance. Más nuevos primero (se puede invertir). |
 | **Resumen** | Solo consulta: todo lo que hay de cada mueble y color, por etapa y piezas. No se captura nada aquí. |
-| **Material** | Cubetas y tambos con **−** y **+**, hasta 3 apodos y litros por envase. Código de barras opcional. |
+| **Material** | Cubetas · Tambos (sellados en el almacén) · Tambos en cabina. Un tambo pasa del almacén a la cabina con **Pasar a cabina**; en cabina solo se resta hasta cero. Cubetas: − y +. |
+| **Reportes** | Muebles y puertas (una línea por mueble con cada etapa), Pintura, y Pedidos (por cliente: qué falta y qué hay para cubrirlo). En computadora se imprime; en celular se baja en PDF. |
 | **Recados** | Avisos para el equipo, con quién ya los vio y quién los cerró. |
 | **Bitácora** | Se escribe sola: cada registro, paso de etapa o corrección con fecha, hora, quién lo capturó y quién hizo el trabajo. |
 | **Catálogo** | La ficha de cada modelo agrupada por familia (Mariana, Monarca… y MDF hasta abajo). Se edita aquí; si falta un dato se marca en rojo y el sistema no lo inventa. Al final, **Piezas extras**: piezas que se agregan solo por nombre, entran a Puertas Uriel y llegan hasta lijadas. |
@@ -63,7 +64,7 @@ manifest.json       para instalarse como app
 datos/reglas.js     etapas, responsables, equivalencias, listos para preparar
 datos/busca.js      búsqueda tolerante
 datos/catalogo.js   ficha de arranque de los modelos, colores, clientes, material
-datos/carga-inicial.js   el stock de la libreta del 2 de octubre; se carga una vez desde Ajustes
+datos/carga-inicial.js   el stock de la libreta del 2 de octubre (muebles, puertas y pintura); se carga una vez desde Ajustes
 datos/almacen.js    capa de datos: nube o local, misma cara
 datos/reglas-firestore.txt  reglas de la base (se pegan en Firebase)
 diseno/             vista previa aprobada
