@@ -1,7 +1,7 @@
 /* Service worker: guarda la app en el aparato para que abra al instante y
    sirva sin señal, y avisa cuando hay versión nueva.
    Al publicar una versión nueva SE CAMBIA ESTE NÚMERO. */
-const VERSION = 'almacen-2026-10-05-3';
+const VERSION = 'almacen-2026-10-05-4';
 const ARCHIVOS = [
   './', './index.html', './estilos.css', './app.js', './config.js',
   './datos/catalogo.js', './datos/carga-inicial.js', './datos/reglas.js', './datos/busca.js', './datos/almacen.js', './manifest.json',
@@ -19,19 +19,16 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Los archivos de la app: primero la copia guardada, y de fondo se refresca.
-// Todo lo demás (la base de datos, letras) va directo a la red.
+// Los archivos de la app: primero la red (así una versión nueva se ve a la primera);
+// si no hay señal, la copia guardada. Todo lo demás (la base de datos, letras) va directo a la red.
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin || e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(guardado => {
-      const red = fetch(e.request).then(resp => {
-        if (resp && resp.ok) caches.open(VERSION).then(c => c.put(e.request, resp.clone()));
-        return resp;
-      }).catch(() => guardado);
-      return guardado || red;
-    })
+    fetch(e.request).then(resp => {
+      if (resp && resp.ok) caches.open(VERSION).then(c => c.put(e.request, resp.clone()));
+      return resp;
+    }).catch(() => caches.match(e.request))
   );
 });
 
