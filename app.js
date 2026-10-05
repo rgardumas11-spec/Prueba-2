@@ -1547,9 +1547,13 @@ function pintaTodo(){
 
 /* ═══════════════ actualización de la app ═══════════════ */
 let swNuevo = null;
-function buscaActualizacion(){
-  if (!("serviceWorker" in navigator)) return grita("Este navegador no guarda la app; siempre abre la última versión.");
-  navigator.serviceWorker.getRegistration().then(r => { if (!r) return grita("Aún no instalada; ya tienes la última."); r.update().then(() => setTimeout(() => { if (!swNuevo) grita("Ya tienes la última versión."); }, 1500)); });
+async function buscaActualizacion(){
+  grita("Buscando la versión nueva…");
+  try {
+    if ("caches" in window){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+    if ("serviceWorker" in navigator){ const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); }
+  } catch(e){}
+  location.replace(location.pathname + "?v=" + Date.now());
 }
 if ("serviceWorker" in navigator && location.protocol !== "file:"){
   navigator.serviceWorker.register("sw.js").then(r => {

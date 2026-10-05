@@ -1,7 +1,7 @@
 /* Service worker: guarda la app en el aparato para que abra al instante y
    sirva sin señal, y avisa cuando hay versión nueva.
    Al publicar una versión nueva SE CAMBIA ESTE NÚMERO. */
-const VERSION = 'almacen-2026-10-05-4';
+const VERSION = 'almacen-2026-10-05-5';
 const ARCHIVOS = [
   './', './index.html', './estilos.css', './app.js', './config.js',
   './datos/catalogo.js', './datos/carga-inicial.js', './datos/reglas.js', './datos/busca.js', './datos/almacen.js', './manifest.json',
@@ -25,7 +25,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin || e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request).then(resp => {
+    fetch(e.request, { cache: 'no-cache' }).then(resp => {
       if (resp && resp.ok) caches.open(VERSION).then(c => c.put(e.request, resp.clone()));
       return resp;
     }).catch(() => caches.match(e.request))
