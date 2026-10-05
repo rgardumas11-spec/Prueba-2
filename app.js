@@ -1216,7 +1216,7 @@ function pintaCatMaterial(){
 function pintaAjustes(){
   const C = window.CONFIG || {};
   $("#ajustes").innerHTML =
-    tarjetaCarga() + tarjetaPintura() +
+    tarjetaPedidosLibreta() + tarjetaCarga() + tarjetaPintura() +
     '<div class="ajuste"><h4>Quién soy</h4><p>' + (E.yo ? "Estás como <b>" + esc(E.yo) + "</b>." : "Todavía no has dicho quién eres.") + '</p><div class="acciones"><button class="btn" id="ajYo">Cambiar de persona</button>' + (Almacen.sesion ? '<button class="btn fantasma" id="ajSalir">Cerrar sesión</button>' : "") + '</div></div>' +
     '<div class="ajuste"><h4>Modo práctica</h4><p>Para jugar sin miedo: datos de juguete, solo en este aparato. El inventario real ni se entera.</p><label class="interruptor"><input type="checkbox" id="ajPractica"' + (Almacen.practica ? " checked" : "") + '> <span>' + (Almacen.practica ? "Practicando" : "Apagado") + '</span></label></div>' +
     '<div class="ajuste"><h4>Hoja de conteo para imprimir</h4><p>Para caminar el almacén con papel y comparar contra el sistema.</p><div class="acciones"><button class="btn" data-imprime="mueble">Muebles</button><button class="btn" data-imprime="pieza">Piezas</button><button class="btn" data-imprime="material">Material</button></div></div>' +
@@ -1225,6 +1225,7 @@ function pintaAjustes(){
     '<div class="ajuste"><h4>Versión</h4><p><b>' + esc(C.VERSION || "?") + '</b> · ' + (Almacen.hayNube ? "base compartida conectada" : "sin base compartida") + '</p><div class="acciones"><button class="btn" id="ajActualiza">Buscar actualización</button><button class="btn fantasma" id="ajTema">Claro / oscuro</button></div></div>';
   const cg = $("#ajCarga"); if (cg) cg.onclick = hojaCarga;
   const cp = $("#ajPintura"); if (cp) cp.onclick = cargaPintura;
+  const cpl = $("#ajPedidos"); if (cpl) cpl.onclick = cargaPedidosLibreta;
   $("#ajYo").onclick = hojaQuienSoy;
   const s = $("#ajSalir"); if (s) s.onclick = async () => { await Almacen.sale(); pintaPulso(); pintaTodo(); };
   $("#ajPractica").onchange = async e => { await Almacen.setPractica(e.target.checked); pintaPulso(); pintaTodo(); grita(e.target.checked ? "Modo práctica encendido" : "De vuelta a lo real"); };
@@ -1239,13 +1240,14 @@ function tarjetaCarga(){
   const hecha = Almacen.cargaHecha(C.id);
   const puede = Almacen.practica || (Almacen.modo === "nube" && Almacen.sesion);
   return '<div class="' + (hecha ? "ajuste" : "aviso") + '"><' + (hecha ? "h4" : "b") + '>' + esc(C.titulo) + (hecha ? " · ya se cargó" : "") + '</' + (hecha ? "h4" : "b") + '><p>' +
-    (hecha ? "Entró " + esc(cuando(Almacen.dame("meta", C.id).hecho)) + " por " + esc(Almacen.dame("meta", C.id).por || "?") + ". Los modelos nuevos quedaron en amarillo en Catálogo para que los revises."
+    (hecha ? "Entró " + esc(cuando(Almacen.dame("meta", C.id).hecho)) + " por " + esc(Almacen.dame("meta", C.id).por || "?") + ". Los modelos nuevos quedaron en amarillo en Catálogo para que los revises. Si se movió algo por error, con el botón se <b>borra</b> lo que hay en Muebles y Piezas y vuelve a quedar la lista de ese día."
            : "La lista de las dos hojas (" + (C.muebles || []).length + " renglones de muebles y " + (C.juegos || []).length + " de puertas). <b>Borra todo lo que haya en Muebles y Piezas</b> y pone esto en su lugar. El material no se toca.") + '</p>' +
-    (hecha ? "" : '<div class="pie"><button class="btn vino" id="ajCarga"' + (puede ? "" : " disabled") + '>Cargar ahora</button>' + (puede ? "" : '<span class="guia" style="margin:0">Entra con tu cuenta primero.</span>') + '</div>') + '</div>';
+    '<div class="pie"><button class="btn ' + (hecha ? "fantasma" : "vino") + '" id="ajCarga"' + (puede ? "" : " disabled") + '>' + (hecha ? "Volver a dejarlo como el 2 de octubre" : "Cargar ahora") + '</button>' + (puede ? "" : '<span class="guia" style="margin:0">Entra con tu cuenta primero.</span>') + '</div></div>';
 }
 function hojaCarga(){
   if (!exigeYo()) return;
-  const C = window.CARGA_INICIAL; if (!C || Almacen.cargaHecha(C.id)) return;
+  const C = window.CARGA_INICIAL; if (!C) return;
+  const otraVez = Almacen.cargaHecha(C.id);
   const prev = Almacen.preparaCarga(C);
   const lotesHoy = E.lotes.filter(l => Number(l.cantidad) > 0).length, piezasHoy = E.piezas.filter(p => Number(p.cantidad) > 0).length;
   const porCat = {}; prev.piezas.forEach(p => { porCat[p.categoria] = (porCat[p.categoria] || 0) + p.cantidad; });
@@ -1256,13 +1258,13 @@ function hojaCarga(){
     '<div class="lotes">' + Object.keys(porEt).map(e => '<div class="lote"><div class="quien">' + esc(R.ETAPAS[e].nombre) + '</div><div class="disp"><b>' + porEt[e] + '</b> muebles</div></div>').join("") +
       Object.keys(porCat).map(c => '<div class="lote"><div class="quien">' + esc(R.PIEZAS[c].nombre) + '</div><div class="disp"><b>' + porCat[c] + '</b> puertas</div></div>').join("") + '</div>' +
     '<p class="guia">' + prev.modelos.length + ' modelos nuevos se agregan al catálogo <b>en amarillo (por revisar)</b>.' + (prev.fuera.length ? ' <b style="color:var(--rojo)">No se pudieron cargar:</b> ' + esc(prev.fuera.join("; ")) : "") + '</p>' +
-    '<button class="btn vino grande" id="cgOk">Sí, borrar lo que hay y cargar</button><button class="btn fantasma grande" id="cgNo" style="margin-top:8px">Cancelar</button>',
+    '<button class="btn vino grande" id="cgOk">' + (otraVez ? "Sí, borrar lo que hay y dejarlo como el 2 de octubre" : "Sí, borrar lo que hay y cargar") + '</button><button class="btn fantasma grande" id="cgNo" style="margin-top:8px">Cancelar</button>',
     h => {
       h.querySelector("#cgNo").onclick = cierraHoja;
       h.querySelector("#cgOk").onclick = async () => {
         if (!confirm("Última confirmación: ¿borrar el inventario actual de muebles y piezas y cargar la libreta?")) return;
         h.querySelector("#cgOk").disabled = true; h.querySelector("#cgOk").textContent = "Cargando…";
-        const r = await Almacen.cargaInicial(C, E.yo, origen());
+        const r = await Almacen.cargaInicial(otraVez ? Object.assign({}, C, { motivo: "se volvió a dejar el stock del 2 de octubre" }) : C, E.yo, origen());
         cierraHoja(); pintaTodo(); grita("Listo: " + plural(r.renglones, "renglón cargado", "renglones cargados"));
       };
     });
@@ -1282,6 +1284,23 @@ async function cargaPintura(){
   if (!confirm("¿Cargar la hoja de pintura? Se suma a lo que ya hay en Material.")) return;
   const r = await Almacen.cargaMaterial(C, E.yo, origen());
   pintaTodo(); grita("Listo: " + plural(r.renglones, "renglón cargado", "renglones cargados"));
+}
+function tarjetaPedidosLibreta(){
+  const C = window.CARGA_PEDIDOS; if (!C) return "";
+  const hecha = Almacen.cargaHecha(C.id);
+  const puede = Almacen.practica || (Almacen.modo === "nube" && Almacen.sesion);
+  const n = (C.pedidos || []).length, r = (C.pedidos || []).reduce((a, p) => a + (p.lineas || []).length, 0);
+  return '<div class="' + (hecha ? "ajuste" : "aviso") + '"><' + (hecha ? "h4" : "b") + '>' + esc(C.titulo) + (hecha ? " · ya se cargó" : "") + '</' + (hecha ? "h4" : "b") + '><p>' +
+    (hecha ? "Entró " + esc(cuando(Almacen.dame("meta", C.id).hecho)) + " por " + esc(Almacen.dame("meta", C.id).por || "?") + ". Los renglones con (?) son nombres que no se entendieron de la libreta: corrígelos con Editar."
+           : plural(n, "pedido", "pedidos") + " con " + plural(r, "renglón", "renglones") + " de las fotos de la libreta, con su fecha y lo que ya se entregó. <b>Se suman</b> a los pedidos que haya; no borra nada.") + '</p>' +
+    (hecha ? "" : '<div class="pie"><button class="btn vino" id="ajPedidos"' + (puede ? "" : " disabled") + '>Cargar ahora</button></div>') + '</div>';
+}
+async function cargaPedidosLibreta(){
+  if (!exigeYo()) return;
+  const C = window.CARGA_PEDIDOS; if (!C || Almacen.cargaHecha(C.id)) return;
+  if (!confirm("¿Cargar los pedidos de la libreta? Se suman a los que ya hay.")) return;
+  const r = await Almacen.cargaPedidos(C, E.yo, origen());
+  pintaTodo(); grita("Listo: " + plural(r.renglones, "pedido cargado", "pedidos cargados"));
 }
 async function diagnostico(){
   const caja = $("#diag"); const filas = [];

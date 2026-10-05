@@ -36,7 +36,7 @@ Cuando se publica una versión nueva, la app avisa arriba en verde y se actualiz
 | **Catálogo** | La ficha de cada modelo agrupada por familia (Mariana, Monarca… y MDF hasta abajo). Se edita aquí; si falta un dato se marca en rojo y el sistema no lo inventa. Al final, **Piezas extras**: piezas que se agregan solo por nombre, entran a Puertas Uriel y llegan hasta lijadas. |
 | **Color** | Lo que todavía no se pinta no tiene color (es stock almacenado). El color se escoge al pasar a Mueble pintado, MDF pintado o Puertas pintadas. |
 | **Catálogo de material** | Todo el material con **litros · nombre · apodo**, editable al tocarlo. El apodo es el nombre con el que se ve en Material. |
-| **Ajustes** | Quién soy, modo práctica, hojas de conteo para imprimir, revisar el aparato, versión. |
+| **Ajustes** | Cargas de la libreta (pedidos de septiembre, stock y pintura del 2 de octubre; el stock se puede volver a dejar como ese día), quién soy, modo práctica, hojas de conteo para imprimir, revisar el aparato, versión. |
 
 La búsqueda está detrás de la lupa de cada pantalla y perdona faltas de ortografía
 ("Maliana Sisne" encuentra "Mariana Cisne"); si nada se parece, dice que no lo encontró.
@@ -64,7 +64,7 @@ manifest.json       para instalarse como app
 datos/reglas.js     etapas, responsables, equivalencias, listos para preparar
 datos/busca.js      búsqueda tolerante
 datos/catalogo.js   ficha de arranque de los modelos, colores, clientes, material
-datos/carga-inicial.js   el stock de la libreta del 2 de octubre (muebles, puertas y pintura); se carga una vez desde Ajustes
+datos/carga-inicial.js   el stock y la pintura del 2 de octubre y los pedidos de septiembre, copiados de la libreta; se cargan desde Ajustes
 datos/almacen.js    capa de datos: nube o local, misma cara
 datos/reglas-firestore.txt  reglas de la base (se pegan en Firebase)
 diseno/             vista previa aprobada

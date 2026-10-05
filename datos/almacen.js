@@ -579,6 +579,24 @@ window.Almacen = (() => {
     return { renglones: movs.length };
   }
 
+  /* ── Carga de pedidos de la libreta: se suman a los que haya (un solo batch) ── */
+  async function cargaPedidos(carga, persona, origen){
+    const t0 = ahora();
+    const escrituras = [];
+    memoria.pedido = memoria.pedido || {};
+    (carga.pedidos || []).forEach(x => {
+      const lineas = (x.lineas || []).map(([modelo, color, cantidad, entregado]) => ({ modelo, color: color || "", cantidad: Number(cantidad || 0), entregado: Math.min(Number(cantidad || 0), Number(entregado || 0)) }));
+      const completo = lineas.length && lineas.every(l => l.entregado >= l.cantidad);
+      const p = { id: uuid(), cliente: x.cliente, fecha: x.fecha || null, lineas, notas: x.notas || "", estado: completo ? "entregado" : "pendiente", de: persona, origen: origen || "", creado: ahora() };
+      memoria.pedido[p.id] = p; escrituras.push(["pedido", p.id, p]);
+    });
+    const meta = { id: carga.id, hecho: t0, por: persona, renglones: escrituras.length };
+    memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; escrituras.push(["meta", meta.id, meta]);
+    guardarLocal("pedido"); avisar("pedido"); guardarLocal("meta"); avisar("meta");
+    await manda(escrituras, []);
+    return { renglones: escrituras.length - 1 };
+  }
+
   function falla(e){
     console.warn("almacén:", e);
     const c = String(e && e.code || "");
@@ -602,6 +620,6 @@ window.Almacen = (() => {
     lista, dame(t, id){ return (memoria[t] || {})[id] || null; },
     pon, parcha, borra, anota, ajusta,
     registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, aCabina,
-    cargaInicial, cargaMaterial, cargaHecha, preparaCarga, claveLote, clavePieza
+    cargaInicial, cargaMaterial, cargaPedidos, cargaHecha, preparaCarga, claveLote, clavePieza
   };
 })();

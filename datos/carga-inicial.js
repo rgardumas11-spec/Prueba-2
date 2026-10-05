@@ -142,3 +142,93 @@ window.CARGA_INICIAL = {
     ["Mariana Cisne", "puertas_pintadas", 2, "Negro completo"], ["Mariana Duela Abatible", "puertas_pintadas", 2, "Negro completo"]
   ]
 };
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Pedidos de la libreta (septiembre de 2026), copiados de las 4 fotos.
+   Se cargan UNA vez desde Ajustes → "Pedidos de la libreta". Se SUMAN a los
+   pedidos que ya haya (no borran nada).
+   · Lo que el taller dijo que ya se entregó va con `entregado` = cantidad.
+   · Los nombres que no se entendieron van tal cual la libreta, con "(?)",
+     para que el taller los corrija con Editar; no se inventó ningún modelo.
+   · "Surtidos" / "diferente color" se guardan como texto, sin modelo.
+   · Los renglones tachados con raya al inicio de las fotos 3 y 4 no se
+     cargaron: no se ve de qué cliente son y ya estaban tachados.
+   Renglón: [mueble, color, cantidad, entregado]
+   ═══════════════════════════════════════════════════════════════════════════ */
+window.CARGA_PEDIDOS = {
+  id: "carga-pedidos-2026-10-05",
+  titulo: "Pedidos de la libreta (septiembre)",
+  pedidos: [
+    { cliente: "Sr. Alfredo, Lupe Lupita", fecha: "2026-09-30", notas: "5 % de descuento", lineas: [
+      ["Ropero Elvis", "Negro puertas blancas", 1, 0] ] },
+    { cliente: "Sr. Edgar Vazquez", fecha: "2026-09-24", notas: "", lineas: [
+      ["Monarca Lámpara (?)", "Negro puertas grises", 4, 0],
+      ["Monarca África", "", 4, 0],
+      ["Monarca Maya", "Negro puertas blancas", 4, 0],
+      ["Ropero Óvalo", "", 10, 0],
+      ["Ropero San José", "", 4, 0] ] },
+    { cliente: "Guillermo Perez", fecha: "2026-09-24", notas: "", lineas: [
+      ["Cómoda Rombo", "", 1, 0],
+      ["Vitrina Angelita", "Negro completo", 1, 0],
+      ["Librero Monte Carlos (¿pulgadas?)", "", 1, 0] ] },
+    { cliente: "Hector De La Rosa", fecha: "2026-09-25", notas: "Sammy: la libreta dice «negro + gris»", lineas: [
+      ["Monarca Rombo", "Café completo", 6, 0],
+      ["Ropero Sammy", "Negro puertas grises", 8, 0],
+      ["Cómoda Midas", "Negro completo", 6, 0] ] },
+    { cliente: "Unión Mueblera Poblana", fecha: "2026-09-25", notas: "Bustos", lineas: [
+      ["Monarca Rombo", "Negro puertas cafés", 1, 0],
+      ["Monarca Midas", "Negro puertas grises", 1, 0],
+      ["Monarca Lámpara (?)", "Negro puertas cafés", 1, 0],
+      ["Monarca Midas Con lámpara", "Negro puertas cafés", 1, 0],
+      ["Vitrina Kukis", "Café completo", 1, 0],
+      ["Vitrina Kukis", "Negro completo", 1, 0],
+      ["Mariana Canadá", "", 1, 0],
+      ["Mariana surtido", "", 2, 0],
+      ["Librero Plasma (?)", "Negro completo", 2, 0] ] },
+    { cliente: "Sr. Sabino Ramos", fecha: "2026-09-29", notas: "Libres", lineas: [
+      ["Mariana surtido (diferente color)", "", 10, 0],
+      ["Mariana surtido", "Gris completo", 2, 0],
+      ["Vitrina Kukis", "", 8, 0],
+      ["Monarca surtido", "", 3, 0],
+      ["Tocador Óvalo", "", 6, 0],
+      ["Base Óvalo, solo la base (?)", "Negro completo", 1, 0] ] },
+    { cliente: "Gregorio Zacapa", fecha: "2026-09-29", notas: "", lineas: [
+      ["Monarca surtido", "", 18, 0],
+      ["Mariana surtido", "", 15, 0],
+      ["Ropero San José", "", 20, 0] ] },
+    { cliente: "Asociación Mueblera", fecha: "2026-09-23", notas: "Las 12 cómodas Amanda ya se entregaron. Junto a las Amanda de 10 cajones la libreta tiene una «P» y un «7».", lineas: [
+      ["Mariana 3 cajones (genérico)", "Negro puertas cafés", 10, 0],
+      ["Mariana 2 lunas (genérico)", "", 5, 0],
+      ["Cajonera Amanda 5 cajones", "", 12, 12],
+      ["Cajonera Amanda 10 cajones", "Café completo", 5, 0],
+      ["Vitrina Kukis", "Negro puertas cafés", 3, 0],
+      ["Monarca Lámpara (?)", "Negro puertas cafés", 2, 0],
+      ["Ropero San José", "Café completo", 3, 0] ] },
+    { cliente: "Sra. Josefina Celis", fecha: "2026-09-24", notas: "Los petaqueros ya se entregaron; faltan todas las Marianas.", lineas: [
+      ["Petaquero Rombo Multifamiliar", "Café completo", 2, 2],
+      ["Petaquero Cisne Multifamiliar", "Café completo", 2, 2],
+      ["Petaquero Tablero Multifamiliar", "Gris completo", 2, 2],
+      ["Petaquero Rejilla Mixta Multifamiliar", "Gris completo", 2, 2],
+      ["Petaquero Duela Multifamiliar", "", 2, 2],
+      ["Petaquero Mónaco (?)", "Blanco completo", 2, 2],
+      ["Petaquero México Multifamiliar", "Negro completo", 2, 2],
+      ["Petaquero Midas Multifamiliar", "Gris completo", 2, 2],
+      ["Mariana Rombo", "Café completo", 2, 0],
+      ["Mariana Cisne", "Negro completo", 2, 0],
+      ["Mariana Tablero", "Gris completo", 2, 0],
+      ["Mariana (no se lee el modelo) (?)", "Café completo", 2, 0],
+      ["Mariana Duela Abatible", "Negro completo", 2, 0],
+      ["Mariana Mónaco", "Blanco completo", 2, 0],
+      ["Mariana México", "Café completo", 2, 0],
+      ["Mariana Midas", "Gris completo", 2, 0] ] },
+    { cliente: "Sr. Pedro Orozco", fecha: "2026-09-09", notas: "", lineas: [
+      ["Monarca Cisne", "Negro completo", 5, 0],
+      ["Monarca Cisne", "Negro puertas grises", 5, 5],
+      ["Monarca Midas Con lámpara", "Negro puertas grises", 3, 3],
+      ["Monarca Midas Con lámpara", "Negro puertas cafés", 5, 5],
+      ["Monarca Rombo", "Negro completo", 5, 0],
+      ["Monarca Rombo", "Café completo", 5, 0],
+      ["Monarca Óvalo", "Negro completo", 5, 0],
+      ["Librero Monte Carlos (¿pulgadas?)", "Negro completo", 3, 0] ] }
+  ]
+};
