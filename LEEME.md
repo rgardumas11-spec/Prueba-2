@@ -30,7 +30,7 @@ Cuando se publica una versión nueva, la app avisa arriba en verde y se actualiz
 | **Pedidos** | Ticket por cliente con fecha (día/mes/año), lo pedido y cuántos van entregados por renglón, con barra de avance. Más nuevos primero (se puede invertir). |
 | **Resumen** | Solo consulta: todo lo que hay de cada mueble y color, por etapa y piezas. No se captura nada aquí. |
 | **Material** | Cubetas · Tambos (sellados en el almacén) · Tambos en cabina. Un tambo pasa del almacén a la cabina con **Pasar a cabina**; en cabina solo se resta hasta cero. Cubetas: − y +. |
-| **Reportes** | Muebles y puertas (una línea por mueble con cada etapa), Pintura, y Pedidos (por cliente: qué falta y qué hay para cubrirlo). En computadora se imprime; en celular se baja en PDF. |
+| **Reportes** | Muebles y piezas (Zona de muebles y Zona de piezas, una tabla por sección, o solo la sección que escojas), Pintura, y Pedidos (por cliente: qué falta y qué hay para cubrirlo). En computadora se imprime; en celular se baja en PDF. |
 | **Recados** | Avisos para el equipo, con quién ya los vio y quién los cerró. |
 | **Bitácora** | Se escribe sola: cada registro, paso de etapa o corrección con fecha, hora, quién lo capturó y quién hizo el trabajo. |
 | **Catálogo** | La ficha de cada modelo agrupada por familia (Mariana, Monarca… y MDF hasta abajo). Se edita aquí; si falta un dato se marca en rojo y el sistema no lo inventa. Al final, **Piezas extras**: piezas que se agregan solo por nombre, entran a Puertas Uriel y llegan hasta lijadas. |

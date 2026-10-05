@@ -1367,16 +1367,26 @@ function imprime(tipo){
    Cada reporte es una tabla {titulo, columnas, filas[], grupos?}. Se ve en pantalla,
    se imprime en computadora y se baja como PDF en el celular. */
 const fechaHoy = () => new Date().toLocaleDateString("es-MX", {weekday:"long", day:"numeric", month:"long", year:"numeric"});
-function reporteMuebles(){
-  const g = {};
-  const toma = (modelo_id, modelo, color) => { const k = modelo_id + "|" + (color || ""); return g[k] = g[k] || { modelo, color: color || "", n: {} }; };
-  E.lotes.filter(l => Number(l.cantidad) > 0).forEach(l => { const r = toma(l.modelo_id, l.modelo, l.color); r.n[l.etapa] = (r.n[l.etapa] || 0) + Number(l.cantidad); });
-  E.piezas.filter(p => vivoPieza(p) > 0).forEach(p => { const r = toma(p.modelo_id, p.modelo, p.color); r.n[p.categoria] = (r.n[p.categoria] || 0) + vivoPieza(p); });
-  const cols = [["maquilado", "Maquilados"], ["mdf", "MDF"], ["armado", "Armados"], ["pintado", "Pintados"], ["mdf_pintado", "MDF pint."], ["puertas_uriel", "P. Uriel"], ["puertas_por_lijar", "P. por lijar"], ["puertas_lijadas", "P. lijadas"], ["puertas_lijadas_bisagras", "P. c/bisagras"], ["puertas_pintadas", "P. pintadas"], ["cajones_pintados", "Cajones"], ["parches_pintados", "Parches"]];
-  const usadas = cols.filter(([k]) => Object.values(g).some(r => r.n[k]));
-  const filas = Object.values(g).sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1)
-    .map(r => [r.modelo + (r.color ? " · " + r.color : ""), ...usadas.map(([k]) => r.n[k] || "")]);
-  return { titulo: "Muebles y puertas", columnas: ["Mueble", ...usadas.map(c => c[1])], filas, numericas: usadas.length };
+const SECCIONES_REP = () => [
+  ...["maquilado", "armado", "pintado", "mdf", "mdf_pintado"].map(k => ({ k, zona: "Zona de muebles", nombre: R.ETAPAS[k].nombre })),
+  ...[["puertas_uriel"], ["puertas_por_lijar"], ["puertas_lijadas", "Puertas lijadas · sin bisagras"], ["puertas_lijadas_bisagras", "Puertas lijadas · con bisagras"], ["puertas_pintadas"], ["cajones_pintados"], ["parches_pintados"]]
+    .map(([k, n]) => ({ k, zona: "Zona de piezas", nombre: n || R.PIEZAS[k].nombre }))
+];
+function reporteMuebles(seccion){
+  const orden = (a, b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1;
+  const grupos = SECCIONES_REP().filter(s => !seccion || s.k === seccion).map(s => {
+    let filas, total = 0;
+    if (s.zona === "Zona de muebles"){
+      const ls = E.lotes.filter(l => l.etapa === s.k && Number(l.cantidad) > 0).sort(orden);
+      filas = ls.map(l => { total += Number(l.cantidad); const q = R.firmaDe(l); return [l.modelo, nombreColor(l.color), Number(l.cantidad), /sin nombre|sin responsable/.test(q || "") ? "" : (q || "")]; });
+    } else {
+      const ps = E.piezas.filter(p => p.categoria === s.k && vivoPieza(p) > 0).sort(orden);
+      filas = ps.map(p => { const n = vivoPieza(p); total += n; return [p.modelo, nombreColor(p.color), n, R.textoEquivalencia(n, s.k, modeloDe(p.modelo_id)).replace(/^\d+ \S+ ?/, "").replace(/^· /, "")]; });
+    }
+    return { zona: s.zona, titulo: s.nombre, total, filas };
+  }).filter(g => seccion || g.filas.length);
+  const sec = seccion && SECCIONES_REP().find(s => s.k === seccion);
+  return { titulo: sec ? (sec.zona === "Zona de muebles" ? "Muebles · " : "Piezas · ") + sec.nombre : "Muebles y piezas", columnas: ["Mueble", "Color", "Hay", sec && sec.zona === "Zona de muebles" ? "Quién" : sec ? "Equivale a" : "Quién / equivale a"], numericas: 1, grupos, conZonas: !seccion };
 }
 function reportePintura(){
   const grupos = [];
@@ -1415,16 +1425,21 @@ function reportePedidos(){
 }
 function pintaReportes(){
   $("#listaReportes").innerHTML =
-    '<div class="ajuste"><h4>Muebles y puertas</h4><p>Una línea por mueble y color: cuántos hay maquilados, armados, pintados, y las puertas en cada paso.</p><div class="acciones"><button class="btn vino" data-rep="muebles">Ver</button></div></div>' +
+    '<div class="ajuste"><h4>Muebles y piezas</h4><p>Seccionado igual que la app: Zona de muebles (una tabla por etapa) y Zona de piezas (una tabla por sección), cada una con mueble, color, cuántos hay y a cuántos juegos equivale.</p><div class="acciones"><button class="btn vino" data-rep="muebles">Todo</button><select id="repSeccion" class="btn"><option value="">Solo una sección…</option>' +
+      ["Zona de muebles", "Zona de piezas"].map(z => '<optgroup label="' + z + '">' + SECCIONES_REP().filter(s => s.zona === z).map(s => '<option value="' + s.k + '">' + esc(s.nombre) + '</option>').join("") + '</optgroup>').join("") + '</select></div></div>' +
     '<div class="ajuste"><h4>Pintura y material</h4><p>Cubetas, tambos en el almacén y tambos abiertos en cabina.</p><div class="acciones"><button class="btn vino" data-rep="pintura">Ver</button></div></div>' +
     '<div class="ajuste"><h4>Pedidos</h4><p>Por cliente: lo que falta por entregar y qué hay en el taller para cubrirlo.</p><div class="acciones"><button class="btn vino" data-rep="pedidos">Ver</button></div></div>';
   $("#listaReportes").querySelectorAll("[data-rep]").forEach(b => b.onclick = () => abreReporte(b.dataset.rep));
+  $("#repSeccion").onchange = e => { if (e.target.value) abreReporte("muebles", e.target.value); };
 }
-function abreReporte(cual){
-  const r = cual === "muebles" ? reporteMuebles() : cual === "pintura" ? reportePintura() : reportePedidos();
-  const tabla = (filas) => '<table class="rep"><thead><tr>' + r.columnas.map((c, i) => '<th' + (i >= r.columnas.length - r.numericas ? ' class="n"' : "") + '>' + esc(c) + '</th>').join("") + '</tr></thead><tbody>' +
-    filas.map(f => '<tr>' + f.map((v, i) => '<td' + (i >= r.columnas.length - r.numericas ? ' class="n"' : "") + '>' + esc(v) + '</td>').join("") + '</tr>').join("") + '</tbody></table>';
-  const cuerpo = r.grupos ? (r.grupos.length ? r.grupos.map(g => '<h4 class="rep-g">' + esc(g.titulo) + '</h4>' + tabla(g.filas)).join("") : '<div class="vacio"><b>Nada que reportar</b></div>') : (r.filas.length ? tabla(r.filas) : '<div class="vacio"><b>Nada que reportar</b></div>');
+const esNum = (r, i) => r.numCols ? r.numCols.includes(i) : i >= r.columnas.length - r.numericas;
+function abreReporte(cual, seccion){
+  const r = cual === "muebles" ? reporteMuebles(seccion) : cual === "pintura" ? reportePintura() : reportePedidos();
+  if (cual === "muebles") r.numCols = [2];
+  const tabla = (filas) => filas.length ? '<table class="rep"><thead><tr>' + r.columnas.map((c, i) => '<th' + (esNum(r, i) ? ' class="n"' : "") + '>' + esc(c) + '</th>').join("") + '</tr></thead><tbody>' +
+    filas.map(f => '<tr>' + f.map((v, i) => '<td' + (esNum(r, i) ? ' class="n"' : "") + '>' + esc(v) + '</td>').join("") + '</tr>').join("") + '</tbody></table>' : '<p class="rep-nada">Nada en esta sección.</p>';
+  let zona = "";
+  const cuerpo = r.grupos ? (r.grupos.length ? r.grupos.map(g => { const z = r.conZonas && g.zona && g.zona !== zona ? '<h3 class="rep-zona">' + esc(zona = g.zona) + '</h3>' : ""; return z + '<h4 class="rep-g">' + esc(g.titulo) + (g.total != null ? ' <span>· ' + g.total + '</span>' : "") + '</h4>' + tabla(g.filas); }).join("") : '<div class="vacio"><b>Nada que reportar</b></div>') : (r.filas.length ? tabla(r.filas) : '<div class="vacio"><b>Nada que reportar</b></div>');
   $("#listaReportes").innerHTML = '<div class="rep-cab"><button class="btn" id="repVolver">← Reportes</button><div class="der">' + (esEscritorio() ? '<button class="btn vino" id="repImprimir">Imprimir</button>' : '<button class="btn vino" id="repPdf">Descargar PDF</button>') + '</div></div>' +
     '<div class="rep-hoja" id="repHoja"><h1>' + esc(r.titulo) + '</h1><p class="rep-fecha">' + esc((window.CONFIG || {}).TALLER || "") + ' · ' + esc(fechaHoy()) + '</p>' + cuerpo + '</div>';
   $("#repVolver").onclick = pintaReportes;
@@ -1447,16 +1462,19 @@ async function descargaPdf(r){
       const alto = 4 + 3.6 * renglones; if (y + alto > H - M){ doc.addPage(); y = M; }
       if (fondo){ doc.setFillColor(240, 232, 228); doc.rect(M, y - 4.2, W - 2*M, alto, "F"); }
       let x = M + 1;
-      partes.forEach((ls, i) => { const num = i >= celdas.length - r.numericas; ls.forEach((t, j) => doc.text(t, num ? x + anchos[i] - 2 : x, y + j * 3.6, num ? { align: "right" } : undefined)); x += anchos[i]; });
+      partes.forEach((ls, i) => { const num = esNum(r, i); ls.forEach((t, j) => doc.text(t, num ? x + anchos[i] - 2 : x, y + j * 3.6, num ? { align: "right" } : undefined)); x += anchos[i]; });
       y += alto;
     };
     txt("", 15, true); doc.text(r.titulo, M, y); y += 6;
     txt("", 9, false); doc.setTextColor(110); doc.text(((window.CONFIG || {}).TALLER || "") + " · " + fechaHoy(), M, y); doc.setTextColor(0); y += 8;
-    const nCols = r.columnas.length; const numW = r.numericas ? Math.min(24, (W - 2*M) * 0.68 / Math.max(1, r.numericas)) : 0;
-    const anchos = r.columnas.map((c, i) => i >= nCols - r.numericas ? numW : (W - 2*M - numW * r.numericas) / Math.max(1, nCols - r.numericas));
+    const nCols = r.columnas.length; const nNum = r.columnas.filter((c, i) => esNum(r, i)).length; const numW = nNum ? Math.min(24, (W - 2*M) * 0.68 / nNum) : 0;
+    const anchos = r.columnas.map((c, i) => esNum(r, i) ? numW : (W - 2*M - numW * nNum) / Math.max(1, nCols - nNum));
     const grupos = r.grupos || [{ titulo: "", filas: r.filas }];
+    let zona = "";
     grupos.forEach(g => {
-      if (g.titulo){ if (y + 10 > H - M){ doc.addPage(); y = M; } y += 3; txt("", 11, true); doc.text(g.titulo, M, y); y += 6; }
+      if (r.conZonas && g.zona && g.zona !== zona){ zona = g.zona; if (y + 16 > H - M){ doc.addPage(); y = M; } y += 5; txt("", 13, true); doc.setTextColor(120, 30, 30); doc.text(zona.toUpperCase(), M, y); doc.setTextColor(0); y += 7; }
+      if (g.titulo){ if (y + 10 > H - M){ doc.addPage(); y = M; } y += 3; txt("", 11, true); doc.text(g.titulo + (g.total != null ? "  ·  " + g.total : ""), M, y); y += 6; }
+      if (!g.filas.length){ txt("", 9, false); doc.setTextColor(110); doc.text("Nada en esta sección.", M, y); doc.setTextColor(0); y += 6; return; }
       linea(r.columnas, anchos, true, true);
       g.filas.forEach(f => linea(f, anchos, false, false));
     });
