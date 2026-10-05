@@ -46,7 +46,7 @@ La búsqueda está detrás de la lupa de cada pantalla y perdona faltas de ortog
 | Paso | Quién puede |
 |---|---|
 | Mueble maquilado | Miguel · Luis · Daniel (uno) |
-| Mueble armado | Giovanni · Rafael (uno) |
+| Mueble armado | Giovanni · Luis · Daniel (uno) |
 | Mueble pintado | Brandon · Antelmo · Raúl · Juan (hasta dos) |
 | Mueble de MDF | Fernando (maquila y arma); al pintarlo no se pregunta |
 | Embisagrar puertas | Miguel · Daniel · Luis (uno). Ningún otro paso de puertas pregunta |

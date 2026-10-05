@@ -39,7 +39,7 @@
   const PINTORES_PIEZAS = ["Brandon", "Juan", "Antelmo", "Raúl", "Ángel", "Daniel", "Jorge"];
   const RESPONSABLES = {
     maquilado:                { opciones: ["Miguel", "Luis", "Daniel"],            max: 1, campo: "maquilo", pregunta: "¿Quién lo maquiló?" },
-    armado:                   { opciones: ["Giovanni", "Rafael"],                  max: 1, campo: "armo",    pregunta: "¿Quién lo armó?" },
+    armado:                   { opciones: ["Giovanni", "Luis", "Daniel"],               max: 1, campo: "armo",    pregunta: "¿Quién lo armó?" },
     pintado:                  { opciones: ["Brandon", "Antelmo", "Raúl", "Juan"],  max: 2, campo: "pinto",   pregunta: "¿Quién lo pintó?" },
     mdf:                      { opciones: ["Fernando"],                            max: 1, campo: "maquilo", pregunta: "¿Quién lo hizo?" },
     mdf_pintado:              null,                                                // no se pregunta: el lote sigue siendo de Fernando

@@ -222,8 +222,8 @@ window.Almacen = (() => {
       ["Monarca Midas", "Negro completo", "armado", 3, "Daniel", "Giovanni", []],
       ["Monarca Midas", "Negro completo", "pintado", 2, "Daniel", "Giovanni", ["Brandon", "Juan"]],
       ["Mariana Cisne", "Negro puertas cafés", "maquilado", 4, "Luis", "", []],
-      ["Ropero Deysi", "Blanco completo", "pintado", 1, "Miguel", "Rafael", ["Antelmo"]],
-      ["Monarca Círculo", "Negro completo", "pintado", 2, "Daniel", "Rafael", ["Raúl"]],
+      ["Ropero Deysi", "Blanco completo", "pintado", 1, "Miguel", "Giovanni", ["Antelmo"]],
+      ["Monarca Círculo", "Negro completo", "pintado", 2, "Daniel", "Giovanni", ["Raúl"]],
       ["Alacena Midas", "Blanco completo", "mdf", 3, "Fernando", "Fernando", []],
       ["Tocador Kitty", "Rosa con blanco", "mdf_pintado", 1, "Fernando", "Fernando", []]
     ];
