@@ -137,15 +137,16 @@
     const sobran = cantidad % porMueble;
     return { muebles, sobran, faltan: sobran ? porMueble - sobran : 0, porMueble };
   }
+  const singular = u => ({ puertas: "puerta", cajones: "cajón", parches: "parche", piezas: "pieza" })[u] || u.replace(/s$/, "");
   function textoEquivalencia(cantidad, categoria, modelo){
     const p = PIEZAS[categoria] || { unidad: "piezas" };
-    const base = cantidad + " " + (cantidad === 1 ? p.unidad.replace(/s$/, "") : p.unidad);
+    const base = cantidad + " " + (cantidad === 1 ? singular(p.unidad) : p.unidad);
     if (categoria === "parches_pintados") return base;
     if (esExtra(modelo)) return base + " · pieza extra";
     const e = equivalencia(cantidad, piezasPorMueble(modelo, categoria));
     if (e.sinFicha) return base + " · sin ficha, no se puede calcular";
     if (e.noLleva) return base + " · este modelo no lleva " + p.unidad;
-    return base + " = " + e.muebles + (e.muebles === 1 ? " mueble" : " muebles") + (e.faltan ? " · falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para el siguiente" : "");
+    return base + " = " + e.muebles + (e.muebles === 1 ? " juego" : " juegos") + (e.sobran ? " · sobra" + (e.sobran === 1 ? "" : "n") + " " + e.sobran + " suelta" + (e.sobran === 1 ? "" : "s") + " (falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para otro juego)" : "");
   }
 
   /* ── Listos para preparar ──

@@ -62,6 +62,7 @@ const E = {
   sel: null,                       // {tipo, ...llaves}
   pend: new Map(), relojes: new Map(),
   ordenPedidos: localStorage.getItem("alm.ordenPedidos") || "desc",
+  porJuego: localStorage.getItem("alm.porJuego") === "1",
   ultimoQuien: {}
 };
 const origen = () => (esEscritorio() ? "computadora" : "celular");
@@ -402,10 +403,13 @@ function filaPiezaHtml(p){
   const m = modeloDe(p.modelo_id); const n = vivoPieza(p); const cat = p.categoria;
   const sig = R.siguientePiezaDe(cat, m); const emb = R.embisagra(cat);
   const txt = R.textoEquivalencia(n, cat, m);
-  const eq = txt.replace(/^\d+ \w+( ·| =)?\s?/, "");
+  const e = R.equivalencia(n, R.piezasPorMueble(m, cat));
+  const eq = cat === "parches_pintados" ? "" : R.esExtra(m) ? "pieza extra" : e.sinFicha ? "sin ficha, no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad
+    : "=&nbsp;<b>" + plural(e.muebles, "juego", "juegos") + "</b>" + (e.sobran ? ' <span class="sello roj" title="Faltan ' + e.faltan + ' para otro juego">sobran ' + e.sobran + '</span>' : "");
   const sel = E.sel && E.sel.tipo === "pieza" && E.sel.id === p.id;
+  const paso = pasoPieza(p, m);
   let botones;
-  if (R.admiteAltaPieza(cat) && !sig) botones = '<button class="tecla" data-menos="' + esc(p.id) + '"' + (n === 0 ? " disabled" : "") + '>−</button><span class="cant">' + n + '</span><button class="tecla" data-mas="' + esc(p.id) + '">＋</button>';
+  if (R.admiteAltaPieza(cat) && !sig) botones = '<button class="tecla" data-menos="' + esc(p.id) + '"' + (n < paso ? " disabled" : "") + '>−' + (paso > 1 ? paso : "") + '</button><span class="cant">' + n + '</span><button class="tecla" data-mas="' + esc(p.id) + '">＋' + (paso > 1 ? paso : "") + '</button>';
   else {
     botones = "";
     if (emb) botones += '<button class="btn suave" data-emb="' + esc(p.id) + '">Embisagrar</button>';
@@ -417,11 +421,22 @@ function filaPiezaHtml(p){
     '<div class="sub">' + chipColor(p.color) + '</div>' +
     '<div class="apodos">' + chipColor(p.color) + '</div>' +
     '<div class="cifra"><b>' + n + '</b><small>' + esc(txt.replace(/^\d+ /, "").split(/ [=·] /)[0]) + '</small></div>' +
-    '<div class="ultimo"><span>' + esc(eq) + '</span></div>' +
+    '<div class="ultimo"><span>' + eq + '</span></div>' +
     '<div class="stepper">' + botones + '</div></div>';
 }
+/* Cuánto mueve cada toque de − y ＋: 1 pieza, o un juego completo si está "Por juego" y el modelo tiene ficha */
+function pasoPieza(p, m){
+  if (!E.porJuego || p.categoria === "parches_pintados") return 1;
+  const por = R.piezasPorMueble(m || modeloDe(p.modelo_id), p.categoria);
+  return por && por > 0 ? por : 1;
+}
+function pintaModoJuego(){
+  const b = $("#modoJuego"); if (!b) return;
+  b.textContent = E.porJuego ? "Por juego" : "Por pieza"; b.classList.toggle("vino", E.porJuego);
+}
+$("#modoJuego").onclick = () => { E.porJuego = !E.porJuego; localStorage.setItem("alm.porJuego", E.porJuego ? "1" : "0"); pintaPiezas(); grita(E.porJuego ? "− y ＋ mueven un juego completo" : "− y ＋ mueven de una en una"); };
 function pintaPiezas(){
-  pintaEtapasPieza();
+  pintaEtapasPieza(); pintaModoJuego();
   const caja = $("#listaPieza"); const pest = E.catPieza; const P = R.PIEZAS[pest];
   const cats = R.categoriasDePestana(pest);
   const grupos = cats.map(c => ({ cat: c, filas: q("piezas") ? Busca.busca(q("piezas"), gruposPieza(c), p => p.modelo + " " + p.color) : gruposPieza(c) }));
@@ -455,7 +470,7 @@ function htmlDetallePieza(){
   const movs = E.movimientos.filter(x => x.pieza_id === p.id || (x.modelo_id === p.modelo_id && (x.color || "") === (p.color || "") && x.categoria === cat)).sort((a,b) => a.creado < b.creado ? 1 : -1).slice(0,10);
   const e = R.equivalencia(n, R.piezasPorMueble(m, cat));
   return '<h2>' + esc(p.modelo) + '</h2><div class="sub">' + chipColor(p.color) + ' &nbsp;' + esc(R.PIEZAS[cat].nombre) + '</div>' +
-    '<div class="grande-cant"><b>' + n + '</b><span>' + esc(R.PIEZAS[cat].unidad) + (cat !== "parches_pintados" && !R.esExtra(m) ? "<br>" + (e.sinFicha ? "sin ficha: no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad : "= <b style='font-size:13px;color:var(--tinta2)'>" + plural(e.muebles, "mueble", "muebles") + "</b>" + (e.faltan ? "<br>falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para el siguiente" : "")) : R.esExtra(m) ? "<br>pieza extra" : "") + '</span></div>' +
+    '<div class="grande-cant"><b>' + n + '</b><span>' + esc(R.PIEZAS[cat].unidad) + (cat !== "parches_pintados" && !R.esExtra(m) ? "<br>" + (e.sinFicha ? "sin ficha: no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad : "= <b style='font-size:13px;color:var(--tinta2)'>" + plural(e.muebles, "juego", "juegos") + "</b>" + (e.sobran ? "<br><span class='sello roj'>sobran " + e.sobran + " suelta" + (e.sobran === 1 ? "" : "s") + "</span><br>falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para otro juego" : "")) : R.esExtra(m) ? "<br>pieza extra" : "") + '</span></div>' +
     '<dl class="ficha">' + (m ? (R.esExtra(m) ? '<dt>Qué es</dt><dd>pieza extra del catálogo (sin ficha de mueble)</dd>' : '<dt>Por mueble</dt><dd>' + esc(fichaCorta(m)) + '</dd>') : '<dt>Ficha</dt><dd style="color:var(--rojo)">este modelo no está en el catálogo</dd>') + '</dl>' +
     '<div class="acciones">' + (emb ? '<button class="btn vino" data-emb>Embisagrar</button>' : "") + (sig ? '<button class="btn' + (emb ? "" : " vino") + '" data-pasar>Pasar a ' + esc(R.PIEZAS[sig].corto.toLowerCase()) + ' →</button>' : "") + '<button class="btn" data-corrige>Corregir cantidad</button>' + (e.sinFicha && m && !R.esExtra(m) ? '<button class="btn" data-ficha>Completar ficha</button>' : "") + '</div>' +
     '<h3>Últimos movimientos</h3>' + (movs.length ? movs.map(lineaMov).join("") : '<div class="vacio" style="padding:14px"><p style="margin:0">Todavía nada.</p></div>');
@@ -471,7 +486,8 @@ function montaDetallePieza(caja){
 function muevePieza(id, d){
   if (!exigeYo()) return;
   const p = E.piezas.find(x => x.id === id); if (!p) return;
-  if (d < 0 && vivoPieza(p) === 0) return;
+  const paso = pasoPieza(p); d = d * paso;
+  if (d < 0 && vivoPieza(p) + d < 0){ if (paso > 1) grita("Solo hay " + vivoPieza(p) + ": no completa un juego de " + paso); return; }
   E.pend.set(id, (E.pend.get(id) || 0) + d);
   pintaPiezas(); if (E.sel && E.sel.id === id) pintaDetalle();
   clearTimeout(E.relojes.get(id));
@@ -495,8 +511,10 @@ async function confirmaPieza(id){
 function registrarPieza(){ if (R.admiteAltaPieza(E.catPieza)) hojaRegistrarPieza(); else hojaRegistrarDesdePieza(E.catPieza); }
 function hojaRegistrarPieza(){
   if (!exigeYo()) return;
-  let modelo = null, color = "", quien = [];
+  let modelo = null, color = "", quien = [], enJuegos = false;
   const cats = ["puertas_uriel", "cajones_pintados", "parches_pintados"];
+  const porDe = () => (cat === "parches_pintados" ? 0 : R.piezasPorMueble(modelo, cat)) || 0;
+  const piezasDe = h => Math.floor(Number(h.querySelector("#rCant").value || 0)) * (enJuegos && porDe() > 1 ? porDe() : 1);
   let cat = cats.includes(E.catPieza) ? E.catPieza : "puertas_uriel";
   const pinta = () => {
     const h = $("#panel"); const regla = R.responsables(cat);
@@ -504,7 +522,12 @@ function hojaRegistrarPieza(){
     h.querySelectorAll("[data-cat]").forEach(b => { b.classList.toggle("on", b.dataset.cat === cat); b.disabled = R.esExtra(modelo) && b.dataset.cat !== "puertas_uriel"; });
     h.querySelector("#rQuien").innerHTML = regla ? '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>' : "";
     h.querySelectorAll("#rQuien [data-n]").forEach(b => b.onclick = () => { quien = quien.includes(b.dataset.n) ? [] : [b.dataset.n]; pinta(); });
-    h.querySelector("#rEq").textContent = modelo && Number(h.querySelector("#rCant").value) > 0 ? R.textoEquivalencia(Math.floor(Number(h.querySelector("#rCant").value)), cat, modelo) : "";
+    const por = porDe(); if (por <= 1) enJuegos = false;
+    h.querySelector("#rUnidad").hidden = por <= 1;
+    h.querySelectorAll("#rUnidad [data-u]").forEach(b => b.classList.toggle("on", (b.dataset.u === "juegos") === enJuegos));
+    h.querySelector("#rUnidad [data-u=juegos]").textContent = "Por juego (" + por + ")";
+    h.querySelector("#rCant").closest(".campo").querySelector("span").textContent = enJuegos ? "Cuántos juegos" : "Cuántas";
+    h.querySelector("#rEq").textContent = modelo && piezasDe(h) > 0 ? R.textoEquivalencia(piezasDe(h), cat, modelo) : "";
     const pideColor = cat !== "puertas_uriel";
     h.querySelector("#rColor").closest(".campo").querySelector("span").textContent = pideColor ? "Color" : "Color (si ya se sabe)";
     h.querySelector("#rColor").options[0].textContent = pideColor ? "— escoge el color —" : "— todavía sin color —";
@@ -513,6 +536,7 @@ function hojaRegistrarPieza(){
   abreHoja('<h3>Registrar piezas</h3><p class="guia">Las puertas entran a «Puertas Uriel» y de ahí se van pasando (por lijar → lijadas → con bisagras → pintadas). Cajones y parches entran ya pintados.</p>' +
     '<div class="grupo-h">Qué son</div><div class="cats" style="margin-bottom:12px">' + cats.map(c => '<button class="cat" data-cat="' + c + '">' + esc(R.PIEZAS[c].nombre) + '</button>').join("") + '</div>' +
     campoModelo() + campoColor() +
+    '<div class="cats" id="rUnidad" style="margin-bottom:8px" hidden><button class="cat on" data-u="piezas">Por pieza</button><button class="cat" data-u="juegos">Por juego</button></div>' +
     '<label class="campo"><span>Cuántas</span><input id="rCant" type="number" inputmode="numeric" min="1" value="1"></label><p class="guia" id="rEq"></p>' +
     '<div id="rQuien"></div><button class="btn vino grande" id="rOk" disabled style="margin-top:14px">Registrar</button>',
     h => {
@@ -520,9 +544,10 @@ function hojaRegistrarPieza(){
       montaCampoModelo(h, m => { modelo = m; pinta(); }, true);
       h.querySelector("#rColor").onchange = e => { color = e.target.value; pinta(); };
       h.querySelector("#rCant").oninput = pinta;
+      h.querySelectorAll("#rUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; pinta(); });
       pinta();
       h.querySelector("#rOk").onclick = async () => {
-        const n = Math.floor(Number(h.querySelector("#rCant").value || 0)); if (!modelo || n <= 0 || (!color && cat !== "puertas_uriel")) return;
+        const n = piezasDe(h); if (!modelo || n <= 0 || (!color && cat !== "puertas_uriel")) return;
         await Almacen.ajustaPieza({ modelo_id: modelo.id, modelo: modelo.nombre, color, categoria: cat }, n, E.yo, "", origen(), quien.join(" y "), "alta");
         cierraHoja(); E.catPieza = R.pestanaDe(cat); E.sel = { tipo:"pieza", id: Almacen.clavePieza({ modelo_id: modelo.id, color, categoria: cat }) }; irA("piezas"); pintaTodo();
         grita("Listo: " + n + " " + R.PIEZAS[cat].unidad);
@@ -560,26 +585,31 @@ function hojaPasarPieza(p, destino){
   const rec = E.ultimoQuien[destino]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
   const n = vivoPieza(p);
   const esEmb = destino === "puertas_lijadas_bisagras";
+  const por = R.piezasPorMueble(modeloDe(p.modelo_id), p.categoria) || 0; let enJuegos = E.porJuego && por > 1 && n >= por;
+  const tope = () => enJuegos ? Math.floor(n / por) : n;
   abreHoja('<h3>' + (esEmb ? "Embisagrar" : "Pasar a " + esc(R.PIEZAS[destino].corto.toLowerCase())) + '</h3>' +
     '<div class="paso-a"><span class="de">' + esc(R.PIEZAS[p.categoria].nombre) + '</span> → <span class="a">' + esc(R.PIEZAS[destino].nombre) + '</span></div>' +
     '<p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(nombreColor(p.color)) + ' · hay <b>' + n + '</b> disponibles.</p>' +
-    '<div class="lote"><div class="quien">Cuántas ' + (esEmb ? "se embisagraron" : "pasan") + '</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="1" max="' + n + '" value="' + n + '"><button class="tecla" data-mas>＋</button></div></div>' +
+    (por > 1 ? '<div class="cats" id="pUnidad" style="margin-bottom:8px"><button class="cat' + (enJuegos ? "" : " on") + '" data-u="piezas">Por pieza</button><button class="cat' + (enJuegos ? " on" : "") + '" data-u="juegos"' + (n < por ? " disabled" : "") + '>Por juego (' + por + ')</button></div>' : "") +
+    '<div class="lote"><div class="quien" id="pCuantas">Cuántas ' + (esEmb ? "se embisagraron" : "pasan") + '</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="1" max="' + tope() + '" value="' + tope() + '"><button class="tecla" data-mas>＋</button></div></div><p class="guia" id="pEq"></p>' +
     (sePintaEn(destino) ? '<div class="grupo-h">De qué color se pintaron</div>' + campoColor(p.color, true, "pColor") : "") +
     (regla ? '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats" id="pQuien">' + regla.opciones.map(x => '<button class="cat' + (quien.includes(x) ? " on" : "") + '" data-n="' + esc(x) + '">' + esc(x) + '</button>').join("") + '</div>' : "") +
     '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" style="margin-top:12px">Confirmar</button>',
     h => {
       const inp = h.querySelector("#pCant");
-      const revisa = () => { const v = Number(inp.value) || 0; inp.classList.toggle("mal", v > n || v < 1); const err = h.querySelector("#pError"); err.hidden = v <= n; err.textContent = "Solo hay " + n + " disponibles"; const colorOk = !sePintaEn(destino) || !!h.querySelector("#pColor").value; h.querySelector("#pOk").disabled = v > n || v < 1 || (regla && !quien.length) || !colorOk; };
+      const piezasDe = () => (Number(inp.value) || 0) * (enJuegos ? por : 1);
+      const revisa = () => { const v = Number(inp.value) || 0, t = tope(); inp.classList.toggle("mal", v > t || v < 1); const err = h.querySelector("#pError"); err.hidden = v <= t; err.textContent = enJuegos ? "Solo hay " + n + " (" + t + " juegos completos)" : "Solo hay " + n + " disponibles"; h.querySelector("#pEq").textContent = enJuegos ? "= " + piezasDe() + " " + R.PIEZAS[p.categoria].unidad : (por > 1 && v > 0 ? R.textoEquivalencia(v, p.categoria, modeloDe(p.modelo_id)).replace(/^[^=·]*/, "") : ""); const colorOk = !sePintaEn(destino) || !!h.querySelector("#pColor").value; h.querySelector("#pOk").disabled = v > t || v < 1 || (regla && !quien.length) || !colorOk; };
       const pc = h.querySelector("#pColor"); if (pc) pc.onchange = revisa;
+      h.querySelectorAll("#pUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; h.querySelectorAll("#pUnidad [data-u]").forEach(x => x.classList.toggle("on", x === b)); h.querySelector("#pCuantas").textContent = (enJuegos ? "Cuántos juegos " : "Cuántas ") + (esEmb ? "se embisagraron" : "pasan"); inp.max = tope(); inp.value = Math.min(Number(inp.value) || 1, tope()) || 1; revisa(); });
       h.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(1, (Number(inp.value) || 0) - 1); revisa(); };
-      h.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(n, (Number(inp.value) || 0) + 1); revisa(); };
+      h.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(tope(), (Number(inp.value) || 0) + 1); revisa(); };
       inp.oninput = revisa; inp.onfocus = () => inp.select();
       h.querySelectorAll("#pQuien [data-n]").forEach(b => b.onclick = () => { quien = quien.includes(b.dataset.n) ? [] : [b.dataset.n]; h.querySelectorAll("#pQuien [data-n]").forEach(x => x.classList.toggle("on", quien.includes(x.dataset.n))); revisa(); });
       revisa();
       h.querySelector("#pOk").onclick = async () => {
         try {
           if (regla) E.ultimoQuien[destino] = { nombres: quien.slice(), t: Date.now() };
-          const d = { pieza_id: p.id, cantidad: Number(inp.value), categoria_a: destino, hecho_por: quien.join(" y ") };
+          const d = { pieza_id: p.id, cantidad: piezasDe(), categoria_a: destino, hecho_por: quien.join(" y ") };
           if (sePintaEn(destino)) d.color_a = h.querySelector("#pColor").value;
           const mov = await Almacen.trasladaPieza(d, E.yo, origen());
           cierraHoja(); grita(mov.delta + " " + R.PIEZAS[destino].unidad + " → " + R.PIEZAS[destino].nombre.toLowerCase());
