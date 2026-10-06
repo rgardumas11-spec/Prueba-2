@@ -1460,15 +1460,20 @@ function reportePedidos(){
         const cnt = k => E.lotes.filter(l => l.etapa === k && ms.includes(l.modelo_id)).reduce((s,l) => s + Number(l.cantidad), 0);
         hay = "surtido: el cliente deja escoger · de " + fam + " hay " + cnt("pintado") + " pintados y " + cnt("preparado") + " preparados";
       } else if (m){
-        const mismo = l => l.modelo_id === m.id && (!x.color || !l.color || l.color === x.color);
-        const et = k => E.lotes.filter(l => l.etapa === k && mismo(l)).reduce((s,l) => s + Number(l.cantidad), 0);
-        const pz = k => E.piezas.filter(q => q.categoria === k && mismo(q)).reduce((s,q) => s + vivoPieza(q), 0);
-        const eq = (n, por) => por == null ? n + " (sin ficha)" : por === 0 ? "no lleva" : "para " + Math.floor(n / por);
+        // Como lego: el mueble y las puertas se pintan por separado. Se dice TODO lo que hay
+        // del modelo, de cualquier color, y se marca con ✓ lo que coincide con el color pedido.
+        const porColor = (lista, cant) => { const g = {}; lista.forEach(l => { const c = l.color || "sin color"; g[c] = (g[c] || 0) + cant(l); }); return Object.keys(g).filter(c => g[c] > 0).sort((a,b) => (b === x.color) - (a === x.color) || g[b] - g[a]).map(c => ({ c, n: g[c] })); };
+        const marca = c => (x.color && c === x.color ? "✓ " : "");
+        const et = (k, nombre) => { const cs = porColor(E.lotes.filter(l => l.etapa === k && l.modelo_id === m.id), l => Number(l.cantidad)); const t = cs.reduce((s,c) => s + c.n, 0); return t + " " + nombre + (t ? " (" + cs.map(c => marca(c.c) + c.n + " " + c.c).join(", ") + ")" : ""); };
+        const pz = (ks, nombre, por) => { const cs = porColor(E.piezas.filter(q => ks.includes(q.categoria) && q.modelo_id === m.id), vivoPieza); const t = cs.reduce((s,c) => s + c.n, 0);
+          const eq = n => por == null ? "" : por === 0 ? "" : " para " + Math.floor(n / por);
+          if (por === 0) return nombre + ": no lleva"; if (!t) return nombre + " para 0";
+          return nombre + " para " + (por ? Math.floor(t / por) : "?") + " (" + cs.map(c => marca(c.c) + c.n + " " + c.c + eq(c.n)).join(", ") + ")" + (por == null ? " · sin ficha" : ""); };
         const partes = [];
-        if (m.tipo === "mdf") partes.push(et("mdf") + " MDF", et("mdf_pintado") + " MDF pintados");
-        else partes.push(et("maquilado") + " maquilados", et("armado") + " armados", et("pintado") + " pintados");
-        partes.push(et("preparado") + " preparados");
-        partes.push("puertas pintadas " + eq(pz("puertas_pintadas"), m.total_puertas), "puertas lijadas " + eq(pz("puertas_lijadas") + pz("puertas_lijadas_bisagras"), m.total_puertas), "cajones " + eq(pz("cajones_pintados"), m.cajones));
+        if (m.tipo === "mdf") partes.push(et("mdf", "MDF"), et("mdf_pintado", "MDF pintados"));
+        else partes.push(et("maquilado", "maquilados"), et("armado", "armados"), et("pintado", "pintados"));
+        partes.push(et("preparado", "preparados"));
+        partes.push(pz(["puertas_pintadas"], "puertas pintadas", m.total_puertas), pz(["puertas_lijadas", "puertas_lijadas_bisagras"], "puertas lijadas", m.total_puertas), pz(["cajones_pintados"], "cajones pintados", m.cajones));
         hay = partes.join(" · ");
       }
       filas.push(["Faltan " + faltan + " " + x.modelo + (x.color ? " · " + x.color : ""), hay]);
