@@ -228,6 +228,52 @@
     return r;
   }
 
+  /* ── Guacales compartidos: "Mariana 3 cajones" es UN guacal que sirve para Abanico, Cisne,
+     Rombo… Las puertas hacen el modelo. Un modelo con `guacal` toma muebles pintados del
+     modelo-guacal (es_guacal) y sus cajones/parches también pueden venir del guacal. ── */
+  const esGuacal = m => !!m && m.es_guacal === true;
+  const guacalDe = m => m ? (m.guacal || m.id) : null;
+  const mismoGuacal = (a, b) => !!a && !!b && (a.id === b.id || guacalDe(a) === guacalDe(b));
+
+  /* ── Colores. Muebles, puertas, cajones y parches se pintan por separado y solo llevan un
+     color LISO. Las combinaciones ("Negro puertas grises") solo existen en los pedidos;
+     desarmaColor las traduce a qué color va cada parte. ── */
+  const COLORES_LISOS = ["Negro", "Negro brilloso", "Café", "Gris", "Blanco", "Nogal", "Rojo", "Crema", "Amarillo", "Azul", "Rosa", "Naranja"];
+  const sinAcentoC = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const ADJ_COLOR = { negro: "Negro", negros: "Negro", negra: "Negro", negras: "Negro", cafe: "Café", cafes: "Café", gris: "Gris", grises: "Gris",
+    blanco: "Blanco", blancos: "Blanco", blanca: "Blanco", blancas: "Blanco", nogal: "Nogal", rojo: "Rojo", rojos: "Rojo", roja: "Rojo", rojas: "Rojo",
+    crema: "Crema", cremas: "Crema", amarillo: "Amarillo", amarillos: "Amarillo", amarilla: "Amarillo", amarillas: "Amarillo", azul: "Azul", azules: "Azul",
+    rosa: "Rosa", rosas: "Rosa", naranja: "Naranja", naranjas: "Naranja" };
+  const mismoColor = (a, b) => sinAcentoC(a) === sinAcentoC(b);
+  const esColorLiso = c => COLORES_LISOS.some(x => mismoColor(x, c));
+  function desarmaColor(c){
+    const r = { mueble: "", puertas: "", cajones: "", parches: "" };
+    const t = sinAcentoC(c); if (!t) return r;
+    const tok = t.split(/\s+/);
+    let mueble = ADJ_COLOR[tok[0]] || String(c).trim();
+    if (tok[0] === "negro" && tok[1] === "brilloso") mueble = "Negro brilloso";
+    if (!ADJ_COLOR[tok[0]]){ r.mueble = r.puertas = r.cajones = r.parches = mueble; return r; }
+    r.mueble = r.puertas = r.cajones = r.parches = mueble;
+    for (let i = 1; i < tok.length; i++){
+      const w = tok[i], sig = ADJ_COLOR[tok[i + 1]];
+      if ((w === "puertas" || w === "con") && sig){ r.puertas = sig; i++; }
+      else if (w === "cajones" && sig){ r.cajones = sig; i++; }
+      else if (w === "parches" && sig){ r.parches = sig; i++; }
+    }
+    return r;
+  }
+  /* Qué color lleva cada parte de un lote preparado (las que difieren del mueble van en `colores`) */
+  const colorParte = (lote, k) => ((lote && lote.colores) || {})[k] || (lote && lote.color) || "";
+  const textoColores = lote => { const cs = (lote && lote.colores) || {}; return Object.keys(cs).filter(k => cs[k] && !mismoColor(cs[k], lote.color)).map(k => k + " " + String(cs[k]).toLowerCase()).join(", "); };
+  /* ¿Este lote (mueble o preparado) sirve para un pedido con esa combinación? */
+  function coincideCombo(combo, lote){
+    if (!combo) return true; if (!lote) return false;
+    const d = desarmaColor(combo);
+    if (!mismoColor(d.mueble, lote.color)) return false;
+    const partes = (lote.partes || {});
+    return ["puertas", "cajones", "parches"].every(k => !partes[k] || mismoColor(colorParte(lote, k), d[k]));
+  }
+
   /* ── Ficha: ¿le falta algo? ── */
   function ficha(modelo){
     const faltan = [];
@@ -239,7 +285,8 @@
 
   const R = { ETAPAS, ETAPAS_VISIBLES, CADENA, PIEZAS, PESTANAS_PIEZA, CADENA_PUERTAS, CADENA_CAJONES, CADENA_PARCHES, PIEZAS_VIEJAS, RESPONSABLES, tipoDe, cadenaDe, primeraEtapa, siguienteEtapa, anteriorEtapa,
     siguientePieza, siguientePiezaDe, anteriorPieza, cadenaPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, sePintaEn, parchesDe, necesitaParaPreparar, componentes, faltanPartes, partesTexto, completo, esExtra, extraAdmite,
-    responsables, origenDe, firmaDe, validaTraslado, piezasPorMueble, equivalencia, textoEquivalencia, listos, ficha };
+    responsables, origenDe, firmaDe, validaTraslado, piezasPorMueble, equivalencia, textoEquivalencia, listos, ficha,
+    esGuacal, guacalDe, mismoGuacal, COLORES_LISOS, mismoColor, esColorLiso, desarmaColor, colorParte, textoColores, coincideCombo };
   if (typeof module !== "undefined" && module.exports) module.exports = R;
   raiz.Reglas = R;
 })(typeof window !== "undefined" ? window : globalThis);

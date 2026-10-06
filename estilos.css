@@ -499,3 +499,8 @@ table.rep .n{text-align:right;font-family:var(--mono);white-space:nowrap}
   .fila{grid-template-columns:minmax(180px,1.6fr) minmax(110px,1fr) 100px 60px 46px minmax(150px,1.2fr) 76px;grid-template-areas:"nombre apodos pres cant min ultimo stepper";gap:10px}
   .fila .pres,.fila .min,.encabezado-lista .pres,.encabezado-lista .min{display:block}
 }
+
+/* 3.3: partes de otro color en preparados; select de color por parte al preparar */
+.chip.partes{background:var(--vino-tinte);border-color:var(--vino-medio);color:var(--vino)}
+.lote.comp select.sel-color{margin-top:6px;width:100%;max-width:260px;font-size:13px;padding:6px 8px;border:1px solid var(--linea);border-radius:8px;background:var(--hoja);color:var(--tinta)}
+.lote.comp.no select.sel-color{opacity:1}

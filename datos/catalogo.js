@@ -4,6 +4,9 @@
 // Donde la ficha no tenía el dato se deja null y la app dice "falta dato"; no se inventa.
 // Los tres modelos que existen en madera y en MDF llevan "MDF" en el nombre.
 // No hay ninguna conexión con el programa de producción.
+// Guacales compartidos: los modelos con "guacal" usan el mueble pintado del modelo-guacal
+// (es_guacal); las puertas son las que hacen el modelo. coloresLisos son los únicos colores
+// de muebles y piezas; gruposColor (combinaciones) solo se usa en los pedidos.
 window.CATALOGO = {
  "fichas": [
   {
@@ -19,7 +22,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M002",
@@ -94,7 +98,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M007",
@@ -109,7 +114,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M008",
@@ -139,7 +145,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M010",
@@ -154,7 +161,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M011",
@@ -169,7 +177,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M012",
@@ -184,7 +193,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M013",
@@ -304,7 +314,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M021",
@@ -319,7 +330,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-2-lunas"
   },
   {
    "id": "M022",
@@ -334,7 +346,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M023",
@@ -349,7 +362,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M024",
@@ -364,7 +378,8 @@ window.CATALOGO = {
    "total_puertas": 5,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-mariana-3-cajones"
   },
   {
    "id": "M025",
@@ -844,7 +859,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": true,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M057",
@@ -859,7 +875,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": true,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M058",
@@ -874,7 +891,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M059",
@@ -889,7 +907,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M060",
@@ -904,7 +923,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M061",
@@ -934,7 +954,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M063",
@@ -949,7 +970,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M064",
@@ -964,7 +986,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M065",
@@ -979,7 +1002,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M066",
@@ -994,7 +1018,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M067",
@@ -1009,7 +1034,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M068",
@@ -1039,7 +1065,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M070",
@@ -1069,7 +1096,8 @@ window.CATALOGO = {
    "total_puertas": 6,
    "lleva_parches": false,
    "lleva_respaldo": false,
-   "activo": true
+   "activo": true,
+   "guacal": "G-petaquero-multi"
   },
   {
    "id": "M072",
@@ -1625,6 +1653,57 @@ window.CATALOGO = {
    "lleva_parches": false,
    "lleva_respaldo": null,
    "activo": true
+  },
+  {
+   "id": "G-mariana-3-cajones",
+   "nombre": "Mariana 3 cajones",
+   "familia": "Mariana",
+   "tipo": "madera",
+   "cajones": 3,
+   "puertas_grandes": null,
+   "puertas_grandes_luna": null,
+   "puertas_chicas": null,
+   "puertas_chicas_luna": null,
+   "total_puertas": null,
+   "lleva_parches": null,
+   "lleva_respaldo": null,
+   "es_guacal": true,
+   "activo": true,
+   "nota": "Guacal compartido: sirve para Abanico, Cisne, Duela, Mariposa, Maya, México, Midas, Rombo, Sol, Tablero y Rejilla Mixta 3 cajones. Las puertas hacen el modelo."
+  },
+  {
+   "id": "G-mariana-2-lunas",
+   "nombre": "Mariana 2 lunas y 6 cajones",
+   "familia": "Mariana",
+   "tipo": "madera",
+   "cajones": 6,
+   "puertas_grandes": null,
+   "puertas_grandes_luna": null,
+   "puertas_chicas": null,
+   "puertas_chicas_luna": null,
+   "total_puertas": null,
+   "lleva_parches": null,
+   "lleva_respaldo": null,
+   "es_guacal": true,
+   "activo": true,
+   "nota": "Guacal compartido: sirve para Círculo y Rejilla Mixta (2 lunas). Las puertas hacen el modelo."
+  },
+  {
+   "id": "G-petaquero-multi",
+   "nombre": "Petaquero Multifamiliar 1 pieza",
+   "familia": "Petaquero",
+   "tipo": "madera",
+   "cajones": 6,
+   "puertas_grandes": null,
+   "puertas_grandes_luna": null,
+   "puertas_chicas": null,
+   "puertas_chicas_luna": null,
+   "total_puertas": null,
+   "lleva_parches": null,
+   "lleva_respaldo": null,
+   "es_guacal": true,
+   "activo": true,
+   "nota": "Guacal compartido: sirve para todos los Petaqueros Multifamiliar de 1 pieza. Las puertas hacen el modelo."
   }
  ],
  "gruposColor": [
@@ -1844,5 +1923,19 @@ window.CATALOGO = {
    "presentacion": "Cubeta",
    "litros": null
   }
+ ],
+ "coloresLisos": [
+  "Negro",
+  "Negro brilloso",
+  "Café",
+  "Gris",
+  "Blanco",
+  "Nogal",
+  "Rojo",
+  "Crema",
+  "Amarillo",
+  "Azul",
+  "Rosa",
+  "Naranja"
  ]
 };

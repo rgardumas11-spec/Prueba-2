@@ -251,3 +251,23 @@ window.CARGA_ARREGLO = {
     { cliente: "",                    modelo: "Monarca surtido",                   pon: { surtido: true, familia: "Monarca" } }
   ]
 };
+
+/* ═══ Guacales compartidos (lista de precios del taller, 6 de octubre) ═══
+   "Mariana de 3 cajones" es UN guacal que sirve para varios modelos: las puertas hacen el
+   modelo. Los genéricos que entraron con la carga del 2 de octubre (ids G-…) se vuelven
+   guacales de verdad y cada variante queda ligada. Se aplica con su botón en Ajustes. */
+window.CARGA_GUACALES = {
+  id: "guacales-2026-10-06",
+  titulo: "Activar guacales compartidos",
+  guacales: [
+    { id: "G-mariana-3-cajones", nombre: "Mariana 3 cajones", familia: "Mariana", tipo: "madera", cajones: 3,
+      nota: "Guacal compartido: sirve para Abanico, Cisne, Duela, Mariposa, Maya, México, Midas, Rombo, Sol, Tablero y Rejilla Mixta 3 cajones. Las puertas hacen el modelo.",
+      variantes: ["Mariana Abanico", "Mariana Cisne", "Mariana Duela Abatible", "Mariana Mariposa", "Mariana Maya", "Mariana México", "Mariana Midas", "Mariana Rombo", "Mariana Sol", "Mariana Tablero", "Mariana Rejilla Mixta 3 cajones"] },
+    { id: "G-mariana-2-lunas", nombre: "Mariana 2 lunas y 6 cajones", familia: "Mariana", tipo: "madera", cajones: 6,
+      nota: "Guacal compartido: sirve para Círculo y Rejilla Mixta (2 lunas). Las puertas hacen el modelo.",
+      variantes: ["Mariana Rejilla Mixta 2 lunas y 4 cajones", "Mariana Círculo"] },
+    { id: "G-petaquero-multi", nombre: "Petaquero Multifamiliar 1 pieza", familia: "Petaquero", tipo: "madera", cajones: 6, total_puertas: 6,
+      nota: "Guacal compartido: sirve para todos los Petaqueros Multifamiliar de 1 pieza. Las puertas hacen el modelo.",
+      variantes: ["Petaquero Abanico Multifamiliar", "Petaquero Círculo Multifamiliar", "Petaquero Cisne Multifamiliar", "Petaquero Colonial Multifamiliar", "Petaquero Duela Multifamiliar", "Petaquero Mariposa Multifamiliar", "Petaquero Maya Multifamiliar", "Petaquero México Multifamiliar", "Petaquero Midas Multifamiliar", "Petaquero Óvalo Multifamiliar", "Petaquero Ramas Multifamiliar", "Petaquero Rombo Multifamiliar", "Petaquero Sol Multifamiliar", "Petaquero Tablero Multifamiliar"] }
+  ]
+};

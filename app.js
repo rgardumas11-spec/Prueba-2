@@ -45,10 +45,13 @@ window.grita = function(txt){
   clearTimeout(relojGrito); relojGrito = setTimeout(() => g.classList.remove("on"), 2800);
 };
 const TINTES = { negro:"#20232a", café:"#6B4A2F", cafe:"#6B4A2F", nogal:"#8A5A32", gris:"#8D9299", blanco:"#F3F3EF",
-  rojo:"#A63122", rosa:"#D98BA5", azul:"#3C6FA8", amarillo:"#D9A521", crema:"#E4D6B4", "iron-man":"#A63122" };
+  rojo:"#A63122", rosa:"#D98BA5", azul:"#3C6FA8", amarillo:"#D9A521", crema:"#E4D6B4", naranja:"#E0742B", "iron-man":"#A63122" };
 function tinte(c){ c = sinAcento(c); for (const k in TINTES) if (c.startsWith(sinAcento(k))) return TINTES[k]; return "#9AA095"; }
 const chipColor = c => c ? '<span class="chip color"><span class="punto" style="background:' + tinte(c) + '"></span>' + esc(c) + '</span>' : '<span class="chip sin-color">sin color</span>';
 const nombreColor = c => c || "sin color";
+/* Chip de color + las partes que van de otro color (preparados): "Negro · puertas gris" */
+const chipColores = l => chipColor(l.color) + (R.textoColores(l) ? ' <span class="chip partes">' + esc(R.textoColores(l)) + '</span>' : "");
+const coloresLisos = () => (CAT.coloresLisos && CAT.coloresLisos.length ? CAT.coloresLisos : R.COLORES_LISOS);
 /* ¿Al entrar a esta etapa/sección se pinta? Ahí se pide el color. */
 const sePintaEn = destino => R.sePintaEn(destino);
 
@@ -136,10 +139,10 @@ const sinHallar = (vista, que) => '<div class="vacio"><b>No encontré ' + que + 
 const llaveMC = x => x.modelo_id + "|" + (x.color || "");
 function gruposMueble(etapa){
   const g = {};
-  const pk = l => etapa === "preparado" ? "|" + Object.keys(l.partes || {}).filter(x => l.partes[x]).sort().join("+") : "";
+  const pk = l => etapa === "preparado" ? "|" + Object.keys(l.partes || {}).filter(x => l.partes[x]).sort().join("+") + "|" + Object.keys(l.colores || {}).filter(x => l.colores[x]).sort().map(x => x + "=" + sinAcento(l.colores[x])).join("+") : "";
   E.lotes.filter(l => l.etapa === etapa && Number(l.cantidad) > 0).forEach(l => {
     const k = llaveMC(l) + pk(l);
-    (g[k] = g[k] || { k, modelo_id: l.modelo_id, modelo: l.modelo, color: l.color || "", etapa, total: 0, lotes: [], partes: l.partes || {} });
+    (g[k] = g[k] || { k, modelo_id: l.modelo_id, modelo: l.modelo, color: l.color || "", etapa, total: 0, lotes: [], partes: l.partes || {}, colores: l.colores || {} });
     g[k].total += Number(l.cantidad); g[k].lotes.push(l);
   });
   return Object.values(g).map(x => { x.lotes.sort((a,b) => b.cantidad - a.cantidad); return x; })
@@ -192,8 +195,8 @@ function pintaMuebles(){
         accion = fal.length ? '<button class="btn suave" data-pasar="' + esc(g.k) + '">Completar →</button>' : '<span class="sello ver">completo</span>'; }
       return '<div class="fila' + (sel ? " sel" : "") + '" data-abre="' + esc(g.k) + '">' +
         '<div class="nombre"><b>' + esc(g.modelo) + '</b></div>' +
-        '<div class="sub">' + chipColor(g.color) + '</div>' +
-        '<div class="apodos">' + chipColor(g.color) + '</div>' +
+        '<div class="sub">' + chipColores(g) + '</div>' +
+        '<div class="apodos">' + chipColores(g) + '</div>' +
         '<div class="cifra"><b>' + g.total + '</b><small>' + (g.total === 1 ? "mueble" : "muebles") + '</small></div>' +
         '<div class="ultimo"><span>' + quien + '</span></div>' +
         '<div class="stepper">' + accion + '</div>' +
@@ -214,7 +217,7 @@ function htmlDetalleMueble(){
   const g = grupoSel(); if (!g) return '<div class="detalle-vacio">Ese mueble ya no está en esta etapa</div>';
   const et = R.ETAPAS[g.etapa]; const sig = R.siguienteEtapa(g.etapa);
   const movs = E.movimientos.filter(m => m.modelo_id === g.modelo_id && (m.color || "") === g.color && !m.pieza_id).sort((a,b) => a.creado < b.creado ? 1 : -1).slice(0,10);
-  return '<h2>' + esc(g.modelo) + '</h2><div class="sub">' + chipColor(g.color) + ' &nbsp;' + esc(et.nombre) + '</div>' +
+  return '<h2>' + esc(g.modelo) + '</h2><div class="sub">' + chipColores(g) + ' &nbsp;' + esc(et.nombre) + '</div>' +
     '<div class="grande-cant"><b>' + g.total + '</b><span>' + (g.total === 1 ? "mueble" : "muebles") + '<br>' + esc(et.nombre.toLowerCase().replace("mueble ", "")) + '</span></div>' +
     '<h3>De quién vienen</h3><div class="lotes">' + g.lotes.map(l => '<div class="lote"><div class="quien">' + esc(R.firmaDe(l)) + '<small>' + esc(R.origenDe(l)) + ' · desde ' + esc(cuando(l.creado)) + '</small></div><div class="disp"><b>' + l.cantidad + '</b></div></div>').join("") + '</div>' +
     (g.etapa === "preparado" ? '<div class="sub" style="margin:-6px 0 10px">' + (R.partesTexto(modeloDe(g.modelo_id), g) ? '<span class="sello ver">con ' + esc(R.partesTexto(modeloDe(g.modelo_id), g)) + '</span> ' : "") + (R.faltanPartes(modeloDe(g.modelo_id), g).length ? '<span class="sello roj">faltan: ' + esc(R.faltanPartes(modeloDe(g.modelo_id), g).map(c => c.k).join(", ")) + '</span>' : '<span class="sello ver">completo</span>') + '</div>' : "") +
@@ -233,8 +236,9 @@ function montaDetalleMueble(caja){
 function registrarMueble(){ if (R.admiteAlta(E.etapa)) hojaRegistrarMueble(); else hojaRegistrarDesdeMueble(E.etapa); }
 function hojaRegistrarDesdeMueble(etapa){
   if (!exigeYo()) return;
+  if (etapa === "preparado") return hojaQuePreparar(null);
   const ant = R.anteriorEtapa(etapa); if (!ant) return;
-  const disponibles = etapa === "preparado" ? gruposMueble("pintado").concat(gruposMueble("mdf_pintado")) : gruposMueble(ant);
+  const disponibles = gruposMueble(ant);
   abreHoja('<h3>Registrar ' + esc(R.ETAPAS[etapa].nombre.toLowerCase()) + '</h3>' +
     '<div class="paso-a"><span class="de">' + esc(etapa === "preparado" ? "Mueble pintado / MDF pintado" : R.ETAPAS[ant].nombre) + '</span> → <span class="a">' + esc(R.ETAPAS[etapa].nombre) + '</span></div>' +
     '<p class="guia">' + (etapa === "preparado" ? "Escoge cuál se preparó: se le descuentan sus puertas, cajones y parches pintados." : "Escoge de cuáles: solo aparecen los que hay en «" + esc(R.ETAPAS[ant].nombre.toLowerCase()) + "». Lo que registres aquí se descuenta de ahí solo.") + '</p>' +
@@ -285,7 +289,11 @@ function hojaRegistrarMueble(){
 }
 /* Campo de modelo con búsqueda tolerante: se escribe y se escoge de la lista; nunca queda texto libre */
 function campoModelo(){ return '<label class="campo"><span>Mueble</span><input id="rModelo" placeholder="Escribe el nombre, aunque sea aproximado…" autocomplete="off"></label><div class="sugerencias" id="rSug" hidden></div>'; }
-function campoColor(sel, obligatorio, id){ const grupos = CAT.gruposColor || []; return '<label class="campo"><span>Color' + (obligatorio ? "" : " (si ya se sabe)") + '</span><select id="' + (id || "rColor") + '"><option value="">' + (obligatorio ? "— escoge el color —" : "— todavía sin color —") + '</option>' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (sel === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("") + '</select></label>'; }
+/* Muebles y piezas solo llevan colores LISOS (las combinaciones "Negro puertas grises" son cosa del pedido). */
+function campoColor(sel, obligatorio, id){
+  const lisos = coloresLisos().slice(); if (sel && !lisos.some(c => R.mismoColor(c, sel))) lisos.push(sel);
+  return '<label class="campo"><span>Color' + (obligatorio ? "" : " (si ya se sabe)") + '</span><select id="' + (id || "rColor") + '"><option value="">' + (obligatorio ? "— escoge el color —" : "— todavía sin color —") + '</option>' + lisos.map(c => '<option' + (sel && R.mismoColor(sel, c) ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select></label>';
+}
 function montaCampoModelo(h, alEscoger, conExtras, filtro){
   const inp = h.querySelector("#rModelo"), sug = h.querySelector("#rSug");
   let escogido = null;
@@ -306,6 +314,8 @@ function montaCampoModelo(h, alEscoger, conExtras, filtro){
 }
 function fichaCorta(m){
   const p = [];
+  if (R.esGuacal(m)) p.push("guacal: sirve para " + plural(modelosActivos().filter(x => x.guacal === m.id).length, "modelo", "modelos"));
+  else if (m.guacal && modeloDe(m.guacal)) p.push("usa el guacal " + modeloDe(m.guacal).nombre);
   p.push(m.cajones == null ? "cajones: falta dato" : plural(m.cajones, "cajón", "cajones"));
   p.push(m.total_puertas == null ? "puertas: falta dato" : plural(m.total_puertas, "puerta", "puertas"));
   const pa = R.parchesDe(m); if (pa > 0) p.push(plural(pa, "parche", "parches"));
@@ -316,7 +326,7 @@ function fichaCorta(m){
 function hojaPasar(g){
   if (!exigeYo()) return;
   const sig = R.siguienteEtapa(g.etapa); if (!sig) return;
-  if (sig === "preparado") return hojaPreparar(g);
+  if (sig === "preparado") return hojaQuePreparar(g);
   const regla = R.responsables(sig);
   let quien = [];
   const rec = E.ultimoQuien[sig]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
@@ -678,12 +688,25 @@ function pideQuien(regla, texto, llave){
 function cierraHojaSin(){ E.resolverQuien = null; cierraHoja(); }
 
 /* ═══════════════ LISTOS PARA PREPARAR ═══════════════ */
+/* Piezas que alcanzan para un modelo: las suyas, y cajones/parches también del guacal */
+function piezasParaListos(m){
+  const r = piezasDe(m.id); const gu = R.guacalDe(m);
+  if (gu && gu !== m.id){ const pg = piezasDe(gu); ["cajones_pintados", "parches_pintados"].forEach(c => { if (pg[c]) r[c] = (r[c] || 0) + pg[c]; }); }
+  return r;
+}
 function calculaListos(){
   const r = [];
   ["pintado", "mdf_pintado"].forEach(et => gruposMueble(et).forEach(g => {
     const m = modeloDe(g.modelo_id);
-    const res = R.listos(m, g.total, piezasDe(g.modelo_id, g.color));
-    r.push(Object.assign({ modelo: g.modelo, color: g.color, modelo_id: g.modelo_id, k: g.k, etapa: et, m }, res));
+    if (R.esGuacal(m)){
+      // Un guacal no se arma solo: se revisa por cada modelo que lo usa y tiene puertas pintadas
+      const variantes = modelosActivos().filter(v => v.guacal === m.id && (piezasDe(v.id).puertas_pintadas || 0) > 0);
+      if (!variantes.length){ r.push(Object.assign({ modelo: g.modelo, color: g.color, modelo_id: g.modelo_id, k: g.k, kl: g.k, etapa: et, m, guacal: true }, R.listos(null, g.total, {}), { detalle: [g.total + " pintados", "es un guacal: se arma con las puertas pintadas de alguno de sus modelos, y no hay de ninguno"] })); return; }
+      variantes.forEach(v => { const res = R.listos(v, g.total, piezasParaListos(v)); r.push(Object.assign({ modelo: v.nombre, color: g.color, modelo_id: v.id, k: g.k, kl: g.k + "|" + v.id, etapa: et, m: v, sobre: g.modelo }, res)); });
+      return;
+    }
+    const res = R.listos(m, g.total, piezasParaListos(m));
+    r.push(Object.assign({ modelo: g.modelo, color: g.color, modelo_id: g.modelo_id, k: g.k, kl: g.k, etapa: et, m }, res));
   }));
   return r.sort((a,b) => b.listos - a.listos || (sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1));
 }
@@ -696,31 +719,32 @@ function pintaListos(){
   if (q("listos")) l = Busca.busca(q("listos"), l, x => x.modelo + " " + x.color);
   let medias = gruposMueble("preparado").map(g => ({ g, m: modeloDe(g.modelo_id), faltan: R.faltanPartes(modeloDe(g.modelo_id), g) })).filter(x => x.faltan.length);
   if (q("listos")) medias = Busca.busca(q("listos"), medias, x => x.g.modelo + " " + x.g.color);
-  const htmlMedias = medias.length ? '<div class="bloque-h">Preparados a medias<span class="n">' + medias.reduce((s,x) => s + x.g.total, 0) + '</span></div>' + medias.map(x => '<div class="fila" data-medio="' + esc(x.g.k) + '"><div class="nombre"><b>' + esc(x.g.modelo) + '</b><small>preparó ' + esc(x.g.lotes.map(l => R.firmaDe(l)).filter((v,i,a) => a.indexOf(v) === i).join(", ")) + '</small></div><div class="sub">' + chipColor(x.g.color) + '</div><div class="apodos">' + chipColor(x.g.color) + '</div>' +
+  const htmlMedias = medias.length ? '<div class="bloque-h">Preparados a medias<span class="n">' + medias.reduce((s,x) => s + x.g.total, 0) + '</span></div>' + medias.map(x => '<div class="fila" data-medio="' + esc(x.g.k) + '"><div class="nombre"><b>' + esc(x.g.modelo) + '</b><small>preparó ' + esc(x.g.lotes.map(l => R.firmaDe(l)).filter((v,i,a) => a.indexOf(v) === i).join(", ")) + '</small></div><div class="sub">' + chipColores(x.g) + '</div><div class="apodos">' + chipColores(x.g) + '</div>' +
       '<div class="cifra"><b>' + x.g.total + '</b><small>con ' + esc(R.partesTexto(x.m, x.g) || "nada") + '</small></div><div class="ultimo"><span class="sello roj">faltan: ' + esc(x.faltan.map(c => c.k).join(", ")) + '</span></div><div class="stepper"><button class="btn suave" data-completa="' + esc(x.g.k) + '">Completar →</button></div></div>').join("") + '<div class="bloque-h">Pintados: qué alcanza para preparar</div>' : "";
   if (!l.length && !medias.length){ caja.innerHTML = q("listos") ? sinHallar("listos", "ese mueble") : '<div class="vacio"><b>Todavía no hay muebles pintados</b><p>Cuando un mueble llegue a «Mueble pintado», aquí se revisa si ya tiene sus puertas, cajones y parches para prepararlo.</p></div>'; return; }
   caja.innerHTML = htmlMedias + '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="d">Listos</span><span>Por qué</span><span></span></div>' + l.map(x => {
-    const sel = E.sel && E.sel.tipo === "listo" && E.sel.k === x.k;
+    const sel = E.sel && E.sel.tipo === "listo" && E.sel.k === x.kl;
     const sellos = (x.faltanParches ? '<span class="sello amb">faltan parches</span>' : "") + (x.sinFicha ? '<span class="sello roj">sin ficha completa</span>' : "");
     const porque = x.sinFicha ? "no se puede calcular" : x.listos < x.pintados ? "faltan " + x.limitante : "completos";
-    return '<div class="fila' + (sel ? " sel" : "") + (x.listos === 0 ? " suave" : "") + '" data-abre="' + esc(x.k) + '" data-etapa="' + x.etapa + '">' +
-      '<div class="nombre"><b>' + esc(x.modelo) + '</b></div><div class="sub">' + chipColor(x.color) + '</div><div class="apodos">' + chipColor(x.color) + '</div>' +
+    return '<div class="fila' + (sel ? " sel" : "") + (x.listos === 0 ? " suave" : "") + '" data-abre="' + esc(x.kl) + '" data-etapa="' + x.etapa + '">' +
+      '<div class="nombre"><b>' + esc(x.modelo) + '</b>' + (x.sobre ? '<small>sobre guacal ' + esc(x.sobre) + '</small>' : "") + '</div><div class="sub">' + chipColor(x.color) + '</div><div class="apodos">' + chipColor(x.color) + '</div>' +
       '<div class="cifra"><b>' + x.listos + '</b><small>' + (x.listos === 1 ? "listo" : "listos") + ' de ' + x.pintados + '</small></div>' +
-      '<div class="ultimo"><span>' + esc(porque) + '</span> ' + sellos + '</div><div class="stepper">' + (x.listos > 0 ? '<button class="btn suave" data-prep="' + esc(x.k) + '" data-etapa="' + x.etapa + '">Preparar →</button>' : "") + '</div></div>';
+      '<div class="ultimo"><span>' + esc(porque) + '</span> ' + sellos + '</div><div class="stepper">' + (x.listos > 0 ? '<button class="btn suave" data-prep="' + esc(x.kl) + '">Preparar →</button>' : "") + '</div></div>';
   }).join("");
   caja.querySelectorAll("[data-abre]").forEach(f => f.onclick = e => { if (e.target.closest("[data-prep]")) return; E.sel = { tipo:"listo", k: f.dataset.abre, etapa: f.dataset.etapa }; pintaListos(); if (esEscritorio()) pintaDetalle(); else abreHoja(htmlDetalleListo(), montaDetalleListo); });
-  caja.querySelectorAll("[data-prep]").forEach(b => b.onclick = e => { e.stopPropagation(); const g = gruposMueble(b.dataset.etapa).find(x => x.k === b.dataset.prep); if (g) hojaPreparar(g); });
+  caja.querySelectorAll("[data-prep]").forEach(b => b.onclick = e => { e.stopPropagation(); preparaDesdeListos(b.dataset.prep); });
   caja.querySelectorAll("[data-completa]").forEach(b => b.onclick = e => { e.stopPropagation(); const g = gruposMueble("preparado").find(x => x.k === b.dataset.completa); if (g) hojaPreparar(g); });
 }
+function preparaDesdeListos(kl){ const x = calculaListos().find(y => y.kl === kl); if (!x) return; const g = gruposMueble(x.etapa).find(y => y.k === x.k); if (g) hojaQuePreparar(g, { modelo: x.m }); }
 function htmlDetalleListo(){
-  const x = calculaListos().find(y => y.k === (E.sel || {}).k); if (!x) return '<div class="detalle-vacio">Ya no está</div>';
-  return '<h2>' + esc(x.modelo) + '</h2><div class="sub">' + chipColor(x.color) + '</div>' +
+  const x = calculaListos().find(y => y.kl === (E.sel || {}).k); if (!x) return '<div class="detalle-vacio">Ya no está</div>';
+  return '<h2>' + esc(x.modelo) + '</h2><div class="sub">' + chipColor(x.color) + (x.sobre ? ' &nbsp;sobre guacal ' + esc(x.sobre) : "") + '</div>' +
     '<div class="grande-cant"><b>' + x.listos + '</b><span>' + (x.listos === 1 ? "listo" : "listos") + ' para preparar<br>de ' + x.pintados + ' pintados</span></div>' +
     (x.faltanParches ? '<div class="candado" style="margin-bottom:10px"><span>Faltan parches</span></div>' : "") +
     '<h3>Cómo se calculó</h3>' + x.detalle.map(d => '<div class="linea"><span class="det">' + esc(d) + '</span></div>').join("") +
     '<div class="acciones" style="margin-top:12px">' + (x.listos > 0 ? '<button class="btn vino" data-prep>Preparar →</button>' : "") + (x.m ? '<button class="btn" data-ficha>Ver ficha en Catálogo</button>' : "") + '</div>';
 }
-function montaDetalleListo(caja){ const x = calculaListos().find(y => y.k === (E.sel || {}).k); const b = caja.querySelector("[data-ficha]"); if (b && x) b.onclick = () => hojaModelo(x.m); const pb = caja.querySelector("[data-prep]"); if (pb && x) pb.onclick = () => { const g = gruposMueble(x.etapa).find(y => y.k === x.k); if (g) hojaPreparar(g); }; }
+function montaDetalleListo(caja){ const x = calculaListos().find(y => y.kl === (E.sel || {}).k); const b = caja.querySelector("[data-ficha]"); if (b && x) b.onclick = () => hojaModelo(x.m); const pb = caja.querySelector("[data-prep]"); if (pb && x) pb.onclick = () => preparaDesdeListos(x.kl); }
 
 /* ═══════════════ MATERIAL ═══════════════ */
 const vivo = p => Math.max(0, Number(p.cantidad || 0) + (E.pend.get(p.id) || 0));
@@ -1137,13 +1161,16 @@ function hojaExtra(m){
 }
 function hojaModelo(m, nombreSugerido){
   if (!exigeYo()) return;
-  const nuevo = !m; m = m || { nombre: nombreSugerido || "", familia: "", tipo: "madera", cajones: null, puertas_grandes: null, puertas_grandes_luna: null, puertas_chicas: null, puertas_chicas_luna: null, total_puertas: null, parches: null, lleva_parches: null, lleva_respaldo: null };
+  const nuevo = !m; m = m || { nombre: nombreSugerido || "", familia: "", tipo: "madera", cajones: null, puertas_grandes: null, puertas_grandes_luna: null, puertas_chicas: null, puertas_chicas_luna: null, total_puertas: null, parches: null, lleva_parches: null, lleva_respaldo: null, guacal: null, es_guacal: false };
+  const guacales = modelosActivos().filter(x => R.esGuacal(x) && x.id !== m.id);
   const num = (id, txt, v) => '<label class="campo"><span>' + txt + '</span><input id="' + id + '" type="number" inputmode="numeric" min="0" value="' + (v == null ? "" : v) + '" placeholder="falta dato"></label>';
   const siNo = (id, txt, v) => '<div class="campo"><span>' + txt + '</span><div class="opcion-si-no" id="' + id + '"><button class="cat' + (v === true ? " on" : "") + '" data-v="1">Sí</button><button class="cat' + (v === false ? " on" : "") + '" data-v="0">No</button><button class="cat' + (v == null ? " on" : "") + '" data-v="">No sé</button></div></div>';
   abreHoja('<h3>' + (nuevo ? "Modelo nuevo" : "Ficha del modelo") + '</h3>' + (m.pendiente ? '<div class="candado" style="margin-bottom:10px"><span><b>Por revisar.</b> ' + esc(m.nota || "Entró con la carga del 2 de octubre; confirma el nombre y la ficha.") + ' Al guardar se quita la marca.</span></div>' : "") + '<p class="guia">Con esta ficha el sistema traduce puertas y cajones a muebles. Si no sabes un dato, déjalo vacío: el sistema dirá «falta dato» en vez de inventar.</p>' +
     '<label class="campo"><span>Nombre</span><input id="mNombre" value="' + esc(m.nombre) + '" placeholder="Monarca Midas"></label>' +
     '<div class="dupla"><label class="campo"><span>Familia</span><input id="mFamilia" value="' + esc(m.familia || "") + '" placeholder="Monarca"></label>' +
     '<div class="campo"><span>Material</span><div class="opcion-si-no" id="mTipo"><button class="cat' + (m.tipo !== "mdf" ? " on" : "") + '" data-v="madera">Madera</button><button class="cat' + (m.tipo === "mdf" ? " on" : "") + '" data-v="mdf">MDF</button></div></div></div>' +
+    '<label class="campo"><span>Comparte guacal con…</span><select id="mGuacal"><option value="">— tiene su propio guacal —</option>' + guacales.map(x => '<option value="' + esc(x.id) + '"' + (m.guacal === x.id ? " selected" : "") + '>' + esc(x.nombre) + '</option>').join("") + '</select></label>' +
+    '<label class="interruptor" style="margin:0 0 10px"><input type="checkbox" id="mEsGuacal"' + (m.es_guacal ? " checked" : "") + '> <span>Este modelo es un guacal: sirve para varios modelos (las puertas hacen el modelo)</span></label>' +
     num("mCajones", "Cajones", m.cajones) +
     '<div class="grupo-h">Puertas</div><div class="dupla">' + num("mPG", "Grandes", m.puertas_grandes) + num("mPGL", "Grandes con luna", m.puertas_grandes_luna) + '</div>' +
     '<div class="dupla">' + num("mPC", "Chicas", m.puertas_chicas) + num("mPCL", "Chicas con luna", m.puertas_chicas_luna) + '</div>' +
@@ -1163,8 +1190,10 @@ function hojaModelo(m, nombreSugerido){
       g("#mOk").onclick = async () => {
         const nombre = g("#mNombre").value.trim(); if (!nombre) return grita("Falta el nombre");
         const repetido = E.modelos.find(x => x.id !== m.id && x.activo !== false && sinAcento(x.nombre) === sinAcento(nombre)); if (repetido) return grita("Ya existe un modelo con ese nombre");
-        const datos = { nombre, familia: g("#mFamilia").value.trim() || nombre.split(" ")[0], tipo, pendiente: false, nota: "", cajones: leeNum("#mCajones"), puertas_grandes: leeNum("#mPG"), puertas_grandes_luna: leeNum("#mPGL"), puertas_chicas: leeNum("#mPC"), puertas_chicas_luna: leeNum("#mPCL"), total_puertas: leeNum("#mTotal"), parches: leeNum("#mParches"), lleva_parches: leeNum("#mParches") == null ? null : leeNum("#mParches") > 0, lleva_respaldo: respaldo, editado_por: E.yo };
-        const cambios = nuevo ? "modelo nuevo" : Object.keys(datos).filter(k => !["editado_por", "pendiente", "nota"].includes(k) && JSON.stringify(datos[k]) !== JSON.stringify(m[k] == null ? null : m[k])).map(k => k.replace(/_/g, " ") + ": " + (m[k] == null ? "vacío" : m[k]) + " → " + (datos[k] == null ? "vacío" : datos[k])).join(" · ");
+        const esG = g("#mEsGuacal").checked;
+        const datos = { nombre, familia: g("#mFamilia").value.trim() || nombre.split(" ")[0], tipo, pendiente: false, nota: "", guacal: esG ? null : (g("#mGuacal").value || null), es_guacal: esG, cajones: leeNum("#mCajones"), puertas_grandes: leeNum("#mPG"), puertas_grandes_luna: leeNum("#mPGL"), puertas_chicas: leeNum("#mPC"), puertas_chicas_luna: leeNum("#mPCL"), total_puertas: leeNum("#mTotal"), parches: leeNum("#mParches"), lleva_parches: leeNum("#mParches") == null ? null : leeNum("#mParches") > 0, lleva_respaldo: respaldo, editado_por: E.yo };
+        const vale = k => k === "es_guacal" ? !!m[k] : (m[k] == null ? null : m[k]);
+        const cambios = nuevo ? "modelo nuevo" : Object.keys(datos).filter(k => !["editado_por", "pendiente", "nota"].includes(k) && JSON.stringify(datos[k]) !== JSON.stringify(vale(k))).map(k => k.replace(/_/g, " ") + ": " + (vale(k) == null ? "vacío" : vale(k)) + " → " + (datos[k] == null ? "vacío" : datos[k])).join(" · ");
         if (!nuevo && !cambios && !m.pendiente){ cierraHoja(); return; }
         let id = m.id;
         if (nuevo){ const f = await Almacen.pon("modelo", Object.assign({ id: "N" + Date.now().toString(36), activo: true }, datos)); id = f.id; }
@@ -1332,7 +1361,7 @@ function pintaCatMaterial(){
 function pintaAjustes(){
   const C = window.CONFIG || {};
   $("#ajustes").innerHTML =
-    tarjetaArregloPuertas() + tarjetaRevisarNombres() + tarjetaArreglo() + tarjetaPedidosLibreta() + tarjetaCarga() + tarjetaPintura() +
+    tarjetaGuacales() + tarjetaColores() + tarjetaArregloPuertas() + tarjetaRevisarNombres() + tarjetaArreglo() + tarjetaPedidosLibreta() + tarjetaCarga() + tarjetaPintura() +
     '<div class="ajuste"><h4>Quién soy</h4><p>' + (E.yo ? "Estás como <b>" + esc(E.yo) + "</b>." : "Todavía no has dicho quién eres.") + '</p><div class="acciones"><button class="btn" id="ajYo">Cambiar de persona</button>' + (Almacen.sesion ? '<button class="btn fantasma" id="ajSalir">Cerrar sesión</button>' : "") + '</div></div>' +
     '<div class="ajuste"><h4>Modo práctica</h4><p>Para jugar sin miedo: datos de juguete, solo en este aparato. El inventario real ni se entera.</p><label class="interruptor"><input type="checkbox" id="ajPractica"' + (Almacen.practica ? " checked" : "") + '> <span>' + (Almacen.practica ? "Practicando" : "Apagado") + '</span></label></div>' +
     '<div class="ajuste"><h4>Hoja de conteo para imprimir</h4><p>Para caminar el almacén con papel y comparar contra el sistema.</p><div class="acciones"><button class="btn" data-imprime="mueble">Muebles</button><button class="btn" data-imprime="pieza">Piezas</button><button class="btn" data-imprime="material">Material</button></div></div>' +
@@ -1345,6 +1374,8 @@ function pintaAjustes(){
   const rn = $("#ajNombres"); if (rn) rn.onclick = hojaRevisarNombres;
   const ar = $("#ajArreglo"); if (ar) ar.onclick = aplicaArreglo;
   const ap = $("#ajPuertas"); if (ap) ap.onclick = hojaArregloPuertas;
+  const gq = $("#ajGuacales"); if (gq) gq.onclick = hojaGuacales;
+  const cl = $("#ajColores"); if (cl) cl.onclick = hojaColores;
   $("#ajYo").onclick = hojaQuienSoy;
   const s = $("#ajSalir"); if (s) s.onclick = async () => { await Almacen.sale(); pintaPulso(); pintaTodo(); };
   $("#ajPractica").onchange = async e => { await Almacen.setPractica(e.target.checked); pintaPulso(); pintaTodo(); grita(e.target.checked ? "Modo práctica encendido" : "De vuelta a lo real"); };
@@ -1479,7 +1510,7 @@ function reporteMuebles(seccion){
       const ls = E.lotes.filter(l => l.etapa === s.k && Number(l.cantidad) > 0).sort(orden);
       filas = ls.map(l => { total += Number(l.cantidad); const q = R.firmaDe(l); let quien = /sin nombre|sin responsable/.test(q || "") ? "" : (q || "");
         if (s.k === "preparado"){ const m = modeloDe(l.modelo_id); const con = R.partesTexto(m, l), fal = R.faltanPartes(m, l); quien = [quien, con ? "con " + con : "", fal.length ? "faltan " + fal.map(c => c.k).join(", ") : "completo"].filter(Boolean).join(" · "); }
-        return [l.modelo, nombreColor(l.color), Number(l.cantidad), quien]; });
+        return [l.modelo, nombreColor(l.color) + (R.textoColores(l) ? " · " + R.textoColores(l) : ""), Number(l.cantidad), quien]; });
       refs = ls.map(l => ({ tipo: "lote", id: l.id, a: destinoPlan("lote", l) }));
     } else {
       const ps = E.piezas.filter(p => p.categoria === s.k && vivoPieza(p) > 0).sort(orden);
@@ -1516,19 +1547,25 @@ function reportePedidos(){
         hay = "surtido: el cliente deja escoger · de " + fam + " hay " + cnt("pintado") + " pintados y " + cnt("preparado") + " preparados";
       } else if (m){
         // Como lego: el mueble y las puertas se pintan por separado. Se dice TODO lo que hay
-        // del modelo, de cualquier color, y se marca con ✓ lo que coincide con el color pedido.
-        const porColor = (lista, cant) => { const g = {}; lista.forEach(l => { const c = l.color || "sin color"; g[c] = (g[c] || 0) + cant(l); }); return Object.keys(g).filter(c => g[c] > 0).sort((a,b) => (b === x.color) - (a === x.color) || g[b] - g[a]).map(c => ({ c, n: g[c] })); };
-        const marca = c => (x.color && c === x.color ? "✓ " : "");
-        const et = (k, nombre) => { const cs = porColor(E.lotes.filter(l => l.etapa === k && l.modelo_id === m.id), l => Number(l.cantidad)); const t = cs.reduce((s,c) => s + c.n, 0); return t + " " + nombre + (t ? " (" + cs.map(c => marca(c.c) + c.n + " " + c.c).join(", ") + ")" : ""); };
-        const pz = (ks, nombre, por) => { const cs = porColor(E.piezas.filter(q => ks.includes(q.categoria) && q.modelo_id === m.id), vivoPieza); const t = cs.reduce((s,c) => s + c.n, 0);
+        // del modelo (y del guacal que usa), de cualquier color, y se marca con ✓ lo que
+        // coincide con lo que pide la combinación del pedido para ESA parte.
+        const d = R.desarmaColor(x.color); const gu = R.guacalDe(m); const guacal = gu !== m.id ? modeloDe(gu) : null;
+        const porColor = (lista, cant, etiqueta, ok) => { const g = {}; lista.forEach(l => { const c = etiqueta(l) || "sin color"; (g[c] = g[c] || { c, n: 0, ok: ok(l) }).n += cant(l); }); return Object.values(g).filter(e => e.n > 0).sort((a,b) => (b.ok - a.ok) || b.n - a.n); };
+        const marca = e => (x.color && e.ok ? "✓ " : "");
+        const deModelo = l => l.modelo_id === m.id || (guacal && l.modelo_id === guacal.id);
+        const et = (k, nombre) => { const cs = porColor(E.lotes.filter(l => l.etapa === k && (k === "preparado" ? l.modelo_id === m.id : deModelo(l))), l => Number(l.cantidad),
+            l => (l.color || "sin color") + (k === "preparado" && R.textoColores(l) ? " · " + R.textoColores(l) : "") + (guacal && l.modelo_id === guacal.id ? " (guacal)" : ""),
+            l => k === "preparado" ? R.coincideCombo(x.color, l) : R.mismoColor(l.color, d.mueble));
+          const t = cs.reduce((s,c) => s + c.n, 0); return t + " " + nombre + (t ? " (" + cs.map(c => marca(c) + c.n + " " + c.c).join(", ") + ")" : ""); };
+        const pz = (ks, nombre, por, parte) => { const cs = porColor(E.piezas.filter(q => ks.includes(q.categoria) && (parte === "puertas" ? q.modelo_id === m.id : deModelo(q))), vivoPieza, q => (q.color || "sin color") + (guacal && q.modelo_id === guacal.id ? " (guacal)" : ""), q => R.mismoColor(q.color, d[parte])); const t = cs.reduce((s,c) => s + c.n, 0);
           const eq = n => por == null ? "" : por === 0 ? "" : " para " + Math.floor(n / por);
           if (por === 0) return nombre + ": no lleva"; if (!t) return nombre + " para 0";
-          return nombre + " para " + (por ? Math.floor(t / por) : "?") + " (" + cs.map(c => marca(c.c) + c.n + " " + c.c + eq(c.n)).join(", ") + ")" + (por == null ? " · sin ficha" : ""); };
+          return nombre + " para " + (por ? Math.floor(t / por) : "?") + " (" + cs.map(c => marca(c) + c.n + " " + c.c + eq(c.n)).join(", ") + ")" + (por == null ? " · sin ficha" : ""); };
         const partes = [];
         if (m.tipo === "mdf") partes.push(et("mdf", "MDF"), et("mdf_pintado", "MDF pintados"));
         else partes.push(et("maquilado", "maquilados"), et("armado", "armados"), et("pintado", "pintados"));
         partes.push(et("preparado", "preparados"));
-        partes.push(pz(["puertas_pintadas"], "puertas pintadas", m.total_puertas), pz(["puertas_lijadas", "puertas_lijadas_bisagras"], "puertas lijadas", m.total_puertas), pz(["cajones_pintados"], "cajones pintados", m.cajones));
+        partes.push(pz(["puertas_pintadas"], "puertas pintadas", m.total_puertas, "puertas"), pz(["puertas_lijadas", "puertas_lijadas_bisagras"], "puertas lijadas", m.total_puertas, "puertas"), pz(["cajones_pintados"], "cajones pintados", m.cajones, "cajones"));
         hay = partes.join(" · ");
       }
       filas.push(["Faltan " + faltan + " " + x.modelo + (x.color ? " · " + x.color : ""), hay]);
@@ -1619,52 +1656,129 @@ async function descargaPdf(r){
 }
 
 /* ═══════════════ PREPARAR: mueble pintado + puertas, cajones y parches pintados ═══════════════ */
-/* Desde Piezas: "Colgar en mueble" → escoger a qué muebles (pintados o preparados a medias) del
-   mismo modelo se les ponen, de cualquier color, y abrir Preparar con esa parte marcada. */
+/* Desde Piezas: "Colgar en mueble" → escoger a qué muebles (pintados del modelo O de su guacal, o
+   preparados a medias del modelo) se les ponen, de cualquier color, y abrir Preparar con esa parte marcada. */
 function hojaColgar(p){
   if (!exigeYo()) return;
   const m = modeloDe(p.modelo_id); if (!m) return grita("Este modelo no está en el catálogo");
   const k = p.categoria === "puertas_pintadas" ? "puertas" : p.categoria === "cajones_pintados" ? "cajones" : "parches";
   const comp = R.componentes(m).find(c => c.k === k);
   if (!comp) return grita("Según la ficha, " + m.nombre + " no lleva " + k);
-  const grupos = gruposMueble("pintado").concat(gruposMueble("mdf_pintado")).filter(g => g.modelo_id === m.id)
+  const gu = R.guacalDe(m); const guacal = gu !== m.id ? modeloDe(gu) : null;
+  const grupos = gruposMueble("pintado").concat(gruposMueble("mdf_pintado")).filter(g => g.modelo_id === m.id || (guacal && g.modelo_id === guacal.id))
     .concat(gruposMueble("preparado").filter(g => g.modelo_id === m.id && !(g.partes || {})[k]));
-  if (!grupos.length) return grita("No hay muebles pintados de " + m.nombre + " para ponerles " + k + ". Primero pasa el mueble a pintado.");
+  if (!grupos.length) return grita("No hay muebles pintados de " + m.nombre + (guacal ? " ni de su guacal (" + guacal.nombre + ")" : "") + " para ponerles " + k + ". Primero pasa el mueble a pintado." + (!guacal && R.esGuacal(m) === false ? " Si este modelo se arma sobre un guacal compartido, ponlo en su ficha." : ""));
   abreHoja('<h3>' + (k === "puertas" ? "Colgar puertas" : "Poner " + k) + '</h3><p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(nombreColor(p.color)) + ' · hay <b>' + vivoPieza(p) + '</b> ' + esc(R.PIEZAS[p.categoria].unidad) + ' (' + esc(R.textoEquivalencia(vivoPieza(p), p.categoria, m).replace(/^[^=]*= /, "")) + '). ¿A qué muebles se les ponen? No importa el color del mueble.</p>' +
-    '<div class="sugerencias">' + grupos.map((g, i) => '<button data-g="' + i + '">' + esc(g.modelo) + ' · ' + esc(nombreColor(g.color)) + ' · ' + esc(R.ETAPAS[g.etapa].nombre) + (g.etapa === "preparado" ? " (con " + esc(R.partesTexto(m, g) || "nada") + ")" : "") + '<small>' + g.total + ' disponibles · ' + esc(g.lotes.map(l => R.firmaDe(l) + " " + l.cantidad).join(" · ")) + '</small></button>').join("") + '</div>',
-    h => h.querySelectorAll("[data-g]").forEach(b => b.onclick = () => hojaPreparar(grupos[Number(b.dataset.g)], k)));
+    '<div class="sugerencias">' + grupos.map((g, i) => '<button data-g="' + i + '">' + esc(g.modelo) + (guacal && g.modelo_id === guacal.id ? ' <span class="chip">guacal</span>' : "") + ' · ' + esc(nombreColor(g.color)) + ' · ' + esc(R.ETAPAS[g.etapa].nombre) + (g.etapa === "preparado" ? " (con " + esc(R.partesTexto(m, g) || "nada") + ")" : "") + '<small>' + g.total + ' disponibles · ' + esc(g.lotes.map(l => R.firmaDe(l) + " " + l.cantidad).join(" · ")) + '</small></button>').join("") + '</div>',
+    h => h.querySelectorAll("[data-g]").forEach(b => b.onclick = () => hojaPreparar(grupos[Number(b.dataset.g)], { modelo: m, pref: k })));
 }
-function hojaPreparar(g, pref){
+/* Renglones de pedidos que todavía faltan (no surtidos), con su modelo del catálogo */
+function pendientesPedido(filtro){
+  const r = [];
+  E.pedidos.filter(p => p.estado !== "entregado").forEach(p => lineasDe(p).forEach((x, i) => {
+    if (x.surtido || !x.modelo) return;
+    const faltan = Number(x.cantidad || 0) - Math.min(Number(x.cantidad || 0), Number(x.entregado || 0)); if (faltan <= 0) return;
+    const m = modelosActivos().find(mm => sinAcento(mm.nombre) === sinAcento(x.modelo)); if (!m || R.esExtra(m)) return;
+    if (filtro && !filtro(m)) return;
+    r.push({ p, i, x, m, faltan });
+  }));
+  return r.sort((a,b) => (a.p.fecha || "") < (b.p.fecha || "") ? -1 : (a.p.fecha || "") > (b.p.fecha || "") ? 1 : (a.p.cliente < b.p.cliente ? -1 : 1));
+}
+/* ¿Qué se prepara? Primero los muebles pendientes de pedidos (del modelo o de los que usan el
+   mismo guacal); abajo, armar uno que no es de pedido. g = grupo de muebles pintados (puede faltar). */
+function hojaQuePreparar(g, opc){
   if (!exigeYo()) return;
+  opc = opc || {};
+  const gm = g ? modeloDe(g.modelo_id) : null;
+  const pend = pendientesPedido(m => opc.modelo ? m.id === opc.modelo.id : (gm ? R.mismoGuacal(m, gm) : true));
+  const libre = () => g ? hojaPreparar(g, { pref: opc.pref, modelo: opc.modelo }) : hojaEscogerPintado(null, null);
+  if (!pend.length) return libre();
+  abreHoja('<h3>¿Qué se prepara?</h3>' + (g ? '<p class="guia"><b>' + esc(g.modelo) + '</b> · ' + esc(nombreColor(g.color)) + ' · hay <b>' + g.total + '</b> ' + esc(R.ETAPAS[g.etapa].nombre.toLowerCase()) + '.</p>' : '<p class="guia">Escoge un mueble pendiente de pedido, o arma uno que no es de pedido.</p>') +
+    '<div class="grupo-h">Muebles pendientes de pedidos</div><div class="sugerencias">' + pend.map((q, i) => '<button data-q="' + i + '">' + esc(q.p.cliente) + ' · <b>' + esc(q.m.nombre) + '</b>' + (q.x.color ? ' · ' + esc(q.x.color) : "") + '<small>faltan ' + q.faltan + (q.p.fecha ? " · pedido del " + esc(isoADma(q.p.fecha)) : "") + (g && q.m.id !== g.modelo_id ? " · se arma sobre " + esc(g.modelo) : "") + '</small></button>').join("") + '</div>' +
+    '<div class="grupo-h">O sin pedido</div><button class="btn grande" id="qLibre">Armar mueble que no es pedido</button>',
+    h => {
+      h.querySelector("#qLibre").onclick = libre;
+      h.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { const q = pend[Number(b.dataset.q)]; const ped = { id: q.p.id, cliente: q.p.cliente, i: q.i, color: q.x.color || "", faltan: q.faltan }; if (g) hojaPreparar(g, { modelo: q.m, pedido: ped, pref: opc.pref }); else hojaEscogerPintado(q.m, ped); });
+    });
+}
+/* Escoger de qué muebles pintados sale: del modelo o de su guacal (m puede faltar: cualquiera) */
+function hojaEscogerPintado(m, pedido){
+  const gu = m ? R.guacalDe(m) : null;
+  const disponibles = gruposMueble("pintado").concat(gruposMueble("mdf_pintado")).filter(g => !m || g.modelo_id === m.id || g.modelo_id === gu);
+  abreHoja('<h3>' + (m ? "Preparar " + esc(m.nombre) : "Armar mueble que no es pedido") + '</h3>' +
+    (pedido ? '<p class="guia">Para <b>' + esc(pedido.cliente) + '</b>' + (pedido.color ? " · " + esc(pedido.color) : "") + ' · faltan <b>' + pedido.faltan + '</b>.</p>' : "") +
+    '<div class="paso-a"><span class="de">Mueble pintado / MDF pintado</span> → <span class="a">Mueble preparado</span></div>' +
+    '<p class="guia">' + (m ? "Escoge de qué muebles pintados sale: del mismo modelo o de su guacal." : "Escoge cuál se preparó: se le descuentan sus puertas, cajones y parches pintados.") + '</p>' +
+    campoBuscaLista("Mueble o color…") + '<div class="sugerencias" id="rLista"></div>',
+    h => {
+      const inp = h.querySelector("#rBusca"), lista = h.querySelector("#rLista");
+      const pinta = () => {
+        const l = inp.value.trim() ? Busca.busca(inp.value, disponibles, g => g.modelo + " " + g.color) : disponibles;
+        lista.innerHTML = l.length ? l.map(g => '<button data-k="' + esc(g.k) + '">' + esc(g.modelo) + (m && g.modelo_id !== m.id ? ' <span class="chip">guacal</span>' : "") + ' · ' + esc(nombreColor(g.color)) + '<small>' + g.total + ' disponibles · ' + esc(g.lotes.map(x => R.firmaDe(x) + " " + x.cantidad).join(" · ")) + '</small></button>').join("")
+          : '<div class="sin-hallar">' + (disponibles.length ? "No encontré ese mueble ahí." : m ? "No hay muebles pintados de " + esc(m.nombre) + (gu !== m.id && modeloDe(gu) ? " ni de su guacal (" + esc(modeloDe(gu).nombre) + ")" : "") + "." : "No hay nada en «mueble pintado» todavía.") + '</div>';
+        lista.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { const g = disponibles.find(x => x.k === b.dataset.k); if (g) hojaPreparar(g, { modelo: m || modeloDe(g.modelo_id), pedido }); });
+      };
+      inp.oninput = pinta; pinta(); inp.focus();
+    });
+}
+/* opc: { modelo: la variante que se arma (si el grupo es un guacal), pedido: {id, cliente, i, color, faltan}, pref: parte que viene marcada } */
+function hojaPreparar(g, opc){
+  if (!exigeYo()) return;
+  opc = opc || {}; const pedido = opc.pedido || null; const pref = opc.pref;
   const regla = R.responsables("preparado"); let quien = [];
   const rec = E.ultimoQuien.preparado; if (rec && Date.now() - rec.t < 15*60*1000) quien = rec.nombres.filter(n => regla.opciones.includes(n));
-  const m = modeloDe(g.modelo_id);
+  const gm = modeloDe(g.modelo_id);
   const completar = g.etapa === "preparado";
+  const m = completar ? gm : (opc.modelo || gm);
+  if (!m) return grita("Este modelo no está en el catálogo");
+  if (R.esGuacal(m) && !completar){
+    const variantes = modelosActivos().filter(x => x.guacal === m.id);
+    abreHoja('<h3>Preparar</h3><p class="guia"><b>' + esc(g.modelo) + '</b> es un guacal: sirve para varios modelos. ¿Cuál se arma?</p>' + campoModelo() +
+      (variantes.length ? '<div class="grupo-h">Modelos de este guacal</div><div class="sugerencias">' + variantes.map(v => '<button data-id="' + esc(v.id) + '">' + esc(v.nombre) + '<small>' + esc(fichaCorta(v)) + '</small></button>').join("") + '</div>' : '<p class="sin-hallar">Ningún modelo del catálogo usa este guacal todavía. Ponlo en la ficha del modelo («Comparte guacal con…»).</p>'),
+      h => { montaCampoModelo(h, x => { if (x) hojaPreparar(g, Object.assign({}, opc, { modelo: x })); }, false, x => x.guacal === m.id); h.querySelectorAll(".sugerencias [data-id]").forEach(b => b.onclick = () => hojaPreparar(g, Object.assign({}, opc, { modelo: modeloDe(b.dataset.id) }))); });
+    return;
+  }
+  if (m.id !== g.modelo_id && R.guacalDe(m) !== g.modelo_id && !R.mismoGuacal(m, gm)) return grita(m.nombre + " no se arma sobre " + g.modelo);
   const ya = completar ? (g.partes || {}) : {};
   const comps = R.componentes(m).filter(c => !ya[c.k]);
-  if (!m) return grita("Este modelo no está en el catálogo");
   if (!comps.length) return grita("Este mueble ya tiene todo lo de su ficha");
-  const marcadas = {}, tocadas = {};
+  const quiere = pedido && pedido.color ? R.desarmaColor(pedido.color) : null;
+  const gu = R.guacalDe(m);
+  const marcadas = {}, tocadas = {}, colores = {};   // colores[k]: "" = cualquier color (primero el del mueble); si no, color fijo
   if (pref) comps.forEach(c => { if (c.k !== pref){ tocadas[c.k] = true; marcadas[c.k] = false; } });
-  const ini = g.lotes.length === 1 ? g.lotes[0].cantidad : 0;
-  abreHoja('<h3>' + (completar ? "Completar" : "Preparar") + '</h3>' +
+  const hayDe = (c, col) => Almacen.piezasPara(m.id, g.color, c.cat, { guacal: gu, color: col }).length > 0;
+  comps.forEach(c => { if (!c.cat) return; if (quiere && quiere[c.k]) colores[c.k] = quiere[c.k]; else colores[c.k] = g.color && hayDe(c, g.color) ? g.color : ""; });
+  const tope = pedido ? Math.max(1, Math.min(pedido.faltan, g.total)) : g.total;
+  const ini = g.lotes.length === 1 ? Math.min(g.lotes[0].cantidad, tope) : 0;
+  const sobreGuacal = m.id !== g.modelo_id;
+  abreHoja('<h3>' + (completar ? "Completar" : "Preparar") + (pedido ? " para " + esc(pedido.cliente) : "") + '</h3>' +
     '<div class="paso-a"><span class="de">' + esc(R.ETAPAS[g.etapa].nombre) + (completar ? " · con " + esc(Object.keys(ya).filter(k => ya[k]).join(", ")) : "") + '</span> → <span class="a">Mueble preparado</span></div>' +
-    '<p class="guia"><b>' + esc(g.modelo) + '</b> · ' + esc(nombreColor(g.color)) + ' · hay <b>' + g.total + '</b>. Como lego: marca lo que se le puso ahora; lo demás queda pendiente y se puede completar después. Las piezas se toman del mismo modelo, de cualquier color (primero las del color del mueble).</p>' +
+    '<p class="guia"><b>' + esc(m.nombre) + '</b>' + (sobreGuacal ? ' sobre el guacal <b>' + esc(g.modelo) + '</b>' : "") + ' · mueble ' + esc(nombreColor(g.color)) + ' · hay <b>' + g.total + '</b>.' +
+      (pedido ? ' Pedido de <b>' + esc(pedido.cliente) + '</b>' + (pedido.color ? ': <b>' + esc(pedido.color) + '</b>' : "") + ' · faltan ' + pedido.faltan + '.' : "") +
+      ' Como lego: marca lo que se le puso ahora y de qué color; lo demás queda pendiente y se puede completar después.</p>' +
     '<div class="lotes">' + g.lotes.map(l => '<div class="lote" data-lote="' + esc(l.id) + '"><div class="quien">' + esc(R.firmaDe(l)) + '<small>' + esc(R.origenDe(l)) + '</small><div class="disp">' + l.cantidad + ' disponibles</div></div>' +
-      '<div class="toma"><button class="tecla" data-menos>−</button><input type="number" inputmode="numeric" min="0" max="' + l.cantidad + '" value="' + (g.lotes.length === 1 ? l.cantidad : 0) + '"><button class="tecla" data-mas>＋</button></div></div>').join("") + '</div>' +
+      '<div class="toma"><button class="tecla" data-menos>−</button><input type="number" inputmode="numeric" min="0" max="' + l.cantidad + '" value="' + (g.lotes.length === 1 ? ini : 0) + '"><button class="tecla" data-mas>＋</button></div></div>').join("") + '</div>' +
     '<div class="total-paso"><span>Muebles</span><b id="pTotal">' + ini + '</b></div>' +
-    '<h3 class="mini">Qué se le puso</h3><div class="lotes" id="pDesc"></div>' +
+    '<h3 class="mini">Qué se le puso y de qué color</h3><div class="lotes" id="pDesc"></div>' +
     '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats" id="pQuien">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>' +
     '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" disabled style="margin-top:12px">Confirmar</button>',
     h => {
       const filas = Array.from(h.querySelectorAll("[data-lote]"));
       const total = () => filas.reduce((s,f) => s + (Number(f.querySelector("input").value) || 0), 0);
+      const selectColor = c => {
+        const fuentes = Almacen.piezasPara(m.id, g.color, c.cat, { guacal: gu }); const porColor = {};
+        fuentes.forEach(p => { if (!p.color) return; const kc = Object.keys(porColor).find(x => R.mismoColor(x, p.color)) || p.color; porColor[kc] = (porColor[kc] || 0) + Number(p.cantidad || 0); });
+        const cols = Object.keys(porColor); const fijo = colores[c.k] || "";
+        if (fijo && !cols.some(x => R.mismoColor(x, fijo))) cols.push(fijo);
+        return '<select class="sel-color" data-k="' + c.k + '"><option value=""' + (!fijo ? " selected" : "") + '>Cualquier color' + (g.color ? " (primero " + esc(g.color) + ")" : "") + '</option>' +
+          cols.map(x => '<option value="' + esc(x) + '"' + (fijo && R.mismoColor(x, fijo) ? " selected" : "") + '>' + esc(x) + ' · ' + (porColor[x] ? "hay " + porColor[x] : "no hay") + (quiere && quiere[c.k] && R.mismoColor(x, quiere[c.k]) ? " · lo pide el pedido" : "") + '</option>').join("") + '</select>';
+      };
       const revisa = () => {
         let mal = false;
         filas.forEach(f => { const l = g.lotes.find(x => x.id === f.dataset.lote); const inp = f.querySelector("input"); const v = Number(inp.value) || 0; const m2 = v < 0 || v > l.cantidad || !Number.isInteger(v); inp.classList.toggle("mal", m2); if (m2) mal = true; });
         const t = total(); h.querySelector("#pTotal").textContent = t;
         const n = Math.max(1, t);
-        const rv = Almacen.revisaPreparar({ modelo_id: g.modelo_id, color: g.color }, n, Object.fromEntries(comps.map(c => [c.k, true])));
+        const rv = Almacen.revisaPreparar({ modelo_id: g.modelo_id, color: g.color }, n, Object.fromEntries(comps.map(c => [c.k, true])), { modelo_id: m.id, colores });
         const info = {}; rv.partes.forEach(pt => info[pt.cat] = pt);
         h.querySelector("#pDesc").innerHTML = comps.map(c => {
           const pt = c.cat ? info[c.cat] : null; const sinFicha = c.cat && c.por == null;
@@ -1673,10 +1787,12 @@ function hojaPreparar(g, pref){
           else if (!(alcanza && !sinFicha)) marcadas[c.k] = false;
           const puede = !sinFicha && (alcanza || !c.cat);
           return '<label class="lote comp' + (marcadas[c.k] ? " on" : "") + (puede ? "" : " no") + '"><input type="checkbox" data-k="' + c.k + '"' + (marcadas[c.k] ? " checked" : "") + (puede ? "" : " disabled") + '><div class="quien">' + esc(c.nombre) +
-            '<small>' + (c.cat ? (sinFicha ? "la ficha no dice cuántos lleva" : "necesita " + (c.por * n) + " · hay " + (pt ? pt.hay : 0) + (pt && pt.fuentes.length ? " (" + pt.fuentes.map(f => f.cantidad + " " + nombreColor(f.color)).join(", ") + ")" : "")) : "no se descuenta nada, solo se marca") + '</small></div>' +
-            '<div class="disp">' + (c.cat ? (sinFicha ? "" : (alcanza ? '<b>−' + (c.por * n) + '</b>' : '<span style="color:var(--rojo)">faltan ' + (c.por * n - (pt ? pt.hay : 0)) + '</span>')) : "") + '</div></label>';
+            '<small>' + (c.cat ? (sinFicha ? "la ficha no dice cuántos lleva" : "necesita " + (c.por * n) + " · hay " + (pt ? pt.hay : 0) + (pt && pt.fuentes.length ? " (" + pt.fuentes.map(f => f.cantidad + " " + nombreColor(f.color) + (f.modelo_id !== m.id ? " del guacal" : "")).join(", ") + ")" : "")) : "no se descuenta nada, solo se marca") + '</small>' +
+            (c.cat && !sinFicha ? selectColor(c) : "") + '</div>' +
+            '<div class="disp">' + (c.cat ? (sinFicha ? "" : (alcanza ? '<b>−' + (c.por * n) + '</b>' : '<span style="color:var(--rojo)">faltan ' + (c.por * n - (pt ? pt.hay : 0)) + (colores[c.k] ? " en " + esc(colores[c.k]) : "") + '</span>')) : "") + '</div></label>';
         }).join("");
-        h.querySelectorAll("#pDesc [data-k]").forEach(cb => cb.onchange = () => { tocadas[cb.dataset.k] = true; marcadas[cb.dataset.k] = cb.checked; cb.closest(".comp").classList.toggle("on", cb.checked); revisa(); });
+        h.querySelectorAll("#pDesc [data-k][type=checkbox]").forEach(cb => cb.onchange = () => { tocadas[cb.dataset.k] = true; marcadas[cb.dataset.k] = cb.checked; cb.closest(".comp").classList.toggle("on", cb.checked); revisa(); });
+        h.querySelectorAll("#pDesc select.sel-color").forEach(sel => { sel.onclick = e => e.stopPropagation(); sel.onchange = () => { colores[sel.dataset.k] = sel.value; tocadas[sel.dataset.k] = false; revisa(); }; });
         const alguna = comps.some(c => marcadas[c.k]);
         const err = h.querySelector("#pError"); err.hidden = alguna || t <= 0; err.textContent = "Marca al menos una cosa que se le puso";
         h.querySelector("#pOk").disabled = mal || t <= 0 || !quien.length || !alguna;
@@ -1692,9 +1808,10 @@ function hojaPreparar(g, pref){
       h.querySelector("#pOk").onclick = async () => {
         E.ultimoQuien.preparado = { nombres: quien.slice(), t: Date.now() };
         let hechos = 0;
+        const cols = Object.fromEntries(comps.filter(c => c.cat && marcadas[c.k] && colores[c.k]).map(c => [c.k, colores[c.k]]));
         try {
-          for (const f of filas){ const n = Number(f.querySelector("input").value) || 0; if (!n) continue; await Almacen.prepara({ lote_id: f.dataset.lote, cantidad: n, preparo: quien[0], partes: marcadas }, E.yo, origen()); hechos += n; }
-          cierraHoja(); grita(plural(hechos, "mueble", "muebles") + " con " + comps.filter(c => marcadas[c.k]).map(c => c.k).join(", "));
+          for (const f of filas){ const n = Number(f.querySelector("input").value) || 0; if (!n) continue; await Almacen.prepara({ lote_id: f.dataset.lote, cantidad: n, preparo: quien[0], partes: marcadas, modelo_a: m.id, colores: cols, pedido_id: pedido ? pedido.id : "", cliente: pedido ? pedido.cliente : "" }, E.yo, origen()); hechos += n; }
+          cierraHoja(); grita(plural(hechos, "mueble", "muebles") + " " + m.nombre + " con " + comps.filter(c => marcadas[c.k]).map(c => c.k).join(", ") + (pedido ? " · para " + pedido.cliente : ""));
           E.etapa = "preparado"; E.sel = null; irA("muebles"); pintaTodo();
         } catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; if (hechos) pintaTodo(); }
       };
@@ -1813,14 +1930,16 @@ function sugiereModelo(nombre, lista){
   return Busca.busca(limpiaNombre(nombre), lista, m => m.nombre)[0] || null;
 }
 function revisionNombres(){
+  const idsGuacal = ((window.CARGA_GUACALES || {}).guacales || []).map(g => g.id);
+  const esGuacalId = id => idsGuacal.includes(id) || R.esGuacal(modeloDe(id));
   const activos = modelosActivos().filter(m => !R.esExtra(m) && !m.pendiente && !/\(gen[eé]rico\)|\(\?\)/i.test(m.nombre));
   const porNombre = {};
   const toma = (nombre, donde, modelo_id) => { const k = sinAcento(nombre); (porNombre[k] = porNombre[k] || { nombre, pedidos: 0, lotes: 0, piezas: 0, modelo_id: modelo_id || null, cantidad: 0 }); porNombre[k][donde]++; if (modelo_id) porNombre[k].modelo_id = modelo_id; };
   const esBueno = n => activos.some(m => sinAcento(m.nombre) === sinAcento(n));
   E.pedidos.forEach(p => lineasDe(p).forEach(x => { if (!x.surtido && x.modelo && !esBueno(x.modelo)) toma(x.modelo, "pedidos"); }));
-  E.lotes.filter(l => Number(l.cantidad) > 0).forEach(l => { if (!esBueno(l.modelo) || (modeloDe(l.modelo_id) || {}).pendiente){ toma(l.modelo, "lotes", l.modelo_id); porNombre[sinAcento(l.modelo)].cantidad += Number(l.cantidad); } });
-  E.piezas.filter(p => vivoPieza(p) > 0).forEach(p => { if (!esBueno(p.modelo) || (modeloDe(p.modelo_id) || {}).pendiente){ toma(p.modelo, "piezas", p.modelo_id); porNombre[sinAcento(p.modelo)].cantidad += vivoPieza(p); } });
-  E.modelos.filter(m => m.activo !== false && !R.esExtra(m) && (m.pendiente || /\(gen[eé]rico\)|\(\?\)/i.test(m.nombre))).forEach(m => { if (!porNombre[sinAcento(m.nombre)]) toma(m.nombre, "lotes", m.id), porNombre[sinAcento(m.nombre)].lotes = 0; });
+  E.lotes.filter(l => Number(l.cantidad) > 0 && !esGuacalId(l.modelo_id)).forEach(l => { if (!esBueno(l.modelo) || (modeloDe(l.modelo_id) || {}).pendiente){ toma(l.modelo, "lotes", l.modelo_id); porNombre[sinAcento(l.modelo)].cantidad += Number(l.cantidad); } });
+  E.piezas.filter(p => vivoPieza(p) > 0 && !esGuacalId(p.modelo_id)).forEach(p => { if (!esBueno(p.modelo) || (modeloDe(p.modelo_id) || {}).pendiente){ toma(p.modelo, "piezas", p.modelo_id); porNombre[sinAcento(p.modelo)].cantidad += vivoPieza(p); } });
+  E.modelos.filter(m => m.activo !== false && !R.esExtra(m) && !esGuacalId(m.id) && (m.pendiente || /\(gen[eé]rico\)|\(\?\)/i.test(m.nombre))).forEach(m => { if (!porNombre[sinAcento(m.nombre)]) toma(m.nombre, "lotes", m.id), porNombre[sinAcento(m.nombre)].lotes = 0; });
   return Object.values(porNombre).map(x => Object.assign(x, { sugerido: sugiereModelo(x.nombre, activos.filter(m => m.id !== x.modelo_id)) })).sort((a,b) => sinAcento(a.nombre) < sinAcento(b.nombre) ? -1 : 1);
 }
 function tarjetaRevisarNombres(){
@@ -1888,6 +2007,53 @@ function hojaArregloPuertas(){
         if (!fallas.length) await Almacen.pon("meta", { id: ARREGLO_PUERTAS_ID, hecho: new Date().toISOString(), por: E.yo, renglones: ok });
         cierraHoja(); pintaTodo();
         if (fallas.length) alert("Regresaron " + ok + ". No se pudieron " + fallas.length + ":\n" + fallas.join("\n")); else grita("Listo: " + plural(ok, "movimiento regresado", "movimientos regresados"));
+      };
+    });
+}
+/* ── Guacales compartidos (datos/carga-inicial.js → CARGA_GUACALES) ── */
+function tarjetaGuacales(){
+  const G = window.CARGA_GUACALES; if (!G) return "";
+  const pv = Almacen.previaGuacales(G); const pend = pv.filter(x => !x.yaEs || x.variantes.length);
+  if (!pend.length) return '<div class="ajuste"><h4>Guacales compartidos · activos</h4><p>' + esc(pv.map(x => x.g.nombre).join(", ")) + ' son guacales: sus muebles pintados sirven para los modelos que los usan (las puertas hacen el modelo). Se cambia en la ficha de cada modelo, en «Comparte guacal con…».</p></div>';
+  return '<div class="aviso"><b>' + esc(G.titulo) + '</b><p>Según la lista de precios, «Mariana 3 cajones», «Mariana 2 lunas y 6 cajones» y «Petaquero Multifamiliar 1 pieza» son UN guacal para varios modelos. Los genéricos de la carga se vuelven ese guacal y cada modelo queda ligado: así a un guacal pintado se le cuelgan las puertas de Abanico, Cisne, Rombo… Hazlo ANTES de «Revisar nombres».</p><div class="pie"><button class="btn vino" id="ajGuacales">Ver y activar</button></div></div>';
+}
+function hojaGuacales(){
+  if (!exigeYo()) return;
+  const G = window.CARGA_GUACALES; const pv = Almacen.previaGuacales(G);
+  abreHoja('<h3>' + esc(G.titulo) + '</h3><p class="guia">Esto es lo que va a cambiar. Nada se borra ni se mueve de etapa; solo cambian nombres y la liga guacal → modelos.</p>' +
+    '<div class="lotes">' + pv.map(x => '<div class="lote" style="display:block"><div class="quien">' + (x.nombreViejo && x.nombreViejo !== x.g.nombre ? esc(x.nombreViejo) + ' → ' : "") + '<b>' + esc(x.g.nombre) + '</b><small>' + (x.existe ? "ya existe en la base" + (x.lotes ? " · " + plural(x.lotes, "mueble", "muebles") + " en inventario" : "") : "se crea en el catálogo") + (x.yaEs ? " · ya es guacal" : "") + '</small>' +
+      '<small>' + (x.variantes.length ? "Se ligan: " + esc(x.variantes.map(m => m.nombre).join(", ")) : "Todos sus modelos ya están ligados") + '</small>' +
+      (x.g.variantes.filter(n => !modelosActivos().some(m => sinAcento(m.nombre) === sinAcento(n))).length ? '<small style="color:var(--ambar)">No están en el catálogo (no se inventan): ' + esc(x.g.variantes.filter(n => !modelosActivos().some(m => sinAcento(m.nombre) === sinAcento(n))).join(", ")) + '</small>' : "") + '</div></div>').join("") + '</div>' +
+    '<p class="sin-hallar" id="gError" hidden></p><button class="btn vino grande" id="gOk" style="margin-top:12px">Activar</button><button class="btn fantasma grande" id="gNo" style="margin-top:8px">Cancelar</button>',
+    h => {
+      h.querySelector("#gNo").onclick = cierraHoja;
+      h.querySelector("#gOk").onclick = async () => {
+        h.querySelector("#gOk").disabled = true;
+        try { const n = await Almacen.aplicaGuacales(G, E.yo, origen()); cierraHoja(); pintaTodo(); grita("Listo: " + plural(n, "modelo ligado", "modelos ligados") + " a su guacal"); }
+        catch(e){ const err = h.querySelector("#gError"); err.hidden = false; err.textContent = e.message; h.querySelector("#gOk").disabled = false; }
+      };
+    });
+}
+/* ── Colores lisos: lo que tenga un color combinado pasa al color liso de esa parte ── */
+const COLORES_ID = "colores-lisos-2026-10-06";
+function tarjetaColores(){
+  const cambios = Almacen.previaColores();
+  if (!cambios.length) return Almacen.cargaHecha(COLORES_ID) ? '<div class="ajuste"><h4>Colores lisos · listo</h4><p>Muebles, puertas, cajones y parches solo llevan un color liso. Las combinaciones («Negro puertas grises») se escogen en el pedido y al preparar se decide de qué color va cada parte.</p></div>' : "";
+  return '<div class="aviso"><b>Simplificar colores · ' + plural(cambios.length, "renglón", "renglones") + '</b><p>Muebles, puertas, cajones y parches ahora solo llevan un color liso (Negro, Café, Gris…). Lo que está con una combinación («Negro completo», «Negro puertas grises») pasa al color de ESA parte: el mueble a Negro, las puertas a Gris. Los pedidos no cambian. Te muestra la lista antes de hacerlo.</p><div class="pie"><button class="btn vino" id="ajColores">Ver y simplificar</button></div></div>';
+}
+function hojaColores(){
+  if (!exigeYo()) return;
+  const cambios = Almacen.previaColores(); if (!cambios.length) return grita("No hay colores que simplificar");
+  const donde = c => (R.ETAPAS[c.donde] || R.PIEZAS[c.donde] || {}).nombre || c.donde;
+  abreHoja('<h3>Simplificar colores</h3><p class="guia">Estos ' + cambios.length + ' renglones cambian de color. Lo que quede con el mismo color se suma en un solo renglón.</p>' +
+    '<div class="lotes" style="max-height:50vh;overflow:auto">' + cambios.map(c => '<div class="lote"><div class="quien">' + esc(c.modelo) + '<small>' + esc(donde(c)) + ' · ' + esc(c.de) + ' → <b>' + esc(c.a) + '</b></small></div><div class="disp"><b>' + c.cantidad + '</b></div></div>').join("") + '</div>' +
+    '<p class="sin-hallar" id="cError" hidden></p><button class="btn vino grande" id="cOk" style="margin-top:12px">Sí, simplificar</button><button class="btn fantasma grande" id="cNo" style="margin-top:8px">Cancelar</button>',
+    h => {
+      h.querySelector("#cNo").onclick = cierraHoja;
+      h.querySelector("#cOk").onclick = async () => {
+        h.querySelector("#cOk").disabled = true;
+        try { const n = await Almacen.simplificaColores(COLORES_ID, E.yo, origen()); cierraHoja(); pintaTodo(); grita("Listo: " + plural(n, "renglón", "renglones") + " con color liso"); }
+        catch(e){ const err = h.querySelector("#cError"); err.hidden = false; err.textContent = e.message; h.querySelector("#cOk").disabled = false; }
       };
     });
 }

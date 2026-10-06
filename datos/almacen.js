@@ -54,8 +54,9 @@ window.Almacen = (() => {
   /* Las llaves de lote y pieza son deterministas: mismo origen → mismo documento.
      Así dos aparatos que suman "5 de Daniel" caen en el mismo lote y se suman. */
   const partesClave = p => Object.keys(p || {}).filter(k => p[k]).sort().join("+");
-  const claveLote = l => ["l", l.modelo_id, slug(l.color), l.etapa, slug(l.maquilo), slug(l.armo), (l.pinto || []).map(slug).sort().join("+")].concat(l.preparo ? [slug(l.preparo)] : []).concat(l.etapa === "preparado" ? ["c" + partesClave(l.partes)] : []).join("~");
-  const baseLote = o => Object.assign({ modelo_id: o.modelo_id, modelo: o.modelo, color: o.color || "", etapa: o.etapa, maquilo: o.maquilo || "", armo: o.armo || "", pinto: o.pinto || [], preparo: o.preparo || "", id: o.id }, o.etapa === "preparado" ? { partes: o.partes || {} } : {});
+  const coloresClave = c => Object.keys(c || {}).filter(k => c[k]).sort().map(k => k + "=" + slug(c[k])).join("+");
+  const claveLote = l => ["l", l.modelo_id, slug(l.color), l.etapa, slug(l.maquilo), slug(l.armo), (l.pinto || []).map(slug).sort().join("+")].concat(l.preparo ? [slug(l.preparo)] : []).concat(l.etapa === "preparado" ? ["c" + partesClave(l.partes)] : []).concat(l.etapa === "preparado" && coloresClave(l.colores) ? ["k" + coloresClave(l.colores)] : []).join("~");
+  const baseLote = o => Object.assign({ modelo_id: o.modelo_id, modelo: o.modelo, color: o.color || "", etapa: o.etapa, maquilo: o.maquilo || "", armo: o.armo || "", pinto: o.pinto || [], preparo: o.preparo || "", id: o.id }, o.etapa === "preparado" ? { partes: o.partes || {}, colores: o.colores || {} } : {});
   const clavePieza = p => ["p", p.modelo_id, slug(p.color), p.categoria].join("~");
 
   function cargarTodoLocal(){ TABLAS.forEach(t => { memoria[t] = leerLocal(t); }); migraPiezasViejas(); TABLAS.forEach(avisar); }
@@ -435,56 +436,76 @@ window.Almacen = (() => {
 
   /* ── PREPARAR: mueble pintado + puertas, cajones y parches pintados → Mueble preparado.
      Un solo batch. Si no alcanza algo, no se toca nada y se dice qué falta. ── */
-  function piezasPara(modelo_id, color, categoria){
+  const PARTE_DE_CAT = { puertas_pintadas: "puertas", cajones_pintados: "cajones", parches_pintados: "parches" };
+  function piezasPara(modelo_id, color, categoria, opc){
     // Como lego: sirven las piezas del modelo de CUALQUIER color. Se toman primero las del
     // mismo color, luego las que no tienen color, luego las demás (las que más haya).
-    const peso = p => (p.color || "") === (color || "") ? 0 : !p.color ? 1 : 2;
-    return lista("pieza").filter(p => p.modelo_id === modelo_id && p.categoria === categoria && Number(p.cantidad || 0) > 0)
-      .sort((a, b) => peso(a) - peso(b) || Number(b.cantidad || 0) - Number(a.cantidad || 0));
+    // Cajones y parches también pueden venir del guacal (opc.guacal); las puertas no: ellas
+    // hacen el modelo. Con opc.color fijo solo se toman las de ese color.
+    opc = opc || {}; const Rg = window.Reglas;
+    const ids = [modelo_id]; if (opc.guacal && opc.guacal !== modelo_id && (Rg.PIEZAS[categoria] || {}).unidad !== "puertas") ids.push(opc.guacal);
+    const peso = p => Rg.mismoColor(p.color, color) ? 0 : !p.color ? 1 : 2;
+    return lista("pieza").filter(p => ids.includes(p.modelo_id) && p.categoria === categoria && Number(p.cantidad || 0) > 0 && (!opc.color || Rg.mismoColor(p.color, opc.color)))
+      .sort((a, b) => peso(a) - peso(b) || ids.indexOf(a.modelo_id) - ids.indexOf(b.modelo_id) || Number(b.cantidad || 0) - Number(a.cantidad || 0));
   }
-  function revisaPreparar(lote, n, cuales){
-    const Rg = window.Reglas; const m = (memoria.modelo || {})[lote.modelo_id] || null;
+  /* opc: { modelo_id (la variante que se arma; si no, el del lote), colores: {puertas:"Gris"…} color fijo por parte } */
+  function revisaPreparar(lote, n, cuales, opc){
+    opc = opc || {};
+    const Rg = window.Reglas; const m = (memoria.modelo || {})[opc.modelo_id || lote.modelo_id] || null;
     const nec = Rg.necesitaParaPreparar(m, n, cuales);
     const partes = [], faltan = [], sinFicha = [];
     Object.keys(nec).forEach(cat => {
-      const necesita = nec[cat];
+      const necesita = nec[cat]; const k = PARTE_DE_CAT[cat];
       if (necesita == null){ sinFicha.push(cat); return; }
       if (necesita === 0) return;
-      const fuentes = piezasPara(lote.modelo_id, lote.color, cat);
+      const fijo = (opc.colores || {})[k] || "";
+      const fuentes = piezasPara(m ? m.id : lote.modelo_id, lote.color, cat, { guacal: Rg.guacalDe(m), color: fijo });
       const hay = fuentes.reduce((s, p) => s + Number(p.cantidad || 0), 0);
-      partes.push({ cat, necesita, hay, fuentes });
-      if (hay < necesita) faltan.push({ cat, faltan: necesita - hay, hay, necesita });
+      partes.push({ cat, k, necesita, hay, fuentes, fijo });
+      if (hay < necesita) faltan.push({ cat, k, faltan: necesita - hay, hay, necesita, fijo });
     });
     return { modelo: m, partes, faltan, sinFicha };
   }
+  /* d: { lote_id, cantidad, preparo, partes, modelo_a (variante que se arma sobre un guacal), colores, pedido_id, cliente } */
   async function prepara(d, persona, origen){
+    const Rg = window.Reglas;
     const o = (memoria.lote || {})[d.lote_id]; if (!o) throw new Error("Ese lote ya no existe");
     const n = Math.floor(Number(d.cantidad || 0)); if (n <= 0) throw new Error("Pon cuántos se prepararon");
     if (n > Number(o.cantidad || 0)) throw new Error("Solo hay " + o.cantidad + (o.etapa === "preparado" ? " preparados" : " pintados"));
+    const om = (memoria.modelo || {})[o.modelo_id] || null;
+    const m = d.modelo_a ? (memoria.modelo || {})[d.modelo_a] : om;
+    if (d.modelo_a && !m) throw new Error("Ese modelo no está en el catálogo");
+    if (m && om && m.id !== om.id && Rg.guacalDe(m) !== om.id && !(o.etapa !== "preparado" && Rg.mismoGuacal(m, om))) throw new Error(m.nombre + " no usa el guacal de " + om.nombre);
+    if (o.etapa === "preparado" && m && m.id !== o.modelo_id) throw new Error("Un preparado a medias se completa como el mismo modelo");
     const partes = d.partes || { puertas: true, cajones: true, parches: true, respaldo: true };
     const ya = o.etapa === "preparado" ? (o.partes || {}) : {};
     const nuevas = {}; Object.keys(partes).forEach(k => { if (partes[k] && !ya[k]) nuevas[k] = true; });
     if (!Object.keys(nuevas).length) throw new Error("Marca qué se le puso");
-    const rev = revisaPreparar(o, n, nuevas);
-    if (rev.faltan.length){ const f = rev.faltan[0]; const Rg = window.Reglas; throw new Error("Faltan " + f.faltan + " " + Rg.PIEZAS[f.cat].nombre.toLowerCase() + " (hay " + f.hay + ", se necesitan " + f.necesita + ")"); }
+    const rev = revisaPreparar(o, n, nuevas, { modelo_id: m ? m.id : o.modelo_id, colores: d.colores || {} });
+    if (rev.faltan.length){ const f = rev.faltan[0]; throw new Error("Faltan " + f.faltan + " " + Rg.PIEZAS[f.cat].nombre.toLowerCase() + (f.fijo ? " en " + f.fijo : "") + " (hay " + f.hay + ", se necesitan " + f.necesita + ")"); }
     const escrituras = [], desglose = [];
     escrituras.push(["lote", o.id, incrementaLocal("lote", baseLote(o), -n)]);
     const union = Object.assign({}, ya); Object.keys(nuevas).forEach(k => union[k] = true);
-    const destino = Object.assign(baseLote(o), { etapa: "preparado", preparo: d.preparo || o.preparo || "", partes: union }); delete destino.id; destino.id = claveLote(destino);
-    escrituras.push(["lote", destino.id, incrementaLocal("lote", destino, n)]);
+    const colores = Object.assign({}, o.etapa === "preparado" ? (o.colores || {}) : {});
     rev.partes.forEach(pt => {
-      let resta = pt.necesita;
+      let resta = pt.necesita; const usados = [];
       pt.fuentes.forEach(p => {
         if (resta <= 0) return;
         const toma = Math.min(resta, Number(p.cantidad || 0)); resta -= toma;
         const base = basePieza(p); base.minimo = Number(p.minimo || 0);
         escrituras.push(["pieza", p.id, incrementaLocal("pieza", base, -toma)]);
-        desglose.push({ de: window.Reglas.PIEZAS[pt.cat].nombre + (p.color ? " · " + p.color : ""), pieza_id: p.id, cantidad: toma });
+        desglose.push({ de: Rg.PIEZAS[pt.cat].nombre + (p.color ? " · " + p.color : "") + (p.modelo_id !== (m ? m.id : o.modelo_id) ? " (del guacal)" : ""), pieza_id: p.id, cantidad: toma });
+        if (!usados.some(c => Rg.mismoColor(c, p.color))) usados.push(p.color || "");
       });
+      // Solo se anota el color de la parte cuando NO es el del mueble (así "Negro completo" no lleva nada)
+      const c = pt.fijo || (usados.length === 1 ? usados[0] : usados.length > 1 ? usados.filter(Boolean).join("/") : "");
+      if (c && !Rg.mismoColor(c, o.color)) colores[pt.k] = c;
     });
-    const mov = { id: uuid(), tipo: "preparado", lote_id: destino.id, lote_de: o.id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color || "", etapa_de: o.etapa, etapa_a: "preparado",
-      delta: n, resultado: memoria.lote[destino.id].cantidad, desglose, hecho_por: d.preparo || o.preparo || "", persona, origen: origen || "",
-      motivo: "se puso: " + Object.keys(nuevas).join(", ") + (rev.sinFicha.length ? " · la ficha no dice cuántos " + rev.sinFicha.map(c => window.Reglas.PIEZAS[c].unidad).join(" ni ") + " lleva; no se descontaron" : ""), creado: ahora() };
+    const destino = Object.assign(baseLote(o), { modelo_id: m ? m.id : o.modelo_id, modelo: m ? m.nombre : o.modelo, etapa: "preparado", preparo: d.preparo || o.preparo || "", partes: union, colores }); delete destino.id; destino.id = claveLote(destino);
+    escrituras.push(["lote", destino.id, incrementaLocal("lote", destino, n)]);
+    const mov = { id: uuid(), tipo: "preparado", lote_id: destino.id, lote_de: o.id, modelo_id: destino.modelo_id, nombre: destino.modelo, modelo_de: o.modelo_id, nombre_de: o.modelo, color: o.color || "", colores, etapa_de: o.etapa, etapa_a: "preparado",
+      delta: n, resultado: memoria.lote[destino.id].cantidad, desglose, hecho_por: d.preparo || o.preparo || "", persona, origen: origen || "", pedido_id: d.pedido_id || "", cliente: d.cliente || "",
+      motivo: "se puso: " + Object.keys(nuevas).join(", ") + (d.cliente ? " · para " + d.cliente : "") + (destino.modelo_id !== o.modelo_id ? " · sobre guacal " + o.modelo : "") + (rev.sinFicha.length ? " · la ficha no dice cuántos " + rev.sinFicha.map(c => Rg.PIEZAS[c].unidad).join(" ni ") + " lleva; no se descontaron" : ""), creado: ahora() };
     guardarLocal("lote"); guardarLocal("pieza"); avisar("lote"); avisar("pieza"); movLocal(mov);
     await manda(escrituras, [mov]);
     return mov;
@@ -615,7 +636,7 @@ window.Almacen = (() => {
     } else if (mov.tipo === "preparado"){
       const dest = (memoria.lote || {})[mov.lote_id]; if (!dest) throw new Error("No encuentro el lote preparado");
       let ori = mov.lote_de ? (memoria.lote || {})[mov.lote_de] : null;
-      if (!ori){ const bo = baseLote(dest); bo.etapa = mov.etapa_de; bo.preparo = ""; delete bo.partes; delete bo.id; bo.id = claveLote(bo); ori = (memoria.lote || {})[bo.id] || bo; }
+      if (!ori){ const bo = baseLote(dest); bo.etapa = mov.etapa_de; bo.preparo = ""; delete bo.partes; delete bo.colores; if (mov.modelo_de){ bo.modelo_id = mov.modelo_de; bo.modelo = mov.nombre_de || bo.modelo; } delete bo.id; bo.id = claveLote(bo); ori = (memoria.lote || {})[bo.id] || bo; }
       ajustaDoc("lote", baseLote(dest), -d); ajustaDoc("lote", baseLote(ori), d);
       (mov.desglose || []).forEach(x => { if (!x.pieza_id) return; const pz = (memoria.pieza || {})[x.pieza_id]; if (!pz) throw new Error("No encuentro la pieza " + (x.de || "")); ajustaDoc("pieza", Object.assign(basePieza(pz), { minimo: Number(pz.minimo || 0) }), Number(x.cantidad || 0)); });
     } else throw new Error("Ese tipo de movimiento no se deshace desde aquí");
@@ -694,6 +715,85 @@ window.Almacen = (() => {
     memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; escrituras.push(["meta", meta.id, meta]);
     guardarLocal("pedido"); avisar("pedido"); guardarLocal("meta"); avisar("meta");
     await manda(escrituras, []);
+    return n;
+  }
+
+  /* ── COLORES LISOS (migración): lo que tenga un color combinado ("Negro completo",
+     "Negro puertas grises") pasa al color liso de ESA parte: el mueble al del mueble, las
+     puertas al de las puertas, etc. Como la llave lleva el color, el doc viejo se borra y
+     se suma al nuevo. Los pedidos no se tocan (ahí sí van las combinaciones). ── */
+  function colorLisoDe(x, tipo){
+    const Rg = window.Reglas; const c = x.color || "";
+    if (!c || Rg.esColorLiso(c)) return c;
+    const d = Rg.desarmaColor(c);
+    if (tipo === "lote") return d.mueble;
+    const u = (Rg.PIEZAS[x.categoria] || {}).unidad;
+    return u === "puertas" ? d.puertas : u === "cajones" ? d.cajones : u === "parches" ? d.parches : d.mueble;
+  }
+  function previaColores(){
+    const cambios = [];
+    ["lote", "pieza"].forEach(t => lista(t).forEach(x => {
+      const a = colorLisoDe(x, t); if (a === (x.color || "")) return;
+      cambios.push({ tipo: t, id: x.id, modelo: x.modelo, de: x.color, a, cantidad: Number(x.cantidad || 0), donde: t === "lote" ? x.etapa : x.categoria });
+    }));
+    lista("plan").forEach(p => { const a = colorLisoDe({ color: p.color, categoria: p.tipo === "pieza" ? p.de : "" }, p.tipo === "lote" ? "lote" : "pieza"); if (a !== (p.color || "")) cambios.push({ tipo: "plan", id: p.id, modelo: p.modelo, de: p.color, a, cantidad: Number(p.cantidad || 0), donde: "plan del día" }); });
+    return cambios;
+  }
+  async function simplificaColores(metaId, persona, origen){
+    const cambios = previaColores(); const escrituras = []; const tocadas = new Set(["meta"]);
+    cambios.forEach(c => {
+      if (c.tipo === "plan"){
+        const p = memoria.plan[c.id]; const base = Object.assign({}, p.base || {}, { color: c.a }); delete base.id;
+        const origen_id = p.tipo === "lote" ? claveLote(base) : clavePieza(base);
+        Object.assign(p, { color: c.a, base, origen_id }); escrituras.push(["plan", p.id, { color: c.a, base, origen_id }]); tocadas.add("plan"); return;
+      }
+      const x = memoria[c.tipo][c.id]; if (!x) return;
+      const base = c.tipo === "lote" ? baseLote(x) : Object.assign(basePieza(x), { minimo: Number(x.minimo || 0) });
+      base.color = c.a; delete base.id; base.id = c.tipo === "lote" ? claveLote(base) : clavePieza(base);
+      delete memoria[c.tipo][c.id]; escrituras.push([c.tipo, c.id, null]);
+      if (c.cantidad > 0) escrituras.push([c.tipo, base.id, incrementaLocal(c.tipo, base, c.cantidad)]);
+      tocadas.add(c.tipo);
+    });
+    const meta = { id: metaId, hecho: ahora(), por: persona, renglones: cambios.length };
+    memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; escrituras.push(["meta", meta.id, meta]);
+    const mov = { id: uuid(), tipo: "catalogo", nombre: "Colores lisos", persona, origen: origen || "", creado: ahora(),
+      motivo: "se simplificaron los colores de " + cambios.length + " renglones: " + cambios.slice(0, 12).map(c => c.modelo + " " + c.de + " → " + c.a).join("; ") + (cambios.length > 12 ? "…" : "") };
+    tocadas.forEach(t => { guardarLocal(t); avisar(t); }); movLocal(mov);
+    await manda(escrituras, [mov]);
+    return cambios.length;
+  }
+
+  /* ── GUACALES COMPARTIDOS (migración): los genéricos de la carga se vuelven guacales de
+     verdad y cada variante del catálogo queda ligada a su guacal. ── */
+  function previaGuacales(G){
+    const Rg = window.Reglas; const r = [];
+    (G.guacales || []).forEach(g => {
+      const ex = (memoria.modelo || {})[g.id];
+      const variantes = (g.variantes || []).map(nombre => lista("modelo").find(m => m.activo !== false && sinAcentoL(m.nombre) === sinAcentoL(nombre))).filter(Boolean).filter(m => m.guacal !== g.id);
+      r.push({ g, existe: !!ex, nombreViejo: ex ? ex.nombre : "", yaEs: !!ex && Rg.esGuacal(ex) && ex.nombre === g.nombre, variantes, lotes: lista("lote").filter(l => l.modelo_id === g.id && Number(l.cantidad) > 0).reduce((s, l) => s + Number(l.cantidad), 0) });
+    });
+    return r;
+  }
+  async function aplicaGuacales(G, persona, origen){
+    const previa = previaGuacales(G); const escrituras = []; let n = 0; const t0 = ahora();
+    memoria.modelo = memoria.modelo || {};
+    previa.forEach(x => {
+      const g = x.g; const ficha = Object.assign({}, g); delete ficha.variantes;
+      const datos = Object.assign(ficha, { es_guacal: true, pendiente: false, activo: true, actualizado: t0, editado_por: persona });
+      if (x.existe){ const ex = memoria.modelo[g.id]; const d2 = Object.assign({}, datos); ["cajones", "total_puertas", "puertas_grandes", "puertas_grandes_luna", "puertas_chicas", "puertas_chicas_luna", "lleva_parches", "lleva_respaldo"].forEach(k => { if (ex[k] != null) delete d2[k]; });
+        memoria.modelo[g.id] = Object.assign({}, ex, d2); escrituras.push(["modelo", g.id, d2]); }
+      else { memoria.modelo[g.id] = Object.assign({ creado: t0 }, datos); escrituras.push(["modelo", g.id, memoria.modelo[g.id]]); }
+      if (x.nombreViejo && x.nombreViejo !== g.nombre){
+        lista("lote").filter(l => l.modelo_id === g.id).forEach(l => { l.modelo = g.nombre; escrituras.push(["lote", l.id, { modelo: g.nombre }]); });
+        lista("pieza").filter(p => p.modelo_id === g.id).forEach(p => { p.modelo = g.nombre; escrituras.push(["pieza", p.id, { modelo: g.nombre }]); });
+      }
+      x.variantes.forEach(m => { memoria.modelo[m.id] = Object.assign({}, m, { guacal: g.id, actualizado: t0 }); escrituras.push(["modelo", m.id, { guacal: g.id, actualizado: t0 }]); n++; });
+    });
+    const meta = { id: G.id, hecho: t0, por: persona, renglones: n };
+    memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; escrituras.push(["meta", meta.id, meta]);
+    const mov = { id: uuid(), tipo: "catalogo", nombre: "Guacales compartidos", persona, origen: origen || "", creado: t0, motivo: previa.map(x => x.g.nombre + " (" + x.variantes.length + " modelos)").join("; ") };
+    ["modelo", "lote", "pieza", "meta"].forEach(t => { guardarLocal(t); avisar(t); }); movLocal(mov);
+    await manda(escrituras, [mov]);
     return n;
   }
 
@@ -913,6 +1013,7 @@ window.Almacen = (() => {
     pon, parcha, borra, anota, ajusta,
     registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, aCabina,
     cargaInicial, cargaMaterial, cargaPedidos, cargaHecha, preparaCarga, claveLote, clavePieza,
-    prepara, revisaPreparar, deshaz, alPlan, planListo, planCambia, planQuita, fusionaModelo, arreglaPedidos, inicioSemana, limpiaSemana
+    prepara, revisaPreparar, piezasPara, deshaz, alPlan, planListo, planCambia, planQuita, fusionaModelo, arreglaPedidos, inicioSemana, limpiaSemana,
+    previaColores, simplificaColores, previaGuacales, aplicaGuacales
   };
 })();
