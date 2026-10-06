@@ -359,7 +359,7 @@ window.Almacen = (() => {
       if (t.cantidad > Number(o.cantidad || 0)) throw new Error(firmaDe(o) + ": solo hay " + o.cantidad + " disponibles");
     }
     const escrituras = [], desglose = [];
-    let total = 0, resultado = 0, ejemplo = null;
+    let total = 0, resultado = 0, ejemplo = null, ultimoDestino = null;
     for (const t of tomas){
       const o = memoria.lote[t.lote_id];
       ejemplo = o;
@@ -370,11 +370,11 @@ window.Almacen = (() => {
       escrituras.push(["lote", o.id, incrementaLocal("lote", origenBase, -t.cantidad)]);
       escrituras.push(["lote", destino.id, incrementaLocal("lote", destino, t.cantidad)]);
       desglose.push({ de: origenDe(o), lote_id: o.id, cantidad: t.cantidad });
-      total += t.cantidad; resultado = memoria.lote[destino.id].cantidad;
+      total += t.cantidad; resultado = memoria.lote[destino.id].cantidad; ultimoDestino = destino.id;
     }
     const firma = [d.armo, ...(d.pinto || []), d.preparo].filter(Boolean).join(" y ");
     const mov = { id: uuid(), tipo: "traslado", modelo_id: ejemplo.modelo_id, nombre: ejemplo.modelo, color: d.color_a != null ? d.color_a : (ejemplo.color || ""),
-      etapa_de: ejemplo.etapa, etapa_a: d.etapa_a, delta: total, resultado, desglose, hecho_por: firma, persona, origen: origen || "", motivo: d.motivo || "", creado: ahora() };
+      etapa_de: ejemplo.etapa, etapa_a: d.etapa_a, delta: total, resultado, desglose, lote_a: ultimoDestino, hecho_por: firma, persona, origen: origen || "", motivo: d.motivo || "", creado: ahora() };
     guardarLocal("lote"); avisar("lote"); movLocal(mov);
     mandaBatch(escrituras, [mov]);
     return mov;
@@ -425,7 +425,7 @@ window.Almacen = (() => {
     const exd = (memoria.pieza || {})[destino.id]; if (exd) destino.minimo = Number(exd.minimo || 0);
     const escrituras = [["pieza", o.id, incrementaLocal("pieza", origenBase, -n)], ["pieza", destino.id, incrementaLocal("pieza", destino, n)]];
     const mov = { id: uuid(), tipo: "traslado", pieza_id: destino.id, modelo_id: o.modelo_id, nombre: o.modelo, color: destino.color,
-      categoria: d.categoria_a, etapa_de: o.categoria, etapa_a: d.categoria_a, delta: n, resultado: memoria.pieza[destino.id].cantidad,
+      categoria: d.categoria_a, etapa_de: o.categoria, etapa_a: d.categoria_a, delta: n, resultado: memoria.pieza[destino.id].cantidad, pieza_de: o.id,
       hecho_por: d.hecho_por || "", persona, origen: origen || "", motivo: d.motivo || "", creado: ahora() };
     guardarLocal("pieza"); avisar("pieza"); movLocal(mov);
     mandaBatch(escrituras, [mov]);
@@ -482,7 +482,7 @@ window.Almacen = (() => {
         desglose.push({ de: window.Reglas.PIEZAS[pt.cat].nombre + (p.color ? " · " + p.color : ""), pieza_id: p.id, cantidad: toma });
       });
     });
-    const mov = { id: uuid(), tipo: "preparado", lote_id: destino.id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color || "", etapa_de: o.etapa, etapa_a: "preparado",
+    const mov = { id: uuid(), tipo: "preparado", lote_id: destino.id, lote_de: o.id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color || "", etapa_de: o.etapa, etapa_a: "preparado",
       delta: n, resultado: memoria.lote[destino.id].cantidad, desglose, hecho_por: d.preparo || o.preparo || "", persona, origen: origen || "",
       motivo: "se puso: " + Object.keys(nuevas).join(", ") + (rev.sinFicha.length ? " · la ficha no dice cuántos " + rev.sinFicha.map(c => window.Reglas.PIEZAS[c].unidad).join(" ni ") + " lleva; no se descontaron" : ""), creado: ahora() };
     guardarLocal("lote"); guardarLocal("pieza"); avisar("lote"); avisar("pieza"); movLocal(mov);
@@ -569,6 +569,62 @@ window.Almacen = (() => {
     delete memoria.plan[id];
     guardarLocal(t); guardarLocal("plan"); avisar(t); avisar("plan"); movLocal(mov);
     await manda(escrituras, [mov]);
+  }
+
+
+  /* ── DESHACER un movimiento: deja las cosas como estaban antes de él. ── */
+  function sePinta(k){ return window.Reglas ? Reglas.sePintaEn(k) : false; }
+  function piezaOrigenDe(mov){
+    if (mov.pieza_de && (memoria.pieza || {})[mov.pieza_de]) return (memoria.pieza || {})[mov.pieza_de];
+    const cands = lista("pieza").filter(p => p.modelo_id === mov.modelo_id && p.categoria === mov.etapa_de);
+    const mismo = cands.filter(p => (p.color || "") === (mov.color || ""));
+    if (mismo.length === 1) return mismo[0];
+    const sin = cands.filter(p => !p.color);
+    if (sin.length === 1) return sin[0];
+    if (cands.length === 1) return cands[0];
+    if (!cands.length) return basePieza({ modelo_id: mov.modelo_id, modelo: mov.nombre, color: sePinta(mov.etapa_a) ? "" : (mov.color || ""), categoria: mov.etapa_de });
+    return null;
+  }
+  async function deshaz(mov_id, persona, origen){
+    const mov = (memoria.movimiento || {})[mov_id]; if (!mov) throw new Error("Ese movimiento ya no está en la bitácora");
+    if (mov.deshecho) throw new Error("Ese movimiento ya se deshizo");
+    const escrituras = []; const tocadas = new Set();
+    const ajustaDoc = (t, base, delta) => { const doc = incrementaLocal(t, base, delta); escrituras.push([t, base.id, doc]); tocadas.add(t); };
+    const baseDeMov = () => {
+      if (mov.pieza_id){ const ex = (memoria.pieza || {})[mov.pieza_id]; if (ex) return ["pieza", Object.assign(basePieza(ex), { minimo: Number(ex.minimo || 0) })]; const b = basePieza({ modelo_id: mov.modelo_id, modelo: mov.nombre, color: mov.color || "", categoria: mov.categoria || mov.etapa_a }); b.id = mov.pieza_id; return ["pieza", b]; }
+      if (mov.lote_id){ const ex = (memoria.lote || {})[mov.lote_id]; if (ex) return ["lote", baseLote(ex)]; return null; }
+      return null;
+    };
+    const d = Number(mov.delta || 0);
+    if (mov.tipo === "ajuste" || mov.tipo === "alta" || mov.tipo === "entrada" || mov.tipo === "salida"){
+      if (mov.producto_id) throw new Error("El material se corrige con − y +");
+      const b = baseDeMov(); if (!b) throw new Error("No encuentro a qué renglón pertenece");
+      if (!d) throw new Error("Ese movimiento no cambió cantidades");
+      ajustaDoc(b[0], b[1], -d);
+    } else if (mov.tipo === "traslado" && mov.pieza_id){
+      const dest = (memoria.pieza || {})[mov.pieza_id]; const bd = dest ? Object.assign(basePieza(dest), { minimo: Number(dest.minimo || 0) }) : Object.assign(basePieza({ modelo_id: mov.modelo_id, modelo: mov.nombre, color: mov.color || "", categoria: mov.categoria || mov.etapa_a }), { id: mov.pieza_id });
+      const ori = piezaOrigenDe(mov); if (!ori) throw new Error("Hay varias secciones de origen posibles; corrígelo a mano");
+      ajustaDoc("pieza", bd, -d); ajustaDoc("pieza", Object.assign(basePieza(ori), { minimo: Number(ori.minimo || 0) }), d);
+    } else if (mov.tipo === "traslado" && mov.desglose){
+      if (mov.producto_id) throw new Error("Los tambos se corrigen con − y +");
+      let destId = mov.lote_a;
+      if (!destId){ const o = (memoria.lote || {})[(mov.desglose[0] || {}).lote_id]; if (!o) throw new Error("No encuentro el lote de origen"); const dd = Object.assign(baseLote(o), { etapa: mov.etapa_a, color: mov.color || o.color }); delete dd.id; destId = claveLote(dd); }
+      const dest = (memoria.lote || {})[destId]; if (!dest) throw new Error("No encuentro el lote al que llegó");
+      ajustaDoc("lote", baseLote(dest), -d);
+      mov.desglose.forEach(x => { const o = (memoria.lote || {})[x.lote_id]; if (!o) throw new Error("No encuentro el lote de origen " + (x.de || "")); ajustaDoc("lote", baseLote(o), Number(x.cantidad || 0)); });
+    } else if (mov.tipo === "preparado"){
+      const dest = (memoria.lote || {})[mov.lote_id]; if (!dest) throw new Error("No encuentro el lote preparado");
+      let ori = mov.lote_de ? (memoria.lote || {})[mov.lote_de] : null;
+      if (!ori){ const bo = baseLote(dest); bo.etapa = mov.etapa_de; bo.preparo = ""; delete bo.partes; delete bo.id; bo.id = claveLote(bo); ori = (memoria.lote || {})[bo.id] || bo; }
+      ajustaDoc("lote", baseLote(dest), -d); ajustaDoc("lote", baseLote(ori), d);
+      (mov.desglose || []).forEach(x => { if (!x.pieza_id) return; const pz = (memoria.pieza || {})[x.pieza_id]; if (!pz) throw new Error("No encuentro la pieza " + (x.de || "")); ajustaDoc("pieza", Object.assign(basePieza(pz), { minimo: Number(pz.minimo || 0) }), Number(x.cantidad || 0)); });
+    } else throw new Error("Ese tipo de movimiento no se deshace desde aquí");
+    mov.deshecho = true; mov.deshecho_por = persona; escrituras.push(["movimiento", mov.id, { deshecho: true, deshecho_por: persona }]);
+    const nuevo = { id: uuid(), tipo: "deshecho", de_mov: mov.id, modelo_id: mov.modelo_id, nombre: mov.nombre, color: mov.color || "", etapa_a: mov.etapa_de || mov.etapa_a || mov.categoria, categoria: mov.categoria, delta: -d,
+      persona, origen: origen || "", motivo: "deshizo: " + (mov.tipo === "traslado" ? "paso " + (mov.etapa_de || "") + " → " + (mov.etapa_a || "") : mov.tipo) + " de " + (mov.persona || "?") + (mov.motivo ? " (" + mov.motivo + ")" : ""), creado: ahora() };
+    tocadas.forEach(t => { guardarLocal(t); avisar(t); }); movLocal(mov); movLocal(nuevo);
+    await manda(escrituras, [nuevo]);
+    return nuevo;
   }
 
   /* ── FUSIONAR NOMBRES (migración): todo lo que esté con un nombre "mal escrito" pasa
@@ -857,6 +913,6 @@ window.Almacen = (() => {
     pon, parcha, borra, anota, ajusta,
     registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, aCabina,
     cargaInicial, cargaMaterial, cargaPedidos, cargaHecha, preparaCarga, claveLote, clavePieza,
-    prepara, revisaPreparar, alPlan, planListo, planCambia, planQuita, fusionaModelo, arreglaPedidos, inicioSemana, limpiaSemana
+    prepara, revisaPreparar, deshaz, alPlan, planListo, planCambia, planQuita, fusionaModelo, arreglaPedidos, inicioSemana, limpiaSemana
   };
 })();

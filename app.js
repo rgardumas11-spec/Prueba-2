@@ -225,6 +225,7 @@ function montaDetalleMueble(caja){
   const g = grupoSel(); if (!g) return;
   const p = caja.querySelector("[data-pasar]"); if (p) p.onclick = () => (g.etapa === "preparado" ? hojaPreparar(g) : hojaPasar(g));
   caja.querySelector("[data-corrige]").onclick = () => hojaCorregirLote(g);
+  enlazaDeshacer(caja);
 }
 
 /* El botón Registrar de Muebles: alta en maquilado / MDF; en las demás etapas se
@@ -492,6 +493,7 @@ function montaDetallePieza(caja){
   const eb = caja.querySelector("[data-emb]"); if (eb) eb.onclick = () => hojaPasarPieza(p, R.embisagra(p.categoria));
   caja.querySelector("[data-corrige]").onclick = () => hojaCorregirPieza(p);
   const f = caja.querySelector("[data-ficha]"); if (f) f.onclick = () => hojaModelo(modeloDe(p.modelo_id));
+  enlazaDeshacer(caja);
 }
 /* − y + en piezas: los toques seguidos se juntan en un envío */
 function muevePieza(id, d){
@@ -1263,7 +1265,8 @@ function descMov(m){
   const et = k => (R.ETAPAS[k] || R.PIEZAS[k] || {}).nombre || k;
   let titulo_ = esc(m.nombre || m.tipo) + (m.color ? " · " + esc(m.color) : "");
   let sub = "";
-  if (m.tipo === "preparado") sub = "se preparó · salió de " + esc(et(m.etapa_de)) + (m.hecho_por ? " · preparó " + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · descontó: " + m.desglose.map(d => d.cantidad + " " + esc(d.de)).join(", ") : "") + (m.motivo ? " · " + esc(m.motivo) : "");
+  if (m.tipo === "deshecho") sub = esc(m.motivo || "se deshizo un movimiento");
+  else if (m.tipo === "preparado") sub = "se preparó · salió de " + esc(et(m.etapa_de)) + (m.hecho_por ? " · preparó " + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · descontó: " + m.desglose.map(d => d.cantidad + " " + esc(d.de)).join(", ") : "") + (m.motivo ? " · " + esc(m.motivo) : "");
   else if (m.tipo === "plan") sub = esc(et(m.etapa_de)) + " → plan del día (" + esc(et(m.etapa_a)) + ")" + (m.motivo ? " · " + esc(m.motivo) : "");
   else if (m.tipo === "traslado") sub = esc(et(m.etapa_de)) + " → " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "puertas_lijadas_bisagras" ? "bisagras: " : m.etapa_a === "armado" ? "armó " : "pintó ") + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · de: " + m.desglose.map(d => esc(d.de) + " " + d.cantidad).join(", ") : "");
   else if (m.tipo === "alta" && m.etapa_a) sub = "entró a " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "mdf" ? "hizo " : "maquiló ") + esc(m.hecho_por) : "") + (m.motivo ? " · " + esc(m.motivo) : "");
@@ -1277,9 +1280,20 @@ function descMov(m){
   if (m.resultado != null && m.tipo !== "catalogo") sub += " · quedan " + m.resultado;
   return { titulo: titulo_, sub };
 }
+const puedeDeshacer = m => !m.deshecho && !m.producto_id && ["ajuste", "alta", "entrada", "salida", "traslado", "preparado"].includes(m.tipo) && (m.pieza_id || m.lote_id || m.desglose);
+const botonDeshacer = m => puedeDeshacer(m) ? '<button class="btn fantasma chico" data-deshaz="' + esc(m.id) + '" title="Dejar las cosas como estaban antes de este movimiento">Deshacer</button>' : (m.deshecho ? '<span class="sello amb">deshecho' + (m.deshecho_por ? " por " + esc(m.deshecho_por) : "") + '</span>' : "");
 function lineaMov(m){
   const d = descMov(m);
-  return '<div class="linea"><span class="reloj">' + esc(cuando(m.creado)) + '</span><span class="delta ' + (m.delta > 0 ? "mas" : m.delta < 0 ? "menos" : "") + '">' + (m.tipo === "traslado" ? "→" + m.delta : m.delta > 0 ? "+" + m.delta : (m.delta || "·")) + '</span><span class="det"><b>' + d.titulo + '</b><small>' + d.sub + ' · ' + esc(m.persona || "?") + '</small></span></div>';
+  return '<div class="linea' + (m.deshecho ? " deshecha" : "") + '"><span class="reloj">' + esc(cuando(m.creado)) + '</span><span class="delta ' + (m.delta > 0 ? "mas" : m.delta < 0 ? "menos" : "") + '">' + (m.tipo === "traslado" ? "→" + m.delta : m.delta > 0 ? "+" + m.delta : (m.delta || "·")) + '</span><span class="det"><b>' + d.titulo + '</b><small>' + d.sub + ' · ' + esc(m.persona || "?") + '</small></span>' + botonDeshacer(m) + '</div>';
+}
+function enlazaDeshacer(caja){
+  caja.querySelectorAll("[data-deshaz]").forEach(b => b.onclick = async e => {
+    e.stopPropagation(); if (!exigeYo()) return;
+    const m = E.movimientos.find(x => x.id === b.dataset.deshaz); if (!m) return;
+    const d = descMov(m); const txt = d.titulo.replace(/<[^>]+>/g, "") + " · " + d.sub.replace(/<[^>]+>/g, "");
+    if (!confirm("¿Deshacer este movimiento y dejar todo como estaba antes?\n\n" + txt)) return;
+    try { await Almacen.deshaz(m.id, E.yo, origen()); grita("Deshecho: todo quedó como estaba"); pintaTodo(); } catch(err){ grita(err.message); }
+  });
 }
 function pintaBitacora(){
   const caja = $("#listaBitacora");
@@ -1291,8 +1305,9 @@ function pintaBitacora(){
   if (!ord.length){ caja.innerHTML = q("bitacora") ? sinHallar("bitacora", "eso en la bitácora") : '<div class="vacio"><b>Todavía no hay movimientos</b><p>Cada registro, paso de etapa o corrección queda aquí con fecha, hora, quién lo capturó y quién hizo el trabajo.</p></div>'; return; }
   caja.innerHTML = ord.map(d => '<div class="dia">' + esc(fechaLarga(d)) + '</div>' + dias[d].sort((a,b) => a.creado < b.creado ? 1 : -1).map(m => {
     const x = descMov(m);
-    return '<div class="linea"><span class="reloj">' + esc(reloj(m.creado)) + '</span><span class="delta ' + (m.delta > 0 ? "mas" : m.delta < 0 ? "menos" : "") + '">' + (m.tipo === "traslado" ? "→" + m.delta : m.delta > 0 ? "+" + m.delta : (m.delta || "·")) + '</span><span class="det"><b>' + x.titulo + '</b><small>' + x.sub + ' · capturó ' + esc(m.persona || "?") + (m.origen ? " · " + esc(m.origen) : "") + '</small></span></div>';
+    return '<div class="linea' + (m.deshecho ? " deshecha" : "") + '"><span class="reloj">' + esc(reloj(m.creado)) + '</span><span class="delta ' + (m.delta > 0 ? "mas" : m.delta < 0 ? "menos" : "") + '">' + (m.tipo === "traslado" ? "→" + m.delta : m.delta > 0 ? "+" + m.delta : (m.delta || "·")) + '</span><span class="det"><b>' + x.titulo + '</b><small>' + x.sub + ' · capturó ' + esc(m.persona || "?") + (m.origen ? " · " + esc(m.origen) : "") + '</small></span>' + botonDeshacer(m) + '</div>';
   }).join("")).join("");
+  enlazaDeshacer(caja);
 }
 
 /* ═══════════════ catálogo de material: litros · nombre · apodo ═══════════════ */
@@ -1317,7 +1332,7 @@ function pintaCatMaterial(){
 function pintaAjustes(){
   const C = window.CONFIG || {};
   $("#ajustes").innerHTML =
-    tarjetaRevisarNombres() + tarjetaArreglo() + tarjetaPedidosLibreta() + tarjetaCarga() + tarjetaPintura() +
+    tarjetaArregloPuertas() + tarjetaRevisarNombres() + tarjetaArreglo() + tarjetaPedidosLibreta() + tarjetaCarga() + tarjetaPintura() +
     '<div class="ajuste"><h4>Quién soy</h4><p>' + (E.yo ? "Estás como <b>" + esc(E.yo) + "</b>." : "Todavía no has dicho quién eres.") + '</p><div class="acciones"><button class="btn" id="ajYo">Cambiar de persona</button>' + (Almacen.sesion ? '<button class="btn fantasma" id="ajSalir">Cerrar sesión</button>' : "") + '</div></div>' +
     '<div class="ajuste"><h4>Modo práctica</h4><p>Para jugar sin miedo: datos de juguete, solo en este aparato. El inventario real ni se entera.</p><label class="interruptor"><input type="checkbox" id="ajPractica"' + (Almacen.practica ? " checked" : "") + '> <span>' + (Almacen.practica ? "Practicando" : "Apagado") + '</span></label></div>' +
     '<div class="ajuste"><h4>Hoja de conteo para imprimir</h4><p>Para caminar el almacén con papel y comparar contra el sistema.</p><div class="acciones"><button class="btn" data-imprime="mueble">Muebles</button><button class="btn" data-imprime="pieza">Piezas</button><button class="btn" data-imprime="material">Material</button></div></div>' +
@@ -1329,6 +1344,7 @@ function pintaAjustes(){
   const cpl = $("#ajPedidos"); if (cpl) cpl.onclick = cargaPedidosLibreta;
   const rn = $("#ajNombres"); if (rn) rn.onclick = hojaRevisarNombres;
   const ar = $("#ajArreglo"); if (ar) ar.onclick = aplicaArreglo;
+  const ap = $("#ajPuertas"); if (ap) ap.onclick = hojaArregloPuertas;
   $("#ajYo").onclick = hojaQuienSoy;
   const s = $("#ajSalir"); if (s) s.onclick = async () => { await Almacen.sale(); pintaPulso(); pintaTodo(); };
   $("#ajPractica").onchange = async e => { await Almacen.setPractica(e.target.checked); pintaPulso(); pintaTodo(); grita(e.target.checked ? "Modo práctica encendido" : "De vuelta a lo real"); };
@@ -1842,6 +1858,38 @@ function tarjetaArreglo(){
     (hecha ? "Se aplicó " + esc(cuando(Almacen.dame("meta", C.id).hecho)) + " por " + esc(Almacen.dame("meta", C.id).por || "?") + "."
            : "Lo que el taller aclaró de los pedidos ya cargados: Monte Carlos 75, Petaquero Mónaco Multifamiliar, el Mariana Rejilla Mixta de Josefina y sus entregas (2 Midas, 1 Mónaco), se quita la «base óvalo» de Sabino y los «surtido» quedan como surtido.") + '</p>' +
     (hecha ? "" : '<div class="pie"><button class="btn vino" id="ajArreglo"' + (puede ? "" : " disabled") + '>Aplicar ahora</button></div>') + '</div>';
+}
+/* Lo que se movió por error el 6 de octubre en Puertas pintadas (se busca en la bitácora real) */
+const ARREGLO_PUERTAS_ID = "arreglo-puertas-2026-10-06";
+function movimientosDel6(){
+  return E.movimientos.filter(m => (m.creado || "").slice(0, 10) === "2026-10-06" && sinAcento(m.persona || "") === "marisol" && !m.deshecho && (
+    (m.tipo === "ajuste" && m.categoria === "puertas_pintadas" && /se prepararon|error/i.test(m.motivo || "")) ||
+    (m.tipo === "traslado" && m.pieza_id && /kukis/i.test(m.nombre || "") && ["puertas_lijadas_bisagras", "puertas_pintadas"].includes(m.etapa_a))
+  )).sort((a,b) => a.creado < b.creado ? 1 : -1);
+}
+function tarjetaArregloPuertas(){
+  const hecha = Almacen.cargaHecha(ARREGLO_PUERTAS_ID); const ms = movimientosDel6();
+  if (hecha && !ms.length) return "";
+  return '<div class="' + (ms.length ? "aviso" : "ajuste") + '"><' + (ms.length ? "b" : "h4") + '>Regresar las correcciones del 6 de octubre' + (ms.length ? " · " + plural(ms.length, "movimiento", "movimientos") : " · nada pendiente") + '</' + (ms.length ? "b" : "h4") + '><p>Busca en la bitácora lo que Marisol movió ese día en Puertas pintadas («Se prepararon», «Error» y los traslados de las Kukis) y lo regresa tal como estaba, del más nuevo al más viejo. Te muestra la lista antes de hacerlo.</p>' +
+    (ms.length ? '<div class="pie"><button class="btn vino" id="ajPuertas">Ver y regresar</button></div>' : "") + '</div>';
+}
+function hojaArregloPuertas(){
+  if (!exigeYo()) return;
+  const ms = movimientosDel6(); if (!ms.length) return grita("No hay nada que regresar");
+  abreHoja('<h3>Regresar las correcciones del 6 de octubre</h3><p class="guia">Estos ' + ms.length + ' movimientos se van a deshacer (del más nuevo al más viejo). Lo que se restó vuelve a sumarse y lo que se sumó vuelve a restarse.</p>' +
+    '<div class="bitacora" style="max-height:50vh;overflow:auto">' + ms.map(lineaMov).join("").replace(/<button[^>]*data-deshaz[^>]*>Deshacer<\/button>/g, "") + '</div>' +
+    '<p class="sin-hallar" id="apError" hidden></p><button class="btn vino grande" id="apOk" style="margin-top:12px">Sí, regresar todo</button><button class="btn fantasma grande" id="apNo" style="margin-top:8px">Cancelar</button>',
+    h => {
+      h.querySelector("#apNo").onclick = cierraHoja;
+      h.querySelector("#apOk").onclick = async () => {
+        h.querySelector("#apOk").disabled = true; h.querySelector("#apOk").textContent = "Regresando…";
+        let ok = 0; const fallas = [];
+        for (const m of ms){ try { await Almacen.deshaz(m.id, E.yo, origen()); ok++; } catch(e){ fallas.push(descMov(m).titulo.replace(/<[^>]+>/g, "") + ": " + e.message); } }
+        if (!fallas.length) await Almacen.pon("meta", { id: ARREGLO_PUERTAS_ID, hecho: new Date().toISOString(), por: E.yo, renglones: ok });
+        cierraHoja(); pintaTodo();
+        if (fallas.length) alert("Regresaron " + ok + ". No se pudieron " + fallas.length + ":\n" + fallas.join("\n")); else grita("Listo: " + plural(ok, "movimiento regresado", "movimientos regresados"));
+      };
+    });
 }
 async function aplicaArreglo(){
   if (!exigeYo()) return;
