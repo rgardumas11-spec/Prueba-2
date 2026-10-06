@@ -307,6 +307,11 @@ table.rep td.acc,table.rep th.acc{width:1%;white-space:nowrap;text-align:right;p
 .p-linea .p-surt.on{background:var(--ambar-t);color:var(--ambar);border-color:var(--ambar)}
 .rev-a{display:block;width:100%;margin-top:6px;font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--linea);border-radius:8px;background:var(--hoja);color:var(--tinta)}
 .lote.rev .quien{flex:1;min-width:0}
+.lote.comp{cursor:pointer;gap:10px;grid-template-columns:auto 1fr auto} .lote.comp input{width:20px;height:20px;accent-color:var(--vino);flex:none} .lote.comp.on{border-color:var(--vino);background:var(--vino-tinte)} .lote.comp.no{opacity:.55}
+.ticket-rec{margin-top:8px;border-top:1px dashed var(--linea);padding-top:6px}
+.ticket-rec .fam-h{font:600 10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--vino);margin:8px 0 2px}
+.ticket-rec .rl{display:flex;gap:10px;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--linea);font-size:14.5px}
+.ticket-rec .rl b{font:600 16px var(--mono);min-width:2.2ch;text-align:right} .ticket-rec .rl small{color:var(--tinta3)}
 table.rep{width:100%;border-collapse:collapse;font-size:13.5px}
 table.rep th,table.rep td{border-bottom:1px solid var(--linea);padding:6px 8px;text-align:left;vertical-align:top}
 table.rep th{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--tinta3);background:var(--hoja2)}

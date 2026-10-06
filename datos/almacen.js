@@ -53,8 +53,9 @@ window.Almacen = (() => {
   const slug = s => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   /* Las llaves de lote y pieza son deterministas: mismo origen → mismo documento.
      Así dos aparatos que suman "5 de Daniel" caen en el mismo lote y se suman. */
-  const claveLote = l => ["l", l.modelo_id, slug(l.color), l.etapa, slug(l.maquilo), slug(l.armo), (l.pinto || []).map(slug).sort().join("+")].concat(l.preparo ? [slug(l.preparo)] : []).join("~");
-  const baseLote = o => ({ modelo_id: o.modelo_id, modelo: o.modelo, color: o.color || "", etapa: o.etapa, maquilo: o.maquilo || "", armo: o.armo || "", pinto: o.pinto || [], preparo: o.preparo || "", id: o.id });
+  const partesClave = p => Object.keys(p || {}).filter(k => p[k]).sort().join("+");
+  const claveLote = l => ["l", l.modelo_id, slug(l.color), l.etapa, slug(l.maquilo), slug(l.armo), (l.pinto || []).map(slug).sort().join("+")].concat(l.preparo ? [slug(l.preparo)] : []).concat(l.etapa === "preparado" ? ["c" + partesClave(l.partes)] : []).join("~");
+  const baseLote = o => Object.assign({ modelo_id: o.modelo_id, modelo: o.modelo, color: o.color || "", etapa: o.etapa, maquilo: o.maquilo || "", armo: o.armo || "", pinto: o.pinto || [], preparo: o.preparo || "", id: o.id }, o.etapa === "preparado" ? { partes: o.partes || {} } : {});
   const clavePieza = p => ["p", p.modelo_id, slug(p.color), p.categoria].join("~");
 
   function cargarTodoLocal(){ TABLAS.forEach(t => { memoria[t] = leerLocal(t); }); migraPiezasViejas(); TABLAS.forEach(avisar); }
@@ -439,9 +440,9 @@ window.Almacen = (() => {
     return lista("pieza").filter(p => p.modelo_id === modelo_id && p.categoria === categoria && Number(p.cantidad || 0) > 0 && ((p.color || "") === (color || "") || !p.color))
       .sort((a, b) => ((a.color || "") === (color || "") ? -1 : 1) - ((b.color || "") === (color || "") ? -1 : 1));
   }
-  function revisaPreparar(lote, n){
+  function revisaPreparar(lote, n, cuales){
     const Rg = window.Reglas; const m = (memoria.modelo || {})[lote.modelo_id] || null;
-    const nec = Rg.necesitaParaPreparar(m, n);
+    const nec = Rg.necesitaParaPreparar(m, n, cuales);
     const partes = [], faltan = [], sinFicha = [];
     Object.keys(nec).forEach(cat => {
       const necesita = nec[cat];
@@ -457,12 +458,17 @@ window.Almacen = (() => {
   async function prepara(d, persona, origen){
     const o = (memoria.lote || {})[d.lote_id]; if (!o) throw new Error("Ese lote ya no existe");
     const n = Math.floor(Number(d.cantidad || 0)); if (n <= 0) throw new Error("Pon cuántos se prepararon");
-    if (n > Number(o.cantidad || 0)) throw new Error("Solo hay " + o.cantidad + " pintados");
-    const rev = revisaPreparar(o, n);
+    if (n > Number(o.cantidad || 0)) throw new Error("Solo hay " + o.cantidad + (o.etapa === "preparado" ? " preparados" : " pintados"));
+    const partes = d.partes || { puertas: true, cajones: true, parches: true, respaldo: true };
+    const ya = o.etapa === "preparado" ? (o.partes || {}) : {};
+    const nuevas = {}; Object.keys(partes).forEach(k => { if (partes[k] && !ya[k]) nuevas[k] = true; });
+    if (!Object.keys(nuevas).length) throw new Error("Marca qué se le puso");
+    const rev = revisaPreparar(o, n, nuevas);
     if (rev.faltan.length){ const f = rev.faltan[0]; const Rg = window.Reglas; throw new Error("Faltan " + f.faltan + " " + Rg.PIEZAS[f.cat].nombre.toLowerCase() + " (hay " + f.hay + ", se necesitan " + f.necesita + ")"); }
     const escrituras = [], desglose = [];
     escrituras.push(["lote", o.id, incrementaLocal("lote", baseLote(o), -n)]);
-    const destino = Object.assign(baseLote(o), { etapa: "preparado", preparo: d.preparo || "" }); delete destino.id; destino.id = claveLote(destino);
+    const union = Object.assign({}, ya); Object.keys(nuevas).forEach(k => union[k] = true);
+    const destino = Object.assign(baseLote(o), { etapa: "preparado", preparo: d.preparo || o.preparo || "", partes: union }); delete destino.id; destino.id = claveLote(destino);
     escrituras.push(["lote", destino.id, incrementaLocal("lote", destino, n)]);
     rev.partes.forEach(pt => {
       let resta = pt.necesita;
@@ -475,8 +481,8 @@ window.Almacen = (() => {
       });
     });
     const mov = { id: uuid(), tipo: "preparado", lote_id: destino.id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color || "", etapa_de: o.etapa, etapa_a: "preparado",
-      delta: n, resultado: memoria.lote[destino.id].cantidad, desglose, hecho_por: d.preparo || "", persona, origen: origen || "",
-      motivo: rev.sinFicha.length ? "la ficha no dice cuántos " + rev.sinFicha.map(c => window.Reglas.PIEZAS[c].unidad).join(" ni ") + " lleva; no se descontaron" : "", creado: ahora() };
+      delta: n, resultado: memoria.lote[destino.id].cantidad, desglose, hecho_por: d.preparo || o.preparo || "", persona, origen: origen || "",
+      motivo: "se puso: " + Object.keys(nuevas).join(", ") + (rev.sinFicha.length ? " · la ficha no dice cuántos " + rev.sinFicha.map(c => window.Reglas.PIEZAS[c].unidad).join(" ni ") + " lleva; no se descontaron" : ""), creado: ahora() };
     guardarLocal("lote"); guardarLocal("pieza"); avisar("lote"); avisar("pieza"); movLocal(mov);
     await manda(escrituras, [mov]);
     return mov;

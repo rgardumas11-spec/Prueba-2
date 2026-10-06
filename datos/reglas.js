@@ -111,6 +111,7 @@
     if (lote.armo && lote.armo !== lote.maquilo) partes.push("armó " + lote.armo);
     if (lote.pinto && lote.pinto.length) partes.push("pintó " + lote.pinto.join(" y "));
     if (lote.preparo) partes.push("preparó " + lote.preparo);
+    if (lote.etapa === "preparado" && lote.partes) partes.push("con " + Object.keys(lote.partes).filter(k => lote.partes[k]).join(", "));
     return partes.join(" · ") || "sin responsable registrado";
   }
   /* Etiqueta corta del lote en la etapa actual: el último responsable que lo tocó. */
@@ -147,14 +148,27 @@
     if (p.unidad === "parches") return parchesDe(modelo);
     return null;
   }
-  /* Qué piezas pintadas se descuentan al preparar n muebles de este modelo. null = la ficha no lo dice. */
-  function necesitaParaPreparar(modelo, n){
-    n = Number(n || 0);
-    const por = { puertas_pintadas: modelo ? (Number.isFinite(modelo.total_puertas) ? modelo.total_puertas : null) : null,
-                  cajones_pintados: modelo ? (Number.isFinite(modelo.cajones) ? modelo.cajones : null) : null,
-                  parches_pintados: parchesDe(modelo) };
+  /* ── Preparar como lego: cada parte se pone cuando se puede. ──
+     componentes(modelo): lo que la ficha dice que lleva (solo eso). respaldo no tiene stock. */
+  const COMPONENTES = [
+    { k: "puertas",  nombre: "Puertas pintadas", cat: "puertas_pintadas", por: m => Number.isFinite(m.total_puertas) ? m.total_puertas : null },
+    { k: "cajones",  nombre: "Cajones pintados", cat: "cajones_pintados", por: m => Number.isFinite(m.cajones) ? m.cajones : null },
+    { k: "parches",  nombre: "Parches pintados", cat: "parches_pintados", por: m => parchesDe(m) },
+    { k: "respaldo", nombre: "Respaldo",         cat: null,               por: m => m.lleva_respaldo === true ? 1 : m.lleva_respaldo === false ? 0 : null }
+  ];
+  function componentes(modelo){
+    if (!modelo) return [];
+    return COMPONENTES.map(c => ({ k: c.k, nombre: c.nombre, cat: c.cat, por: c.por(modelo) })).filter(c => c.por == null || c.por > 0);
+  }
+  const partesDe = lote => (lote && lote.partes) || {};
+  const faltanPartes = (modelo, lote) => componentes(modelo).filter(c => c.por !== null && !partesDe(lote)[c.k]);
+  const partesTexto = (modelo, lote) => componentes(modelo).filter(c => partesDe(lote)[c.k]).map(c => c.k).join(", ");
+  const completo = (modelo, lote) => !!modelo && componentes(modelo).every(c => c.por === null || partesDe(lote)[c.k]);
+  /* Qué piezas pintadas se descuentan al preparar n muebles con estas partes. null = la ficha no lo dice. */
+  function necesitaParaPreparar(modelo, n, partes){
+    n = Number(n || 0); partes = partes || { puertas: true, cajones: true, parches: true };
     const r = {};
-    Object.keys(por).forEach(k => { r[k] = por[k] == null ? null : por[k] * n; });
+    componentes(modelo).forEach(c => { if (c.cat && partes[c.k]) r[c.cat] = c.por == null ? null : c.por * n; });
     return r;
   }
   /* 19 puertas con 2 por mueble → 9 muebles, sobra 1, falta 1 para el siguiente */
@@ -224,7 +238,7 @@
   }
 
   const R = { ETAPAS, ETAPAS_VISIBLES, CADENA, PIEZAS, PESTANAS_PIEZA, CADENA_PUERTAS, CADENA_CAJONES, CADENA_PARCHES, PIEZAS_VIEJAS, RESPONSABLES, tipoDe, cadenaDe, primeraEtapa, siguienteEtapa, anteriorEtapa,
-    siguientePieza, siguientePiezaDe, anteriorPieza, cadenaPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, sePintaEn, parchesDe, necesitaParaPreparar, esExtra, extraAdmite,
+    siguientePieza, siguientePiezaDe, anteriorPieza, cadenaPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, sePintaEn, parchesDe, necesitaParaPreparar, componentes, faltanPartes, partesTexto, completo, esExtra, extraAdmite,
     responsables, origenDe, firmaDe, validaTraslado, piezasPorMueble, equivalencia, textoEquivalencia, listos, ficha };
   if (typeof module !== "undefined" && module.exports) module.exports = R;
   raiz.Reglas = R;
