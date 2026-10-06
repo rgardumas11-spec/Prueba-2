@@ -28,6 +28,7 @@ service cloud.firestore {
     match /pedido/{id}     { allow read, write: if delTaller(); }
     match /persona/{id}    { allow read, write: if delTaller(); }
     match /meta/{id}       { allow read, write: if delTaller(); }
+    match /plan/{id}       { allow read, write: if delTaller(); }
 
     // Todo lo demás, cerrado.
     match /{document=**}   { allow read, write: if false; }
@@ -72,7 +73,9 @@ pedido       cliente, fecha, lineas[] ({modelo, color, cantidad,
              entregado}), notas, estado (pendiente | entregado), de, creado
 
 meta         marcas del sistema (por ejemplo, que la carga inicial ya se hizo)
-recado       texto, de, para, hecho, urgente, vistos{}, creado
+recado       texto, de, para, hecho, hecho_en, urgente, tipo ('maquilado' si lo puso el sistema), vistos{}, creado
+plan         plan del día: tipo ('lote'|'pieza'), origen_id, modelo_id, modelo, color, de, a,
+             cantidad, juegos, autorizo, de_quien, creado, base (copia del origen)
 persona      nombre (es el propio id), creado
 
 Las sumas y restas usan `increment`, que Firestore aplica de su lado: si

@@ -177,7 +177,7 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .lista.v2 .fila .cifra small{max-width:120px}
 .lista.v2 .fila .ultimo{display:block;grid-area:ultimo;padding-left:14px;font-size:12.5px;color:var(--tinta2);align-self:center;min-width:0}
 .lista.v2 .fila .ultimo span{display:inline}
-.lista.v2 .fila .stepper{grid-area:stepper;justify-self:end;align-self:center;margin-top:2px}
+.lista.v2 .fila .stepper{grid-area:stepper;justify-self:end;align-self:center;margin-top:2px;flex-wrap:wrap;justify-content:flex-end;row-gap:6px;max-width:100%}
 .lista.v2 .fila .apodos{display:none}
 .fila .stepper{grid-area:stepper;display:flex;align-items:center;gap:2px}
 .tecla{width:42px;height:42px;border-radius:var(--r-s);border:1px solid var(--linea2);background:var(--hoja2);font-size:22px;line-height:1;cursor:pointer;display:grid;place-items:center;user-select:none;color:var(--tinta)}
@@ -185,6 +185,7 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .tecla[disabled]{opacity:.35;cursor:default}
 .cant{font:600 24px var(--mono);font-variant-numeric:tabular-nums;min-width:2.6ch;text-align:center;cursor:pointer}
 .fila > .cant{display:none}
+.lista.v2 .fila .stepper .cant{display:none}
 .cant.pend{color:var(--vino)}
 .chip{font-size:12px;background:var(--hoja2);border:1px solid var(--linea);border-radius:999px;padding:2px 8px;white-space:nowrap;color:var(--tinta)}
 .chip.color{padding-left:6px;display:inline-flex;align-items:center;gap:5px}
@@ -244,10 +245,10 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .ticket .t-estado{text-align:center;font-weight:600;letter-spacing:.14em;font-size:11px;color:var(--vino);margin-top:10px}
 .ticket.entregado .t-estado{color:var(--verde)}
 .ticket .t-acciones{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap;font-family:var(--sans)}
-.p-linea{display:grid;grid-template-columns:64px 1fr 1fr auto;gap:6px;margin-bottom:6px;align-items:center}
+.p-linea{display:grid;grid-template-columns:64px 1fr 1fr auto auto;gap:6px;margin-bottom:6px;align-items:center}
 .p-linea input,.p-linea select{background:var(--hoja);border:1px solid var(--linea2);border-radius:var(--r-s);padding:10px 8px;font-size:15px;min-width:0;color:var(--tinta)}
 .p-linea .p-cant{text-align:center;font:600 16px var(--mono)}
-@media (max-width:560px){.p-linea{grid-template-columns:56px 1fr auto}.p-linea .p-color{grid-column:1/3}}
+@media (max-width:560px){.p-linea{grid-template-columns:56px 1fr auto}.p-linea .p-color{grid-column:1/3}.p-linea .p-surt{grid-column:3}.p-linea .p-quita{grid-column:3;grid-row:1}}
 
 /* ── Catálogo ── */
 .ficha-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
@@ -298,6 +299,14 @@ main{padding:14px 14px calc(110px + env(safe-area-inset-bottom,0));flex:1;min-wi
 .rep-g span{color:var(--tinta3);letter-spacing:0}
 .rep-nada{color:var(--tinta3);font-size:13px;margin:0 0 8px}
 #repSeccion{max-width:240px}
+table.rep td.acc,table.rep th.acc{width:1%;white-space:nowrap;text-align:right;padding-right:4px}
+.impresion table.rep .acc{display:none}
+.dia.semana{font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--vino);border-bottom:2px solid var(--vino);padding-bottom:6px;margin:18px 0 10px}
+.plan-fila .stepper{display:flex;gap:6px;align-items:center}
+.p-linea .p-fam{display:none} .p-linea.surtido .p-fam{display:block} .p-linea.surtido .p-modelo{display:none}
+.p-linea .p-surt.on{background:var(--ambar-t);color:var(--ambar);border-color:var(--ambar)}
+.rev-a{display:block;width:100%;margin-top:6px;font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--linea);border-radius:8px;background:var(--hoja);color:var(--tinta)}
+.lote.rev .quien{flex:1;min-width:0}
 table.rep{width:100%;border-collapse:collapse;font-size:13.5px}
 table.rep th,table.rep td{border-bottom:1px solid var(--linea);padding:6px 8px;text-align:left;vertical-align:top}
 table.rep th{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--tinta3);background:var(--hoja2)}
@@ -337,7 +346,7 @@ table.rep .n{text-align:right;font-family:var(--mono);white-space:nowrap}
 .detalle-vacio{color:var(--tinta3);font-size:13.5px;text-align:center;padding:40px 10px}
 
 /* ── Barra inferior ── */
-.barra{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--hoja);border-top:1px solid var(--linea);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom,0)}
+.barra{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--hoja);border-top:1px solid var(--linea);display:grid;grid-template-columns:repeat(6,1fr);padding-bottom:env(safe-area-inset-bottom,0)}
 .dest{border:0;background:none;cursor:pointer;padding:8px 2px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--tinta3);font:600 10px var(--mono);letter-spacing:.04em;text-transform:uppercase;position:relative}
 .dest svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .dest.on{color:var(--vino)}

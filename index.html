@@ -34,11 +34,11 @@
   <aside class="lateral">
     <div class="marca"><span class="caja">MUEBLES</span><span class="script">San Bernardo</span><small id="versionLat">Almacén</small></div>
     <nav class="nav">
+      <a href="#plan" data-vista="plan"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M8.5 15l2 2 4-4"/></svg>Plan del día<span class="n" id="nPlan" hidden></span></a>
       <a href="#muebles" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles</a>
       <a href="#piezas" data-vista="piezas"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="7" height="17" rx="1"/><rect x="13" y="3.5" width="7" height="17" rx="1"/><path d="M9 12h.01M15 12h.01"/></svg>Piezas</a>
       <a href="#listos" data-vista="listos"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg>Listos para preparar<span class="n" id="nListos" hidden></span></a>
       <a href="#pedidos" data-vista="pedidos"><svg viewBox="0 0 24 24"><path d="M5 3.5h14v17l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16h4"/></svg>Pedidos<span class="n" id="nPed" hidden></span></a>
-      <a href="#resumen" data-vista="resumen"><svg viewBox="0 0 24 24"><path d="M4 19h16M6 16V9M11 16V5M16 16v-6"/></svg>Resumen</a>
       <a href="#reportes" data-vista="reportes"><svg viewBox="0 0 24 24"><path d="M6 3.5h9l4 4v13H6z"/><path d="M15 3.5v4h4M9 12h6M9 16h6"/></svg>Reportes</a>
       <a href="#material" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/><path d="M9 12v5M15 12v5"/></svg>Material<span class="n" id="nMat" hidden></span></a>
       <div class="sep"></div>
@@ -95,12 +95,12 @@
       <div id="listaPedidos"></div>
     </section>
 
-    <section class="vista" id="v-resumen">
-      <div class="arriba"><h1>Resumen <em id="resumenResumen"></em></h1>
-        <div class="der"><button class="lupa-btn" data-lupa="resumen" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button></div>
+    <section class="vista" id="v-plan">
+      <div class="arriba"><h1>Plan del día <em id="resumenPlan"></em></h1>
+        <div class="der"><button class="lupa-btn" data-lupa="plan" aria-label="Buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button><button class="btn vino" data-vista="reportes">Armar desde Reportes →</button></div>
       </div>
-      <div class="busca-caja" id="busca-resumen" hidden></div>
-      <div class="lista" id="listaResumen"></div>
+      <div class="busca-caja" id="busca-plan" hidden></div>
+      <div class="lista v2" id="listaPlan"></div>
     </section>
 
     <section class="vista" id="v-material">
@@ -158,6 +158,7 @@
 
   <!-- ── Barra inferior (celular) ── -->
   <nav class="barra">
+    <button class="dest" data-vista="plan"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M8.5 15l2 2 4-4"/></svg>Plan</button>
     <button class="dest" data-vista="muebles"><svg viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Muebles</button>
     <button class="dest" data-vista="piezas"><svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="7" height="17" rx="1"/><rect x="13" y="3.5" width="7" height="17" rx="1"/></svg>Piezas</button>
     <button class="dest" data-vista="material"><svg viewBox="0 0 24 24"><path d="M6 3.5h12l1 5H5z"/><path d="M5 8.5h14l-1 12H6z"/></svg>Material</button>

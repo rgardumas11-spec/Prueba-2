@@ -170,7 +170,7 @@ window.CARGA_PEDIDOS = {
     { cliente: "Guillermo Perez", fecha: "2026-09-24", notas: "", lineas: [
       ["Cómoda Rombo", "", 1, 0],
       ["Vitrina Angelita", "Negro completo", 1, 0],
-      ["Librero Monte Carlos (¿pulgadas?)", "", 1, 0] ] },
+      ["Librero Monte Carlos 75 pulgadas", "", 1, 0] ] },
     { cliente: "Hector De La Rosa", fecha: "2026-09-25", notas: "Sammy: la libreta dice «negro + gris»", lineas: [
       ["Monarca Rombo", "Café completo", 6, 0],
       ["Ropero Sammy", "Negro puertas grises", 8, 0],
@@ -183,18 +183,17 @@ window.CARGA_PEDIDOS = {
       ["Vitrina Kukis", "Café completo", 1, 0],
       ["Vitrina Kukis", "Negro completo", 1, 0],
       ["Mariana Canadá", "", 1, 0],
-      ["Mariana surtido", "", 2, 0],
+      ["Mariana surtido", "", 2, 0, { surtido: true, familia: "Mariana" }],
       ["Librero Plasma (?)", "Negro completo", 2, 0] ] },
     { cliente: "Sr. Sabino Ramos", fecha: "2026-09-29", notas: "Libres", lineas: [
-      ["Mariana surtido (diferente color)", "", 10, 0],
-      ["Mariana surtido", "Gris completo", 2, 0],
+      ["Mariana surtido (diferente color)", "", 10, 0, { surtido: true, familia: "Mariana" }],
+      ["Mariana surtido", "Gris completo", 2, 0, { surtido: true, familia: "Mariana" }],
       ["Vitrina Kukis", "", 8, 0],
-      ["Monarca surtido", "", 3, 0],
-      ["Tocador Óvalo", "", 6, 0],
-      ["Base Óvalo, solo la base (?)", "Negro completo", 1, 0] ] },
+      ["Monarca surtido", "", 3, 0, { surtido: true, familia: "Monarca" }],
+      ["Tocador Óvalo", "", 6, 0] ] },
     { cliente: "Gregorio Zacapa", fecha: "2026-09-29", notas: "", lineas: [
-      ["Monarca surtido", "", 18, 0],
-      ["Mariana surtido", "", 15, 0],
+      ["Monarca surtido", "", 18, 0, { surtido: true, familia: "Monarca" }],
+      ["Mariana surtido", "", 15, 0, { surtido: true, familia: "Mariana" }],
       ["Ropero San José", "", 20, 0] ] },
     { cliente: "Asociación Mueblera", fecha: "2026-09-23", notas: "Las 12 cómodas Amanda ya se entregaron. Junto a las Amanda de 10 cajones la libreta tiene una «P» y un «7».", lineas: [
       ["Mariana 3 cajones (genérico)", "Negro puertas cafés", 10, 0],
@@ -204,23 +203,23 @@ window.CARGA_PEDIDOS = {
       ["Vitrina Kukis", "Negro puertas cafés", 3, 0],
       ["Monarca Lámpara (?)", "Negro puertas cafés", 2, 0],
       ["Ropero San José", "Café completo", 3, 0] ] },
-    { cliente: "Sra. Josefina Celis", fecha: "2026-09-24", notas: "Los petaqueros ya se entregaron; faltan todas las Marianas.", lineas: [
+    { cliente: "Sra. Josefina Celis", fecha: "2026-09-24", notas: "Los petaqueros ya se entregaron. De las Marianas: 2 Midas negro puertas grises y 1 Mónaco negro puertas blancas ya se entregaron.", lineas: [
       ["Petaquero Rombo Multifamiliar", "Café completo", 2, 2],
       ["Petaquero Cisne Multifamiliar", "Café completo", 2, 2],
       ["Petaquero Tablero Multifamiliar", "Gris completo", 2, 2],
       ["Petaquero Rejilla Mixta Multifamiliar", "Gris completo", 2, 2],
       ["Petaquero Duela Multifamiliar", "", 2, 2],
-      ["Petaquero Mónaco (?)", "Blanco completo", 2, 2],
+      ["Petaquero Mónaco Multifamiliar", "Blanco completo", 2, 2],
       ["Petaquero México Multifamiliar", "Negro completo", 2, 2],
       ["Petaquero Midas Multifamiliar", "Gris completo", 2, 2],
       ["Mariana Rombo", "Café completo", 2, 0],
       ["Mariana Cisne", "Negro completo", 2, 0],
       ["Mariana Tablero", "Gris completo", 2, 0],
-      ["Mariana (no se lee el modelo) (?)", "Café completo", 2, 0],
+      ["Mariana Rejilla Mixta 3 cajones", "Café completo", 2, 0],
       ["Mariana Duela Abatible", "Negro completo", 2, 0],
-      ["Mariana Mónaco", "Blanco completo", 2, 0],
+      ["Mariana Mónaco", "Negro puertas blancas", 2, 1],
       ["Mariana México", "Café completo", 2, 0],
-      ["Mariana Midas", "Gris completo", 2, 0] ] },
+      ["Mariana Midas", "Negro puertas grises", 2, 2] ] },
     { cliente: "Sr. Pedro Orozco", fecha: "2026-09-09", notas: "", lineas: [
       ["Monarca Cisne", "Negro completo", 5, 0],
       ["Monarca Cisne", "Negro puertas grises", 5, 5],
@@ -229,6 +228,26 @@ window.CARGA_PEDIDOS = {
       ["Monarca Rombo", "Negro completo", 5, 0],
       ["Monarca Rombo", "Café completo", 5, 0],
       ["Monarca Óvalo", "Negro completo", 5, 0],
-      ["Librero Monte Carlos (¿pulgadas?)", "Negro completo", 3, 0] ] }
+      ["Librero Monte Carlos 75 pulgadas", "Negro completo", 3, 0] ] }
+  ]
+};
+
+/* Correcciones a los pedidos que YA se cargaron con la versión 2.4 (nombres que el taller
+   aclaró después). Se aplican UNA vez desde Ajustes → "Correcciones de la libreta".
+   cambios: { cliente, modelo (como quedó cargado), color?, pon: {…} | borrar: true } */
+window.CARGA_ARREGLO = {
+  id: "arreglo-pedidos-2026-10-06",
+  titulo: "Correcciones de la libreta",
+  cambios: [
+    { cliente: "Guillermo Perez",     modelo: "Librero Monte Carlos (¿pulgadas?)", pon: { modelo: "Librero Monte Carlos 75 pulgadas" } },
+    { cliente: "Sr. Pedro Orozco",    modelo: "Librero Monte Carlos (¿pulgadas?)", pon: { modelo: "Librero Monte Carlos 75 pulgadas" } },
+    { cliente: "Sra. Josefina Celis", modelo: "Petaquero Mónaco (?)",              pon: { modelo: "Petaquero Mónaco Multifamiliar" } },
+    { cliente: "Sra. Josefina Celis", modelo: "Mariana (no se lee el modelo) (?)", pon: { modelo: "Mariana Rejilla Mixta 3 cajones" } },
+    { cliente: "Sra. Josefina Celis", modelo: "Mariana Mónaco",                    pon: { color: "Negro puertas blancas", entregado: 1 } },
+    { cliente: "Sra. Josefina Celis", modelo: "Mariana Midas",                     pon: { color: "Negro puertas grises", entregado: 2 } },
+    { cliente: "Sr. Sabino Ramos",    modelo: "Base Óvalo, solo la base (?)",       borrar: true },
+    { cliente: "",                    modelo: "Mariana surtido",                   pon: { surtido: true, familia: "Mariana" } },
+    { cliente: "",                    modelo: "Mariana surtido (diferente color)", pon: { surtido: true, familia: "Mariana", modelo: "Mariana surtido" } },
+    { cliente: "",                    modelo: "Monarca surtido",                   pon: { surtido: true, familia: "Monarca" } }
   ]
 };

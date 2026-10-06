@@ -50,13 +50,13 @@ function tinte(c){ c = sinAcento(c); for (const k in TINTES) if (c.startsWith(si
 const chipColor = c => c ? '<span class="chip color"><span class="punto" style="background:' + tinte(c) + '"></span>' + esc(c) + '</span>' : '<span class="chip sin-color">sin color</span>';
 const nombreColor = c => c || "sin color";
 /* ¿Al entrar a esta etapa/sección se pinta? Ahí se pide el color. */
-const sePintaEn = destino => destino === "pintado" || destino === "mdf_pintado" || destino === "puertas_pintadas";
+const sePintaEn = destino => R.sePintaEn(destino);
 
 /* ── estado de pantalla ── */
 const E = {
   yo: localStorage.getItem("alm.yo") || "",
-  vista: "muebles",
-  modelos: [], lotes: [], piezas: [], productos: [], movimientos: [], recados: [], personas: [], pedidos: [],
+  vista: "plan",
+  modelos: [], lotes: [], piezas: [], productos: [], movimientos: [], recados: [], personas: [], pedidos: [], plan: [],
   etapa: "maquilado", catPieza: "puertas_uriel", catMat: "",
   busca: {}, buscaAbierta: {},
   sel: null,                       // {tipo, ...llaves}
@@ -111,7 +111,7 @@ function pintaPulso(){
 }
 
 /* ═══════════════ búsqueda: un icono, se despliega al tocarlo ═══════════════ */
-const TEXTO_BUSCA = { muebles:"Mueble o color…", piezas:"Mueble o color…", listos:"Mueble o color…", pedidos:"Cliente o mueble…", resumen:"Mueble o color…", material:"Nombre o apodo…", bitacora:"Mueble, persona…", catalogo:"Nombre del modelo…", apodos:"Nombre o apodo…" };
+const TEXTO_BUSCA = { plan:"Mueble o color…", muebles:"Mueble o color…", piezas:"Mueble o color…", listos:"Mueble o color…", pedidos:"Cliente o mueble…", material:"Nombre o apodo…", bitacora:"Mueble, persona…", catalogo:"Nombre del modelo…", apodos:"Nombre o apodo…" };
 function pintaLupa(vista){
   const caja = $("#busca-" + vista); const btn = $('[data-lupa="' + vista + '"]'); if (!caja) return;
   const abierta = !!E.buscaAbierta[vista];
@@ -151,9 +151,11 @@ const vivoPieza = p => Math.max(0, Number(p.cantidad || 0) + (E.pend.get(p.id) |
 function pintaEtapasMueble(){
   const caja = $("#etapasMueble");
   const tabs = [];
-  R.CADENA.madera.forEach((e, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(e, R.ETAPAS[e].corto, totalEtapa(e), E.etapa === e)); });
+  R.CADENA.madera.filter(e => e !== "preparado").forEach((e, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(e, R.ETAPAS[e].corto, totalEtapa(e), E.etapa === e)); });
   tabs.push('<span class="flecha" style="margin:0 6px">|</span>');
-  R.CADENA.mdf.forEach((e, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(e, R.ETAPAS[e].corto, totalEtapa(e), E.etapa === e)); });
+  R.CADENA.mdf.filter(e => e !== "preparado").forEach((e, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(e, R.ETAPAS[e].corto, totalEtapa(e), E.etapa === e)); });
+  tabs.push('<span class="flecha" style="margin:0 6px">→</span>');
+  tabs.push(pestana("preparado", R.ETAPAS.preparado.corto, totalEtapa("preparado"), E.etapa === "preparado"));
   caja.innerHTML = tabs.join("");
   caja.querySelectorAll("[data-etapa]").forEach(b => b.onclick = () => { E.etapa = b.dataset.etapa; E.sel = null; pintaMuebles(); if (esEscritorio()) pintaDetalle(); });
   const total = E.lotes.reduce((s,l) => s + Number(l.cantidad || 0), 0);
@@ -171,7 +173,7 @@ function pintaMuebles(){
     if (q("muebles")){ caja.innerHTML = sinHallar("muebles", "ese mueble en " + et.nombre.toLowerCase()); return; }
     const ant = etapaAnterior(E.etapa);
     caja.innerHTML = '<div class="vacio"><b>No hay muebles en «' + esc(et.nombre) + '»</b><p>' +
-      (R.admiteAlta(E.etapa) ? "Aquí entran los muebles recién hechos. Regístralos con el botón de arriba." : "Se registran aquí con el botón de arriba y el sistema los descuenta solo de «" + esc(R.ETAPAS[ant].nombre) + "».") + '</p>' +
+      (R.admiteAlta(E.etapa) ? "Aquí entran los muebles recién hechos. Regístralos con el botón de arriba." : E.etapa === "preparado" ? "Un mueble se prepara desde «Mueble pintado» o «MDF pintado» con el botón «Preparar»: se le descuentan sus puertas, cajones y parches pintados." : "Se registran aquí con el botón de arriba y el sistema los descuenta solo de «" + esc(R.ETAPAS[ant].nombre) + "».") + '</p>' +
       '<button class="btn vino" data-registrar="mueble">＋ Registrar</button></div>';
     const b = caja.querySelector("[data-registrar]"); if (b) b.onclick = registrarMueble;
     const v = caja.querySelector("[data-ir-etapa]"); if (v) v.onclick = () => { E.etapa = v.dataset.irEtapa; pintaMuebles(); };
@@ -188,7 +190,7 @@ function pintaMuebles(){
         '<div class="apodos">' + chipColor(g.color) + '</div>' +
         '<div class="cifra"><b>' + g.total + '</b><small>' + (g.total === 1 ? "mueble" : "muebles") + '</small></div>' +
         '<div class="ultimo"><span>' + quien + '</span></div>' +
-        '<div class="stepper">' + (R.siguienteEtapa(g.etapa) ? '<button class="btn suave" data-pasar="' + esc(g.k) + '">Pasar a ' + esc(R.ETAPAS[R.siguienteEtapa(g.etapa)].corto.toLowerCase()) + ' →</button>' : '<span class="sello ver">final</span>') + '</div>' +
+        '<div class="stepper">' + (R.siguienteEtapa(g.etapa) === "preparado" ? '<button class="btn suave" data-pasar="' + esc(g.k) + '">Preparar →</button>' : R.siguienteEtapa(g.etapa) ? '<button class="btn suave" data-pasar="' + esc(g.k) + '">Pasar a ' + esc(R.ETAPAS[R.siguienteEtapa(g.etapa)].corto.toLowerCase()) + ' →</button>' : '<span class="sello ver">final</span>') + '</div>' +
       '</div>';
     }).join("");
   caja.querySelectorAll("[data-abre]").forEach(f => f.onclick = e => { if (e.target.closest("[data-pasar]")) return; seleccionaMueble(f.dataset.abre, true); });
@@ -209,7 +211,7 @@ function htmlDetalleMueble(){
   return '<h2>' + esc(g.modelo) + '</h2><div class="sub">' + chipColor(g.color) + ' &nbsp;' + esc(et.nombre) + '</div>' +
     '<div class="grande-cant"><b>' + g.total + '</b><span>' + (g.total === 1 ? "mueble" : "muebles") + '<br>' + esc(et.nombre.toLowerCase().replace("mueble ", "")) + '</span></div>' +
     '<h3>De quién vienen</h3><div class="lotes">' + g.lotes.map(l => '<div class="lote"><div class="quien">' + esc(R.firmaDe(l)) + '<small>' + esc(R.origenDe(l)) + ' · desde ' + esc(cuando(l.creado)) + '</small></div><div class="disp"><b>' + l.cantidad + '</b></div></div>').join("") + '</div>' +
-    '<div class="acciones">' + (sig ? '<button class="btn vino" data-pasar>Pasar a ' + esc(R.ETAPAS[sig].corto.toLowerCase()) + ' →</button>' : "") + '<button class="btn" data-corrige>Corregir cantidad</button></div>' +
+    '<div class="acciones">' + (sig === "preparado" ? '<button class="btn vino" data-pasar>Preparar →</button>' : sig ? '<button class="btn vino" data-pasar>Pasar a ' + esc(R.ETAPAS[sig].corto.toLowerCase()) + ' →</button>' : "") + '<button class="btn" data-corrige>Corregir cantidad</button></div>' +
     '<h3>Últimos movimientos</h3>' + (movs.length ? movs.map(lineaMov).join("") : '<div class="vacio" style="padding:14px"><p style="margin:0">Todavía nada.</p></div>');
 }
 function montaDetalleMueble(caja){
@@ -224,10 +226,10 @@ function registrarMueble(){ if (R.admiteAlta(E.etapa)) hojaRegistrarMueble(); el
 function hojaRegistrarDesdeMueble(etapa){
   if (!exigeYo()) return;
   const ant = R.anteriorEtapa(etapa); if (!ant) return;
-  const disponibles = gruposMueble(ant);
+  const disponibles = etapa === "preparado" ? gruposMueble("pintado").concat(gruposMueble("mdf_pintado")) : gruposMueble(ant);
   abreHoja('<h3>Registrar ' + esc(R.ETAPAS[etapa].nombre.toLowerCase()) + '</h3>' +
-    '<div class="paso-a"><span class="de">' + esc(R.ETAPAS[ant].nombre) + '</span> → <span class="a">' + esc(R.ETAPAS[etapa].nombre) + '</span></div>' +
-    '<p class="guia">Escoge de cuáles: solo aparecen los que hay en «' + esc(R.ETAPAS[ant].nombre.toLowerCase()) + '». Lo que registres aquí se descuenta de ahí solo.</p>' +
+    '<div class="paso-a"><span class="de">' + esc(etapa === "preparado" ? "Mueble pintado / MDF pintado" : R.ETAPAS[ant].nombre) + '</span> → <span class="a">' + esc(R.ETAPAS[etapa].nombre) + '</span></div>' +
+    '<p class="guia">' + (etapa === "preparado" ? "Escoge cuál se preparó: se le descuentan sus puertas, cajones y parches pintados." : "Escoge de cuáles: solo aparecen los que hay en «" + esc(R.ETAPAS[ant].nombre.toLowerCase()) + "». Lo que registres aquí se descuenta de ahí solo.") + '</p>' +
     campoBuscaLista("Mueble o color…") + '<div class="sugerencias" id="rLista"></div>',
     h => {
       const inp = h.querySelector("#rBusca"), lista = h.querySelector("#rLista");
@@ -267,6 +269,7 @@ function hojaRegistrarMueble(){
         const d = { modelo_id: modelo.id, modelo: modelo.nombre, color, etapa, cantidad: n };
         if (tipo === "mdf"){ d.maquilo = quien[0]; d.armo = quien[0]; } else d.maquilo = quien[0];
         await Almacen.registra(d, E.yo, origen());
+        Almacen.pon("recado", { texto: quien[0] + (tipo === "mdf" ? " hizo " : " maquiló ") + plural(n, "mueble", "muebles") + " " + modelo.nombre + (color ? " · " + color : ""), de: E.yo, para: "", hecho: false, urgente: false, tipo: "maquilado", vistos: {} });
         cierraHoja(); E.etapa = etapa; E.sel = { tipo:"mueble", k: modelo.id + "|" + color, etapa }; irA("muebles"); pintaTodo();
         grita("Listo: " + plural(n, "mueble", "muebles") + " en " + R.ETAPAS[etapa].nombre.toLowerCase());
       };
@@ -275,10 +278,10 @@ function hojaRegistrarMueble(){
 /* Campo de modelo con búsqueda tolerante: se escribe y se escoge de la lista; nunca queda texto libre */
 function campoModelo(){ return '<label class="campo"><span>Mueble</span><input id="rModelo" placeholder="Escribe el nombre, aunque sea aproximado…" autocomplete="off"></label><div class="sugerencias" id="rSug" hidden></div>'; }
 function campoColor(sel, obligatorio, id){ const grupos = CAT.gruposColor || []; return '<label class="campo"><span>Color' + (obligatorio ? "" : " (si ya se sabe)") + '</span><select id="' + (id || "rColor") + '"><option value="">' + (obligatorio ? "— escoge el color —" : "— todavía sin color —") + '</option>' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (sel === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("") + '</select></label>'; }
-function montaCampoModelo(h, alEscoger, conExtras){
+function montaCampoModelo(h, alEscoger, conExtras, filtro){
   const inp = h.querySelector("#rModelo"), sug = h.querySelector("#rSug");
   let escogido = null;
-  const fuente = () => modelosActivos().filter(m => conExtras ? true : !R.esExtra(m));
+  const fuente = () => modelosActivos().filter(m => conExtras ? true : !R.esExtra(m)).filter(m => filtro ? filtro(m) : true);
   const pinta = () => {
     const t = inp.value.trim();
     if (escogido && escogido.nombre === t){ sug.hidden = true; return; }
@@ -297,7 +300,7 @@ function fichaCorta(m){
   const p = [];
   p.push(m.cajones == null ? "cajones: falta dato" : plural(m.cajones, "cajón", "cajones"));
   p.push(m.total_puertas == null ? "puertas: falta dato" : plural(m.total_puertas, "puerta", "puertas"));
-  if (m.lleva_parches === true) p.push("lleva parches");
+  const pa = R.parchesDe(m); if (pa > 0) p.push(plural(pa, "parche", "parches"));
   return p.join(" · ");
 }
 
@@ -305,6 +308,7 @@ function fichaCorta(m){
 function hojaPasar(g){
   if (!exigeYo()) return;
   const sig = R.siguienteEtapa(g.etapa); if (!sig) return;
+  if (sig === "preparado") return hojaPreparar(g);
   const regla = R.responsables(sig);
   let quien = [];
   const rec = E.ultimoQuien[sig]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
@@ -393,9 +397,10 @@ const totalPestana = pest => R.categoriasDePestana(pest).reduce((s,c) => s + tot
 function pintaEtapasPieza(){
   const caja = $("#etapasPieza");
   const tabs = [];
-  R.CADENA_PUERTAS.forEach((c, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(c, R.PIEZAS[c].nombre, totalPestana(c), E.catPieza === c)); });
-  tabs.push('<span class="flecha" style="margin:0 6px">|</span>');
-  ["cajones_pintados", "parches_pintados"].forEach(c => tabs.push(pestana(c, R.PIEZAS[c].nombre, totalPestana(c), E.catPieza === c)));
+  [R.CADENA_PUERTAS, R.CADENA_CAJONES, R.CADENA_PARCHES].forEach((cad, j) => {
+    if (j) tabs.push('<span class="flecha" style="margin:0 6px">|</span>');
+    cad.forEach((c, i) => { if (i) tabs.push('<span class="flecha">→</span>'); tabs.push(pestana(c, R.PIEZAS[c].nombre, totalPestana(c), E.catPieza === c)); });
+  });
   caja.innerHTML = tabs.join("");
   caja.querySelectorAll("[data-etapa]").forEach(b => b.onclick = () => { E.catPieza = b.dataset.etapa; E.sel = null; pintaPiezas(); if (esEscritorio()) pintaDetalle(); });
 }
@@ -404,18 +409,15 @@ function filaPiezaHtml(p){
   const sig = R.siguientePiezaDe(cat, m); const emb = R.embisagra(cat);
   const txt = R.textoEquivalencia(n, cat, m);
   const e = R.equivalencia(n, R.piezasPorMueble(m, cat));
-  const eq = cat === "parches_pintados" ? "" : R.esExtra(m) ? "pieza extra" : e.sinFicha ? "sin ficha, no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad
+  const eq = R.esExtra(m) ? "pieza extra" : e.sinFicha ? "sin ficha, no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad
     : "=&nbsp;<b>" + plural(e.muebles, "juego", "juegos") + "</b>" + (e.sobran ? ' <span class="sello roj" title="Faltan ' + e.faltan + ' para otro juego">sobran ' + e.sobran + '</span>' : "");
   const sel = E.sel && E.sel.tipo === "pieza" && E.sel.id === p.id;
   const paso = pasoPieza(p, m);
-  let botones;
-  if (R.admiteAltaPieza(cat) && !sig) botones = '<button class="tecla" data-menos="' + esc(p.id) + '"' + (n < paso ? " disabled" : "") + '>−' + (paso > 1 ? paso : "") + '</button><span class="cant">' + n + '</span><button class="tecla" data-mas="' + esc(p.id) + '">＋' + (paso > 1 ? paso : "") + '</button>';
-  else {
-    botones = "";
-    if (emb) botones += '<button class="btn suave" data-emb="' + esc(p.id) + '">Embisagrar</button>';
-    if (sig) botones += '<button class="btn suave" data-pasar="' + esc(p.id) + '"' + (emb ? ' style="margin-left:6px"' : "") + '>Pasar a ' + esc(R.PIEZAS[sig].corto.toLowerCase()) + ' →</button>';
-    if (!sig && !emb) botones += '<span class="sello ver">final</span>';
-  }
+  let botones = "";
+  if (R.admiteAltaPieza(cat)) botones += '<button class="tecla" data-menos="' + esc(p.id) + '"' + (n < paso ? " disabled" : "") + '>−' + (paso > 1 ? paso : "") + '</button><span class="cant">' + n + '</span><button class="tecla" data-mas="' + esc(p.id) + '">＋' + (paso > 1 ? paso : "") + '</button>';
+  if (emb) botones += '<button class="btn suave" data-emb="' + esc(p.id) + '">Embisagrar</button>';
+  if (sig) botones += '<button class="btn suave" data-pasar="' + esc(p.id) + '"' + (emb || R.admiteAltaPieza(cat) ? ' style="margin-left:6px"' : "") + '>Pasar a ' + esc(R.PIEZAS[sig].corto.toLowerCase()) + ' →</button>';
+  if (!sig && !emb && !R.admiteAltaPieza(cat)) botones += '<span class="sello ver">final</span>';
   return '<div class="fila' + (sel ? " sel" : "") + (E.pend.get(p.id) ? " pend" : "") + '" data-abre="' + esc(p.id) + '">' +
     '<div class="nombre"><b>' + esc(p.modelo) + '</b>' + (R.esExtra(m) ? '<small>pieza extra</small>' : "") + '</div>' +
     '<div class="sub">' + chipColor(p.color) + '</div>' +
@@ -512,7 +514,7 @@ function registrarPieza(){ if (R.admiteAltaPieza(E.catPieza)) hojaRegistrarPieza
 function hojaRegistrarPieza(){
   if (!exigeYo()) return;
   let modelo = null, color = "", quien = [], enJuegos = false;
-  const cats = ["puertas_uriel", "cajones_pintados", "parches_pintados"];
+  const cats = ["puertas_uriel", "cajones_armados", "parches_por_lijar"];
   const porDe = () => (cat === "parches_pintados" ? 0 : R.piezasPorMueble(modelo, cat)) || 0;
   const piezasDe = h => Math.floor(Number(h.querySelector("#rCant").value || 0)) * (enJuegos && porDe() > 1 ? porDe() : 1);
   let cat = cats.includes(E.catPieza) ? E.catPieza : "puertas_uriel";
@@ -528,14 +530,14 @@ function hojaRegistrarPieza(){
     h.querySelector("#rUnidad [data-u=juegos]").textContent = "Por juego (" + por + ")";
     h.querySelector("#rCant").closest(".campo").querySelector("span").textContent = enJuegos ? "Cuántos juegos" : "Cuántas";
     h.querySelector("#rEq").textContent = modelo && piezasDe(h) > 0 ? R.textoEquivalencia(piezasDe(h), cat, modelo) : "";
-    const pideColor = cat !== "puertas_uriel";
-    h.querySelector("#rColor").closest(".campo").querySelector("span").textContent = pideColor ? "Color" : "Color (si ya se sabe)";
-    h.querySelector("#rColor").options[0].textContent = pideColor ? "— escoge el color —" : "— todavía sin color —";
-    h.querySelector("#rOk").disabled = !(modelo && (color || !pideColor) && Number(h.querySelector("#rCant").value) > 0 && (!regla || quien.length));
+    const sinParches = cat === "parches_por_lijar" && modelo && !(R.parchesDe(modelo) > 0);
+    h.querySelector("#rAviso").hidden = !sinParches;
+    if (sinParches) h.querySelector("#rAviso").textContent = R.parchesDe(modelo) === 0 ? "Este modelo no lleva parches según su ficha." : "La ficha de este modelo no dice cuántos parches lleva. Ponlo en Catálogo primero.";
+    h.querySelector("#rOk").disabled = !(modelo && piezasDe(h) > 0 && (!regla || quien.length) && !sinParches);
   };
-  abreHoja('<h3>Registrar piezas</h3><p class="guia">Las puertas entran a «Puertas Uriel» y de ahí se van pasando (por lijar → lijadas → con bisagras → pintadas). Cajones y parches entran ya pintados.</p>' +
+  abreHoja('<h3>Registrar piezas</h3><p class="guia">Las puertas entran a «Puertas Uriel» (por lijar → lijadas → con bisagras → pintadas). Los cajones entran armados y de ahí pasan a pintados. Los parches entran por lijar (lijados → pintados), solo para modelos cuya ficha dice cuántos llevan.</p>' +
     '<div class="grupo-h">Qué son</div><div class="cats" style="margin-bottom:12px">' + cats.map(c => '<button class="cat" data-cat="' + c + '">' + esc(R.PIEZAS[c].nombre) + '</button>').join("") + '</div>' +
-    campoModelo() + campoColor() +
+    campoModelo() + '<p class="sin-hallar" id="rAviso" hidden></p>' + campoColor() +
     '<div class="cats" id="rUnidad" style="margin-bottom:8px" hidden><button class="cat on" data-u="piezas">Por pieza</button><button class="cat" data-u="juegos">Por juego</button></div>' +
     '<label class="campo"><span>Cuántas</span><input id="rCant" type="number" inputmode="numeric" min="1" value="1"></label><p class="guia" id="rEq"></p>' +
     '<div id="rQuien"></div><button class="btn vino grande" id="rOk" disabled style="margin-top:14px">Registrar</button>',
@@ -547,7 +549,7 @@ function hojaRegistrarPieza(){
       h.querySelectorAll("#rUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; pinta(); });
       pinta();
       h.querySelector("#rOk").onclick = async () => {
-        const n = piezasDe(h); if (!modelo || n <= 0 || (!color && cat !== "puertas_uriel")) return;
+        const n = piezasDe(h); if (!modelo || n <= 0) return;
         await Almacen.ajustaPieza({ modelo_id: modelo.id, modelo: modelo.nombre, color, categoria: cat }, n, E.yo, "", origen(), quien.join(" y "), "alta");
         cierraHoja(); E.catPieza = R.pestanaDe(cat); E.sel = { tipo:"pieza", id: Almacen.clavePieza({ modelo_id: modelo.id, color, categoria: cat }) }; irA("piezas"); pintaTodo();
         grita("Listo: " + n + " " + R.PIEZAS[cat].unidad);
@@ -689,9 +691,10 @@ function pintaListos(){
     return '<div class="fila' + (sel ? " sel" : "") + (x.listos === 0 ? " suave" : "") + '" data-abre="' + esc(x.k) + '" data-etapa="' + x.etapa + '">' +
       '<div class="nombre"><b>' + esc(x.modelo) + '</b></div><div class="sub">' + chipColor(x.color) + '</div><div class="apodos">' + chipColor(x.color) + '</div>' +
       '<div class="cifra"><b>' + x.listos + '</b><small>' + (x.listos === 1 ? "listo" : "listos") + ' de ' + x.pintados + '</small></div>' +
-      '<div class="ultimo"><span>' + esc(porque) + '</span> ' + sellos + '</div><div class="stepper"></div></div>';
+      '<div class="ultimo"><span>' + esc(porque) + '</span> ' + sellos + '</div><div class="stepper">' + (x.listos > 0 ? '<button class="btn suave" data-prep="' + esc(x.k) + '" data-etapa="' + x.etapa + '">Preparar →</button>' : "") + '</div></div>';
   }).join("");
-  caja.querySelectorAll("[data-abre]").forEach(f => f.onclick = () => { E.sel = { tipo:"listo", k: f.dataset.abre, etapa: f.dataset.etapa }; pintaListos(); if (esEscritorio()) pintaDetalle(); else abreHoja(htmlDetalleListo(), montaDetalleListo); });
+  caja.querySelectorAll("[data-abre]").forEach(f => f.onclick = e => { if (e.target.closest("[data-prep]")) return; E.sel = { tipo:"listo", k: f.dataset.abre, etapa: f.dataset.etapa }; pintaListos(); if (esEscritorio()) pintaDetalle(); else abreHoja(htmlDetalleListo(), montaDetalleListo); });
+  caja.querySelectorAll("[data-prep]").forEach(b => b.onclick = e => { e.stopPropagation(); const g = gruposMueble(b.dataset.etapa).find(x => x.k === b.dataset.prep); if (g) hojaPreparar(g); });
 }
 function htmlDetalleListo(){
   const x = calculaListos().find(y => y.k === (E.sel || {}).k); if (!x) return '<div class="detalle-vacio">Ya no está</div>';
@@ -699,29 +702,9 @@ function htmlDetalleListo(){
     '<div class="grande-cant"><b>' + x.listos + '</b><span>' + (x.listos === 1 ? "listo" : "listos") + ' para preparar<br>de ' + x.pintados + ' pintados</span></div>' +
     (x.faltanParches ? '<div class="candado" style="margin-bottom:10px"><span>Faltan parches</span></div>' : "") +
     '<h3>Cómo se calculó</h3>' + x.detalle.map(d => '<div class="linea"><span class="det">' + esc(d) + '</span></div>').join("") +
-    (x.m ? '<div class="acciones" style="margin-top:12px"><button class="btn" data-ficha>Ver ficha en Catálogo</button></div>' : "");
+    '<div class="acciones" style="margin-top:12px">' + (x.listos > 0 ? '<button class="btn vino" data-prep>Preparar →</button>' : "") + (x.m ? '<button class="btn" data-ficha>Ver ficha en Catálogo</button>' : "") + '</div>';
 }
-function montaDetalleListo(caja){ const x = calculaListos().find(y => y.k === (E.sel || {}).k); const b = caja.querySelector("[data-ficha]"); if (b && x) b.onclick = () => hojaModelo(x.m); }
-
-/* ═══════════════ RESUMEN (solo consulta; nada se cuenta dos veces) ═══════════════ */
-function pintaResumen(){
-  const caja = $("#listaResumen");
-  const g = {};
-  E.lotes.filter(l => Number(l.cantidad) > 0).forEach(l => { const k = llaveMC(l); (g[k] = g[k] || { k, modelo: l.modelo, modelo_id: l.modelo_id, color: l.color || "", etapas: {}, piezas: {} }).etapas[l.etapa] = (g[k].etapas[l.etapa] || 0) + Number(l.cantidad); });
-  E.piezas.filter(p => vivoPieza(p) > 0).forEach(p => { const k = llaveMC(p); (g[k] = g[k] || { k, modelo: p.modelo, modelo_id: p.modelo_id, color: p.color || "", etapas: {}, piezas: {} }).piezas[p.categoria] = vivoPieza(p); });
-  const listos = calculaListos();
-  let l = Object.values(g).sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1);
-  $("#resumenResumen").textContent = l.length ? plural(l.length, "mueble con existencia", "muebles con existencia") : "";
-  if (q("resumen")) l = Busca.busca(q("resumen"), l, x => x.modelo + " " + x.color);
-  if (!l.length){ caja.innerHTML = q("resumen") ? sinHallar("resumen", "ese mueble") : '<div class="vacio"><b>Sin existencias todavía</b></div>'; return; }
-  caja.innerHTML = l.map(x => {
-    const li = listos.find(y => y.k === x.k);
-    const chips = Object.keys(R.ETAPAS).filter(e => x.etapas[e]).map(e => '<span><b>' + x.etapas[e] + '</b> ' + esc(R.ETAPAS[e].nombre.toLowerCase().replace("mueble ", "").replace("mueble de ", "")) + '</span>');
-    if (li && li.listos) chips.push('<span class="ok"><b>' + li.listos + '</b> listos</span>');
-    const pz = Object.keys(R.PIEZAS).filter(c => x.piezas[c]).map(c => '<span><b>' + x.piezas[c] + '</b> ' + esc(R.PIEZAS[c].nombre.toLowerCase()) + '</span>');
-    return '<div class="resumen-fila"><div class="nom"><b>' + esc(x.modelo) + '</b> ' + chipColor(x.color) + '</div><div class="etapas">' + (chips.join("") || '<span>sin muebles</span>') + '</div>' + (pz.length ? '<div class="etapas">' + pz.join("") + '</div>' : "") + '</div>';
-  }).join("");
-}
+function montaDetalleListo(caja){ const x = calculaListos().find(y => y.k === (E.sel || {}).k); const b = caja.querySelector("[data-ficha]"); if (b && x) b.onclick = () => hojaModelo(x.m); const pb = caja.querySelector("[data-prep]"); if (pb && x) pb.onclick = () => { const g = gruposMueble(x.etapa).find(y => y.k === x.k); if (g) hojaPreparar(g); }; }
 
 /* ═══════════════ MATERIAL ═══════════════ */
 const vivo = p => Math.max(0, Number(p.cantidad || 0) + (E.pend.get(p.id) || 0));
@@ -955,6 +938,9 @@ function cargaScript(src){ return new Promise((ok, no) => { const s = document.c
 
 /* ═══════════════ PEDIDOS (tickets) ═══════════════ */
 const lineasDe = p => (Array.isArray(p.lineas) ? p.lineas : []).map(x => Object.assign({ entregado: 0 }, x));
+const FAMILIAS_SURTIDO = ["Mariana", "Monarca", "Petaquero", "Ropero", "Cómoda", "Vitrina", "Cajonera", "Librero", "Tocador", "Alacena"];
+const modeloExacto = n => E.modelos.find(m => m.activo !== false && sinAcento(m.nombre) === sinAcento(n)) || null;
+const enCatalogo = x => !!(x.surtido || modeloExacto(x.modelo));
 const avance = p => { const ls = lineasDe(p); const t = ls.reduce((s,x) => s + Number(x.cantidad || 0), 0); const e = ls.reduce((s,x) => s + Math.min(Number(x.cantidad || 0), Number(x.entregado || 0)), 0); return { t, e, pct: t ? Math.round(e * 100 / t) : 0 }; };
 function pintaPedidos(){
   const caja = $("#listaPedidos");
@@ -972,7 +958,7 @@ function pintaPedidos(){
       '<div class="t-fila"><span>CLIENTE</span><b>' + esc(p.cliente) + '</b></div>' +
       '<div class="t-fila"><span>FECHA</span><b>' + esc(isoADma(p.fecha) || "—") + '</b></div>' +
       '<div class="t-fila"><span>CAPTURÓ</span><b>' + esc(p.de || "?") + '</b></div><div class="t-linea"></div>' +
-      (ls.length ? ls.map((x, i) => { const ent = Math.min(x.cantidad, x.entregado || 0); return '<div class="t-item' + (ent >= x.cantidad ? " hecho" : "") + '"><span class="t-n">' + Number(x.cantidad || 0) + '</span><span class="t-desc">' + esc(x.modelo) + (x.color ? '<small>' + esc(x.color) + '</small>' : "") + '</span>' +
+      (ls.length ? ls.map((x, i) => { const ent = Math.min(x.cantidad, x.entregado || 0); return '<div class="t-item' + (ent >= x.cantidad ? " hecho" : "") + '"><span class="t-n">' + Number(x.cantidad || 0) + '</span><span class="t-desc">' + esc(x.modelo) + (x.surtido ? ' <span class="sello amb">surtido</span>' : enCatalogo(x) ? "" : ' <span class="sello roj">no está en catálogo</span>') + (x.color ? '<small>' + esc(x.color) + '</small>' : "") + (x.surtido && (x.entregas || []).length ? '<small>se dieron: ' + esc(x.entregas.map(e => e.cantidad + " " + e.modelo + (e.color ? " " + e.color : "")).join(", ")) + '</small>' : "") + '</span>' +
         '<span class="t-ent"><button class="tecla" data-ent="' + p.id + '|' + i + '|-1"' + (ent <= 0 ? " disabled" : "") + '>−</button><small>' + ent + ' de ' + x.cantidad + '</small><button class="tecla" data-ent="' + p.id + '|' + i + '|1"' + (ent >= x.cantidad ? " disabled" : "") + '>＋</button>' + (ent >= x.cantidad ? '<span class="sello ver">listo</span>' : '<button class="btn suave chico" data-listo="' + p.id + '|' + i + '">Listo</button>') + '</span></div>'; }).join("")
                : '<div class="t-item"><span class="t-desc" style="color:var(--tinta3)">sin renglones</span></div>') +
       '<div class="t-linea"></div>' +
@@ -985,7 +971,9 @@ function pintaPedidos(){
   }).join("") + '</div>';
   caja.querySelectorAll("[data-ent]").forEach(b => b.onclick = () => { const [id, i, d] = b.dataset.ent.split("|"); entrega(id, Number(i), Number(d)); });
   caja.querySelectorAll("[data-listo]").forEach(b => b.onclick = () => { const [id, i] = b.dataset.listo.split("|"); entrega(id, Number(i), 99999); });
-  caja.querySelectorAll("[data-todo]").forEach(b => b.onclick = () => { if (!exigeYo()) return; const p = E.pedidos.find(x => x.id === b.dataset.todo); Almacen.parcha("pedido", p.id, { lineas: lineasDe(p).map(x => Object.assign({}, x, { entregado: x.cantidad })), estado: "entregado" }); });
+  caja.querySelectorAll("[data-todo]").forEach(b => b.onclick = () => { if (!exigeYo()) return; const p = E.pedidos.find(x => x.id === b.dataset.todo); const ls = lineasDe(p);
+    if (ls.some(x => x.surtido && Number(x.entregado || 0) < Number(x.cantidad || 0))) return grita("Hay renglones surtidos: márcalos uno por uno y di qué muebles se dieron");
+    Almacen.parcha("pedido", p.id, { lineas: ls.map(x => Object.assign({}, x, { entregado: x.cantidad })), estado: "entregado" }); });
   caja.querySelectorAll("[data-reabre]").forEach(b => b.onclick = () => Almacen.parcha("pedido", b.dataset.reabre, {estado:"pendiente"}));
   caja.querySelectorAll("[data-edita]").forEach(b => b.onclick = () => hojaPedido(E.pedidos.find(x => x.id === b.dataset.edita)));
   caja.querySelectorAll("[data-borra]").forEach(b => b.onclick = () => { if (confirm("¿Borrar este pedido?")) Almacen.borra("pedido", b.dataset.borra); });
@@ -994,6 +982,8 @@ function entrega(id, i, d){
   if (!exigeYo()) return;
   const p = E.pedidos.find(x => x.id === id); if (!p) return;
   const ls = lineasDe(p); const x = ls[i]; if (!x) return;
+  if (x.surtido && d > 0) return hojaEntregaSurtido(p, i, Math.min(Number(x.cantidad || 0), Number(x.entregado || 0) + d));
+  if (x.surtido && d < 0){ const es = (x.entregas || []).slice(); let quitar = -d; while (quitar > 0 && es.length){ const u = es[es.length - 1]; const t = Math.min(quitar, u.cantidad); u.cantidad -= t; quitar -= t; if (!u.cantidad) es.pop(); } x.entregas = es; }
   x.entregado = Math.max(0, Math.min(Number(x.cantidad || 0), Number(x.entregado || 0) + d));
   const completo = ls.every(y => Number(y.entregado || 0) >= Number(y.cantidad || 0));
   Almacen.parcha("pedido", id, { lineas: ls, estado: completo ? "entregado" : "pendiente" });
@@ -1004,7 +994,10 @@ function hojaPedido(p){
   let lineas = lineasDe(p); if (!lineas.length) lineas = [{modelo:"", color:"", cantidad:1, entregado:0}];
   const grupos = CAT.gruposColor || [];
   const opcionesColor = sel => '<option value="">— color —</option>' + grupos.map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (sel === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("");
-  const filaHtml_ = (x, i) => '<div class="p-linea" data-i="' + i + '" data-ent="' + (x.entregado || 0) + '"><input class="p-cant" type="number" inputmode="numeric" min="1" value="' + (x.cantidad || 1) + '" aria-label="Cantidad"><input class="p-modelo" list="dlModelosP" placeholder="Mueble" value="' + esc(x.modelo || "") + '" autocomplete="off"><select class="p-color">' + opcionesColor(x.color) + '</select><button class="btn fantasma p-quita" aria-label="Quitar renglón">×</button></div>';
+  const opcionesFam = sel => FAMILIAS_SURTIDO.map(f => '<option' + (sel === f ? " selected" : "") + '>' + f + '</option>').join("");
+  const filaHtml_ = (x, i) => '<div class="p-linea' + (x.surtido ? " surtido" : "") + '" data-i="' + i + '" data-ent="' + (x.entregado || 0) + '" data-entregas="' + esc(JSON.stringify(x.entregas || [])) + '"><input class="p-cant" type="number" inputmode="numeric" min="1" value="' + (x.cantidad || 1) + '" aria-label="Cantidad">' +
+    '<input class="p-modelo" list="dlModelosP" placeholder="Mueble" value="' + esc(x.surtido ? "" : (x.modelo || "")) + '" autocomplete="off"><select class="p-fam" aria-label="Familia surtida">' + opcionesFam(x.familia) + '</select>' +
+    '<select class="p-color">' + opcionesColor(x.color) + '</select><button class="btn fantasma p-surt" title="El cliente deja escoger los modelos de una familia">Surtido</button><button class="btn fantasma p-quita" aria-label="Quitar renglón">×</button></div>';
   abreHoja('<h3>' + (nuevo ? "Nuevo pedido" : "Editar pedido") + '</h3>' +
     '<label class="campo"><span>Cliente</span><input id="pCliente" list="dlClientes" value="' + esc(p.cliente || "") + '" placeholder="Sr. Pedro Orozco" autocomplete="off"></label>' +
     '<datalist id="dlClientes">' + (CAT.clientes || []).map(c => '<option value="' + esc(c) + '">').join("") + '</datalist>' +
@@ -1016,8 +1009,10 @@ function hojaPedido(p){
     '<button class="btn vino grande" id="pOk">' + (nuevo ? "Guardar pedido" : "Guardar cambios") + '</button>',
     h => {
       const cont = h.querySelector("#pLineas");
-      const leer = () => Array.from(cont.querySelectorAll(".p-linea")).map(f => ({ cantidad: Math.max(0, Number(f.querySelector(".p-cant").value || 0)), modelo: f.querySelector(".p-modelo").value.trim(), color: f.querySelector(".p-color").value, entregado: Number(f.dataset.ent || 0) }));
-      const enlaza = () => cont.querySelectorAll(".p-quita").forEach(b => b.onclick = () => { if (cont.children.length > 1) b.closest(".p-linea").remove(); });
+      const leer = () => Array.from(cont.querySelectorAll(".p-linea")).map(f => { const surtido = f.classList.contains("surtido"); const fam = f.querySelector(".p-fam").value; let entregas = []; try { entregas = JSON.parse(f.dataset.entregas || "[]"); } catch(e){}
+        return Object.assign({ cantidad: Math.max(0, Number(f.querySelector(".p-cant").value || 0)), modelo: surtido ? fam + " surtido" : f.querySelector(".p-modelo").value.trim(), color: f.querySelector(".p-color").value, entregado: Number(f.dataset.ent || 0) }, surtido ? { surtido: true, familia: fam, entregas } : {}); });
+      const enlaza = () => { cont.querySelectorAll(".p-quita").forEach(b => b.onclick = () => { if (cont.children.length > 1) b.closest(".p-linea").remove(); });
+        cont.querySelectorAll(".p-surt").forEach(b => b.onclick = () => { const f = b.closest(".p-linea"); f.classList.toggle("surtido"); b.classList.toggle("on", f.classList.contains("surtido")); }); cont.querySelectorAll(".p-linea.surtido .p-surt").forEach(b => b.classList.add("on")); };
       enlaza();
       h.querySelector("#pMas").onclick = () => { cont.insertAdjacentHTML("beforeend", filaHtml_({cantidad:1}, cont.children.length)); enlaza(); cont.lastElementChild.querySelector(".p-modelo").focus(); };
       const f = h.querySelector("#pFecha");
@@ -1027,11 +1022,40 @@ function hojaPedido(p){
         if (!exigeYo()) return;
         const cliente = h.querySelector("#pCliente").value.trim(); if (!cliente) return grita("Falta el cliente");
         const iso = dmaAIso(f.value); if (f.value && !iso) return grita("La fecha va día/mes/año, por ejemplo 04/09/2026");
-        const ls = leer().filter(x => x.modelo && x.cantidad > 0).map(x => Object.assign(x, { entregado: Math.min(x.entregado, x.cantidad) }));
+        const ls = leer().filter(x => (x.modelo || x.surtido) && x.cantidad > 0).map(x => Object.assign(x, { entregado: Math.min(x.entregado, x.cantidad) }));
         const completo = ls.length && ls.every(x => x.entregado >= x.cantidad);
         const datos = { cliente, fecha: iso || null, lineas: ls, notas: h.querySelector("#pNotas").value.trim(), estado: completo ? "entregado" : "pendiente", de: p.de || E.yo };
         if (nuevo) await Almacen.pon("pedido", datos); else await Almacen.parcha("pedido", p.id, datos);
         cierraHoja(); grita(nuevo ? "Pedido guardado" : "Guardado"); pintaPedidos();
+      };
+    });
+}
+
+/* Renglón surtido: al entregar hay que decir qué muebles se dieron (modelos de esa familia). */
+function hojaEntregaSurtido(p, i, nuevoTotal){
+  const x = lineasDe(p)[i]; const fam = x.familia || (x.modelo || "").split(" ")[0];
+  const previas = (x.entregas || []).slice(); const ya = previas.reduce((s, e) => s + Number(e.cantidad || 0), 0);
+  const faltanDecir = nuevoTotal - ya; if (faltanDecir <= 0){ const ls = lineasDe(p); ls[i].entregado = nuevoTotal; Almacen.parcha("pedido", p.id, { lineas: ls, estado: ls.every(y => y.entregado >= y.cantidad) ? "entregado" : "pendiente" }); return; }
+  const modelos = modelosActivos().filter(m => !R.esExtra(m) && sinAcento(m.familia || m.nombre.split(" ")[0]) === sinAcento(fam));
+  let filas = [{ modelo: "", color: x.color || "", cantidad: faltanDecir }];
+  const opcionesColor = sel => '<option value="">— color —</option>' + (CAT.gruposColor || []).map(g => '<optgroup label="' + esc(g.grupo) + '">' + g.colores.map(c => '<option' + (sel === c ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</optgroup>').join("");
+  const filaHtml = (f, j) => '<div class="p-linea" data-j="' + j + '"><input class="p-cant" type="number" inputmode="numeric" min="1" value="' + f.cantidad + '"><select class="p-modelo-s"><option value="">— modelo —</option>' + modelos.map(m => '<option' + (f.modelo === m.nombre ? " selected" : "") + '>' + esc(m.nombre) + '</option>').join("") + '</select><select class="p-color">' + opcionesColor(f.color) + '</select><button class="btn fantasma p-quita">×</button></div>';
+  abreHoja('<h3>¿Qué muebles se dieron?</h3><p class="guia"><b>' + esc(p.cliente) + '</b> pidió <b>' + x.cantidad + ' ' + esc(fam) + ' surtidos</b>' + (ya ? " · ya se habían anotado " + ya : "") + '. Di cuáles son los <b>' + faltanDecir + '</b> que se entregan ahora.</p>' +
+    '<div id="sLineas">' + filas.map(filaHtml).join("") + '</div><button class="btn" id="sMas" style="margin:6px 0 10px">＋ Otro modelo</button>' +
+    '<div class="total-paso"><span>Suman</span><b id="sTotal">0</b> <span>de ' + faltanDecir + '</span></div><p class="sin-hallar" id="sError" hidden></p>' +
+    '<button class="btn vino grande" id="sOk" disabled>Guardar entrega</button>',
+    h => {
+      const cont = h.querySelector("#sLineas");
+      const leer = () => Array.from(cont.querySelectorAll(".p-linea")).map(f => ({ cantidad: Math.max(0, Number(f.querySelector(".p-cant").value || 0)), modelo: f.querySelector(".p-modelo-s").value, color: f.querySelector(".p-color").value }));
+      const revisa = () => { const ls = leer(); const t = ls.reduce((s, f) => s + f.cantidad, 0); h.querySelector("#sTotal").textContent = t; const ok = t === faltanDecir && ls.every(f => f.modelo && f.cantidad > 0); h.querySelector("#sOk").disabled = !ok; const err = h.querySelector("#sError"); err.hidden = t <= faltanDecir; err.textContent = "Son más de " + faltanDecir; };
+      const enlaza = () => { cont.querySelectorAll("input,select").forEach(e => { e.oninput = revisa; e.onchange = revisa; }); cont.querySelectorAll(".p-quita").forEach(b => b.onclick = () => { if (cont.children.length > 1){ b.closest(".p-linea").remove(); revisa(); } }); };
+      enlaza(); revisa();
+      h.querySelector("#sMas").onclick = () => { cont.insertAdjacentHTML("beforeend", filaHtml({ modelo: "", color: x.color || "", cantidad: 1 }, cont.children.length)); enlaza(); revisa(); };
+      h.querySelector("#sOk").onclick = async () => {
+        const ls = lineasDe(p); ls[i].entregas = previas.concat(leer()); ls[i].entregado = nuevoTotal;
+        const completo = ls.every(y => Number(y.entregado || 0) >= Number(y.cantidad || 0));
+        await Almacen.parcha("pedido", p.id, { lineas: ls, estado: completo ? "entregado" : "pendiente" });
+        cierraHoja(); grita("Entrega anotada"); pintaPedidos();
       };
     });
 }
@@ -1061,7 +1085,7 @@ function filaModeloHtml(m){
   const chips = [(m.pendiente ? '<span class="chip revisar">por revisar</span>' : ""), (m.tipo === "mdf" ? '<span class="chip mdf">MDF</span>' : ""),
     m.cajones == null ? '<span class="chip falta">cajones: falta dato</span>' : '<span class="chip">' + plural(m.cajones, "cajón", "cajones") + '</span>',
     m.total_puertas == null ? '<span class="chip falta">puertas: falta dato</span>' : '<span class="chip">' + plural(m.total_puertas, "puerta", "puertas") + '</span>',
-    m.lleva_parches == null ? '<span class="chip falta">¿parches?: falta dato</span>' : m.lleva_parches ? '<span class="chip">lleva parches</span>' : "",
+    R.parchesDe(m) == null ? '<span class="chip falta">parches: falta dato</span>' : R.parchesDe(m) > 0 ? '<span class="chip">' + plural(R.parchesDe(m), "parche", "parches") + '</span>' : "",
     m.lleva_respaldo === true ? '<span class="chip">lleva respaldo</span>' : ""].filter(Boolean).join("");
   return '<div class="fila' + (m.pendiente ? " revisar" : "") + '" data-id="' + esc(m.id) + '"><div class="nombre"><b>' + esc(m.nombre) + '</b>' + (m.nota ? '<small>' + esc(m.nota) + '</small>' : "") + '</div><div class="sub ficha-chips">' + chips + '</div><div class="apodos ficha-chips">' + chips + '</div><div class="cifra"></div><div class="ultimo"><span>' + (m.editado_por ? esc(m.editado_por) + " · " + esc(cuando(m.actualizado || m.creado)) : "") + '</span></div><div class="stepper"><button class="btn" data-edita="' + esc(m.id) + '">Editar</button></div></div>';
 }
@@ -1097,7 +1121,7 @@ function hojaExtra(m){
 }
 function hojaModelo(m, nombreSugerido){
   if (!exigeYo()) return;
-  const nuevo = !m; m = m || { nombre: nombreSugerido || "", familia: "", tipo: "madera", cajones: null, puertas_grandes: null, puertas_grandes_luna: null, puertas_chicas: null, puertas_chicas_luna: null, total_puertas: null, lleva_parches: null, lleva_respaldo: null };
+  const nuevo = !m; m = m || { nombre: nombreSugerido || "", familia: "", tipo: "madera", cajones: null, puertas_grandes: null, puertas_grandes_luna: null, puertas_chicas: null, puertas_chicas_luna: null, total_puertas: null, parches: null, lleva_parches: null, lleva_respaldo: null };
   const num = (id, txt, v) => '<label class="campo"><span>' + txt + '</span><input id="' + id + '" type="number" inputmode="numeric" min="0" value="' + (v == null ? "" : v) + '" placeholder="falta dato"></label>';
   const siNo = (id, txt, v) => '<div class="campo"><span>' + txt + '</span><div class="opcion-si-no" id="' + id + '"><button class="cat' + (v === true ? " on" : "") + '" data-v="1">Sí</button><button class="cat' + (v === false ? " on" : "") + '" data-v="0">No</button><button class="cat' + (v == null ? " on" : "") + '" data-v="">No sé</button></div></div>';
   abreHoja('<h3>' + (nuevo ? "Modelo nuevo" : "Ficha del modelo") + '</h3>' + (m.pendiente ? '<div class="candado" style="margin-bottom:10px"><span><b>Por revisar.</b> ' + esc(m.nota || "Entró con la carga del 2 de octubre; confirma el nombre y la ficha.") + ' Al guardar se quita la marca.</span></div>' : "") + '<p class="guia">Con esta ficha el sistema traduce puertas y cajones a muebles. Si no sabes un dato, déjalo vacío: el sistema dirá «falta dato» en vez de inventar.</p>' +
@@ -1108,15 +1132,14 @@ function hojaModelo(m, nombreSugerido){
     '<div class="grupo-h">Puertas</div><div class="dupla">' + num("mPG", "Grandes", m.puertas_grandes) + num("mPGL", "Grandes con luna", m.puertas_grandes_luna) + '</div>' +
     '<div class="dupla">' + num("mPC", "Chicas", m.puertas_chicas) + num("mPCL", "Chicas con luna", m.puertas_chicas_luna) + '</div>' +
     num("mTotal", "Total de puertas (lo que cuenta para las equivalencias)", m.total_puertas) +
-    '<div class="dupla">' + siNo("mParches", "¿Lleva parches?", m.lleva_parches) + siNo("mRespaldo", "¿Lleva respaldo?", m.lleva_respaldo) + '</div>' +
+    '<div class="dupla">' + num("mParches", "Parches por mueble (0 si no lleva)", R.parchesDe(m)) + siNo("mRespaldo", "¿Lleva respaldo?", m.lleva_respaldo) + '</div>' +
     '<button class="btn vino grande" id="mOk" style="margin-top:8px">' + (nuevo ? "Agregar al catálogo" : "Guardar cambios") + '</button>' +
     (nuevo ? "" : '<button class="btn fantasma grande" id="mQuita" style="margin-top:8px">Quitar del catálogo</button>'),
     h => {
       const g = id => h.querySelector(id);
-      let tipo = m.tipo === "mdf" ? "mdf" : "madera", parches = m.lleva_parches, respaldo = m.lleva_respaldo;
+      let tipo = m.tipo === "mdf" ? "mdf" : "madera", respaldo = m.lleva_respaldo;
       const marca = (cont, v) => cont.querySelectorAll("[data-v]").forEach(b => b.classList.toggle("on", b.dataset.v === (v == null ? "" : String(v === true ? 1 : v === false ? 0 : v))));
       g("#mTipo").querySelectorAll("[data-v]").forEach(b => b.onclick = () => { tipo = b.dataset.v; marca(g("#mTipo"), tipo); });
-      g("#mParches").querySelectorAll("[data-v]").forEach(b => b.onclick = () => { parches = b.dataset.v === "" ? null : b.dataset.v === "1"; marca(g("#mParches"), parches); });
       g("#mRespaldo").querySelectorAll("[data-v]").forEach(b => b.onclick = () => { respaldo = b.dataset.v === "" ? null : b.dataset.v === "1"; marca(g("#mRespaldo"), respaldo); });
       const suma = () => { const vs = ["#mPG", "#mPGL", "#mPC", "#mPCL"].map(id => g(id).value); if (vs.every(v => v !== "")) g("#mTotal").value = vs.reduce((s,v) => s + Number(v), 0); };
       ["#mPG", "#mPGL", "#mPC", "#mPCL"].forEach(id => g(id).oninput = suma);
@@ -1124,7 +1147,7 @@ function hojaModelo(m, nombreSugerido){
       g("#mOk").onclick = async () => {
         const nombre = g("#mNombre").value.trim(); if (!nombre) return grita("Falta el nombre");
         const repetido = E.modelos.find(x => x.id !== m.id && x.activo !== false && sinAcento(x.nombre) === sinAcento(nombre)); if (repetido) return grita("Ya existe un modelo con ese nombre");
-        const datos = { nombre, familia: g("#mFamilia").value.trim() || nombre.split(" ")[0], tipo, pendiente: false, nota: "", cajones: leeNum("#mCajones"), puertas_grandes: leeNum("#mPG"), puertas_grandes_luna: leeNum("#mPGL"), puertas_chicas: leeNum("#mPC"), puertas_chicas_luna: leeNum("#mPCL"), total_puertas: leeNum("#mTotal"), lleva_parches: parches, lleva_respaldo: respaldo, editado_por: E.yo };
+        const datos = { nombre, familia: g("#mFamilia").value.trim() || nombre.split(" ")[0], tipo, pendiente: false, nota: "", cajones: leeNum("#mCajones"), puertas_grandes: leeNum("#mPG"), puertas_grandes_luna: leeNum("#mPGL"), puertas_chicas: leeNum("#mPC"), puertas_chicas_luna: leeNum("#mPCL"), total_puertas: leeNum("#mTotal"), parches: leeNum("#mParches"), lleva_parches: leeNum("#mParches") == null ? null : leeNum("#mParches") > 0, lleva_respaldo: respaldo, editado_por: E.yo };
         const cambios = nuevo ? "modelo nuevo" : Object.keys(datos).filter(k => !["editado_por", "pendiente", "nota"].includes(k) && JSON.stringify(datos[k]) !== JSON.stringify(m[k] == null ? null : m[k])).map(k => k.replace(/_/g, " ") + ": " + (m[k] == null ? "vacío" : m[k]) + " → " + (datos[k] == null ? "vacío" : datos[k])).join(" · ");
         if (!nuevo && !cambios && !m.pendiente){ cierraHoja(); return; }
         let id = m.id;
@@ -1151,6 +1174,12 @@ $("#nuevoModelo").onclick = () => hojaModelo(null);
 
 
 /* ═══════════════ recados ═══════════════ */
+function textoSemana(sab){
+  const vie = new Date(sab); vie.setDate(vie.getDate() + 6);
+  const f = d => d.toLocaleDateString("es-MX", { day: "numeric", month: "long" });
+  const hoySab = Almacen.inicioSemana().getTime() === sab.getTime();
+  return "Semana del sábado " + f(sab) + " al viernes " + f(vie) + (hoySab ? " · esta semana" : "");
+}
 function pintaRecados(){
   const caja = $("#listaRecados");
   const l = E.recados.slice().sort((a,b) => a.creado < b.creado ? 1 : -1);
@@ -1159,16 +1188,18 @@ function pintaRecados(){
   const nuevos = l.filter(r => !r.hecho && !(r.vistos || {})[E.yo]).length;
   $("#globoRec").hidden = !nuevos; $("#globoRec").textContent = nuevos;
   $("#nRec").hidden = !pend; $("#nRec").textContent = pend;
-  if (!l.length){ caja.innerHTML = '<div class="vacio"><b>No hay recados</b><p>Escribe uno arriba y todos lo ven.</p></div>'; return; }
-  caja.innerHTML = l.map(r => {
+  if (!l.length){ caja.innerHTML = '<div class="vacio"><b>No hay recados</b><p>Escribe uno arriba y todos lo ven. Lo que ya quedó hecho se borra solo el domingo a las 12 de la noche.</p></div>'; return; }
+  const semanas = {};
+  l.forEach(r => { const sab = Almacen.inicioSemana(r.creado); const k = sab.toISOString(); (semanas[k] = semanas[k] || { sab, rs: [] }).rs.push(r); });
+  caja.innerHTML = Object.keys(semanas).sort().reverse().map(k => '<div class="dia semana">' + esc(textoSemana(semanas[k].sab)) + '</div>' + semanas[k].rs.map(r => {
     const vistos = Object.keys(r.vistos || {}).filter(v => v !== r.de);
-    return '<article class="tarjeta' + (r.hecho ? " lista" : r.urgente ? " urge" : "") + '"><div class="enc"><span class="av">' + esc(iniciales(r.de)) + '</span><b>' + esc(r.de || "Alguien") + '</b><span class="hora">' + esc(cuando(r.creado)) + '</span></div>' +
-      '<div class="cuerpo">' + esc(r.texto) + '</div><div class="pie"><span class="visto">' + (vistos.length ? "Visto: " + esc(vistos.join(", ")) : "Nadie lo ha visto") + '</span>' +
+    return '<article class="tarjeta' + (r.hecho ? " lista" : r.urgente ? " urge" : "") + '"><div class="enc"><span class="av">' + esc(iniciales(r.de)) + '</span><b>' + esc(r.de || "Alguien") + '</b>' + (r.tipo === "maquilado" ? '<span class="sello amb">maquilado</span>' : "") + '<span class="hora">' + esc(cuando(r.creado)) + '</span></div>' +
+      '<div class="cuerpo">' + esc(r.texto) + '</div><div class="pie"><span class="visto">' + (r.hecho ? "Hecho " + esc(cuando(r.hecho_en || r.creado)) + " · se borra el domingo en la noche" : vistos.length ? "Visto: " + esc(vistos.join(", ")) : "Nadie lo ha visto") + '</span>' +
       (r.hecho ? '<button class="btn fantasma" data-reabre="' + r.id + '">Reabrir</button>' : '<button class="btn" data-hecho="' + r.id + '">✓ Ya quedó</button>') +
       '<button class="btn fantasma" data-borra="' + r.id + '">Borrar</button></div></article>';
-  }).join("");
-  caja.querySelectorAll("[data-hecho]").forEach(b => b.onclick = () => { if (exigeYo()) Almacen.parcha("recado", b.dataset.hecho, {hecho:true}); });
-  caja.querySelectorAll("[data-reabre]").forEach(b => b.onclick = () => Almacen.parcha("recado", b.dataset.reabre, {hecho:false}));
+  }).join("")).join("");
+  caja.querySelectorAll("[data-hecho]").forEach(b => b.onclick = () => { if (exigeYo()) Almacen.parcha("recado", b.dataset.hecho, {hecho:true, hecho_en: new Date().toISOString(), hecho_por: E.yo}); });
+  caja.querySelectorAll("[data-reabre]").forEach(b => b.onclick = () => Almacen.parcha("recado", b.dataset.reabre, {hecho:false, hecho_en: null}));
   caja.querySelectorAll("[data-borra]").forEach(b => b.onclick = () => { if (confirm("¿Borrar este recado para todos?")) Almacen.borra("recado", b.dataset.borra); });
   marcaVistos();
 }
@@ -1194,7 +1225,9 @@ function descMov(m){
   const et = k => (R.ETAPAS[k] || R.PIEZAS[k] || {}).nombre || k;
   let titulo_ = esc(m.nombre || m.tipo) + (m.color ? " · " + esc(m.color) : "");
   let sub = "";
-  if (m.tipo === "traslado") sub = esc(et(m.etapa_de)) + " → " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "puertas_lijadas_bisagras" ? "bisagras: " : m.etapa_a === "armado" ? "armó " : "pintó ") + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · de: " + m.desglose.map(d => esc(d.de) + " " + d.cantidad).join(", ") : "");
+  if (m.tipo === "preparado") sub = "se preparó · salió de " + esc(et(m.etapa_de)) + (m.hecho_por ? " · preparó " + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · descontó: " + m.desglose.map(d => d.cantidad + " " + esc(d.de)).join(", ") : "") + (m.motivo ? " · " + esc(m.motivo) : "");
+  else if (m.tipo === "plan") sub = esc(et(m.etapa_de)) + " → plan del día (" + esc(et(m.etapa_a)) + ")" + (m.motivo ? " · " + esc(m.motivo) : "");
+  else if (m.tipo === "traslado") sub = esc(et(m.etapa_de)) + " → " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "puertas_lijadas_bisagras" ? "bisagras: " : m.etapa_a === "armado" ? "armó " : "pintó ") + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · de: " + m.desglose.map(d => esc(d.de) + " " + d.cantidad).join(", ") : "");
   else if (m.tipo === "alta" && m.etapa_a) sub = "entró a " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "mdf" ? "hizo " : "maquiló ") + esc(m.hecho_por) : "") + (m.motivo ? " · " + esc(m.motivo) : "");
   else if (m.tipo === "alta" && m.categoria) sub = "entró a " + esc(et(m.categoria)) + (m.hecho_por ? " · pintó " + esc(m.hecho_por) : "") + (m.motivo ? " · " + esc(m.motivo) : "");
   else if (m.tipo === "ajuste" && (m.etapa_a || m.categoria)) sub = "corrección en " + esc(et(m.etapa_a || m.categoria)) + (m.motivo ? " · " + esc(m.motivo) : "");
@@ -1246,7 +1279,7 @@ function pintaCatMaterial(){
 function pintaAjustes(){
   const C = window.CONFIG || {};
   $("#ajustes").innerHTML =
-    tarjetaPedidosLibreta() + tarjetaCarga() + tarjetaPintura() +
+    tarjetaRevisarNombres() + tarjetaArreglo() + tarjetaPedidosLibreta() + tarjetaCarga() + tarjetaPintura() +
     '<div class="ajuste"><h4>Quién soy</h4><p>' + (E.yo ? "Estás como <b>" + esc(E.yo) + "</b>." : "Todavía no has dicho quién eres.") + '</p><div class="acciones"><button class="btn" id="ajYo">Cambiar de persona</button>' + (Almacen.sesion ? '<button class="btn fantasma" id="ajSalir">Cerrar sesión</button>' : "") + '</div></div>' +
     '<div class="ajuste"><h4>Modo práctica</h4><p>Para jugar sin miedo: datos de juguete, solo en este aparato. El inventario real ni se entera.</p><label class="interruptor"><input type="checkbox" id="ajPractica"' + (Almacen.practica ? " checked" : "") + '> <span>' + (Almacen.practica ? "Practicando" : "Apagado") + '</span></label></div>' +
     '<div class="ajuste"><h4>Hoja de conteo para imprimir</h4><p>Para caminar el almacén con papel y comparar contra el sistema.</p><div class="acciones"><button class="btn" data-imprime="mueble">Muebles</button><button class="btn" data-imprime="pieza">Piezas</button><button class="btn" data-imprime="material">Material</button></div></div>' +
@@ -1256,6 +1289,8 @@ function pintaAjustes(){
   const cg = $("#ajCarga"); if (cg) cg.onclick = hojaCarga;
   const cp = $("#ajPintura"); if (cp) cp.onclick = cargaPintura;
   const cpl = $("#ajPedidos"); if (cpl) cpl.onclick = cargaPedidosLibreta;
+  const rn = $("#ajNombres"); if (rn) rn.onclick = hojaRevisarNombres;
+  const ar = $("#ajArreglo"); if (ar) ar.onclick = aplicaArreglo;
   $("#ajYo").onclick = hojaQuienSoy;
   const s = $("#ajSalir"); if (s) s.onclick = async () => { await Almacen.sale(); pintaPulso(); pintaTodo(); };
   $("#ajPractica").onchange = async e => { await Almacen.setPractica(e.target.checked); pintaPulso(); pintaTodo(); grita(e.target.checked ? "Modo práctica encendido" : "De vuelta a lo real"); };
@@ -1368,22 +1403,33 @@ function imprime(tipo){
    se imprime en computadora y se baja como PDF en el celular. */
 const fechaHoy = () => new Date().toLocaleDateString("es-MX", {weekday:"long", day:"numeric", month:"long", year:"numeric"});
 const SECCIONES_REP = () => [
-  ...["maquilado", "armado", "pintado", "mdf", "mdf_pintado"].map(k => ({ k, zona: "Zona de muebles", nombre: R.ETAPAS[k].nombre })),
-  ...[["puertas_uriel"], ["puertas_por_lijar"], ["puertas_lijadas", "Puertas lijadas · sin bisagras"], ["puertas_lijadas_bisagras", "Puertas lijadas · con bisagras"], ["puertas_pintadas"], ["cajones_pintados"], ["parches_pintados"]]
+  ...["maquilado", "armado", "pintado", "mdf", "mdf_pintado", "preparado"].map(k => ({ k, zona: "Zona de muebles", nombre: R.ETAPAS[k].nombre })),
+  ...[["puertas_uriel"], ["puertas_por_lijar"], ["puertas_lijadas", "Puertas lijadas · sin bisagras"], ["puertas_lijadas_bisagras", "Puertas lijadas · con bisagras"], ["puertas_pintadas"], ["cajones_armados"], ["cajones_pintados"], ["parches_por_lijar"], ["parches_lijados"], ["parches_pintados"]]
     .map(([k, n]) => ({ k, zona: "Zona de piezas", nombre: n || R.PIEZAS[k].nombre }))
 ];
+/* A dónde va cada cosa cuando se descuenta desde el reporte al Plan del día (null = no se puede) */
+function destinoPlan(tipo, x){
+  if (tipo === "lote"){ const sig = R.siguienteEtapa(x.etapa); return sig && sig !== "preparado" ? sig : null; }
+  if (x.categoria === "puertas_lijadas") return "puertas_pintadas";       // sin bisagras: pide autorización
+  if (R.esExtra(modeloDe(x.modelo_id))) return R.siguientePiezaDe(x.categoria, modeloDe(x.modelo_id));
+  return R.siguientePieza(x.categoria);
+}
+const NOMBRE_PLAN = { puertas_por_lijar: "Puertas a pre lijar (Uriel)", puertas_lijadas: "Puertas a lijar", puertas_pintadas: "Puertas a pintar", armado: "Muebles a armar", pintado: "Muebles a pintar", mdf_pintado: "MDF a pintar", cajones_pintados: "Cajones a pintar", parches_lijados: "Parches a lijar", parches_pintados: "Parches a pintar" };
 function reporteMuebles(seccion){
   const orden = (a, b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1;
   const grupos = SECCIONES_REP().filter(s => !seccion || s.k === seccion).map(s => {
     let filas, total = 0;
+    let refs;
     if (s.zona === "Zona de muebles"){
       const ls = E.lotes.filter(l => l.etapa === s.k && Number(l.cantidad) > 0).sort(orden);
       filas = ls.map(l => { total += Number(l.cantidad); const q = R.firmaDe(l); return [l.modelo, nombreColor(l.color), Number(l.cantidad), /sin nombre|sin responsable/.test(q || "") ? "" : (q || "")]; });
+      refs = ls.map(l => ({ tipo: "lote", id: l.id, a: destinoPlan("lote", l) }));
     } else {
       const ps = E.piezas.filter(p => p.categoria === s.k && vivoPieza(p) > 0).sort(orden);
       filas = ps.map(p => { const n = vivoPieza(p); total += n; return [p.modelo, nombreColor(p.color), n, R.textoEquivalencia(n, s.k, modeloDe(p.modelo_id)).replace(/^\d+ \S+ ?/, "").replace(/^· /, "")]; });
+      refs = ps.map(p => ({ tipo: "pieza", id: p.id, a: destinoPlan("pieza", p) }));
     }
-    return { zona: s.zona, titulo: s.nombre, total, filas };
+    return { zona: s.zona, titulo: s.nombre, total, filas, refs };
   }).filter(g => seccion || g.filas.length);
   const sec = seccion && SECCIONES_REP().find(s => s.k === seccion);
   return { titulo: sec ? (sec.zona === "Zona de muebles" ? "Muebles · " : "Piezas · ") + sec.nombre : "Muebles y piezas", columnas: ["Mueble", "Color", "Hay", sec && sec.zona === "Zona de muebles" ? "Quién" : sec ? "Equivale a" : "Quién / equivale a"], numericas: 1, grupos, conZonas: !seccion };
@@ -1399,14 +1445,19 @@ function reportePintura(){
 /* Lo que falta por cliente y qué hay en el taller para cubrirlo */
 function reportePedidos(){
   const grupos = [];
-  const porModelo = n => E.modelos.find(m => sinAcento(m.nombre) === sinAcento(n)) || Busca.busca(n, modelosActivos(), m => m.nombre)[0] || null;
+  const porModelo = n => E.modelos.find(m => sinAcento(m.nombre) === sinAcento(n)) || null;
   E.pedidos.filter(p => p.estado !== "entregado").sort((a,b) => (a.cliente || "") < (b.cliente || "") ? -1 : 1).forEach(p => {
     const filas = [];
     lineasDe(p).forEach(x => {
       const faltan = Number(x.cantidad || 0) - Math.min(Number(x.cantidad || 0), Number(x.entregado || 0)); if (faltan <= 0) return;
-      const m = porModelo(x.modelo);
+      const m = x.surtido ? null : porModelo(x.modelo);
       let hay = "no está en el catálogo";
-      if (m){
+      if (x.surtido){
+        const fam = x.familia || (x.modelo || "").split(" ")[0];
+        const ms = E.modelos.filter(mm => mm.activo !== false && sinAcento(mm.familia || "") === sinAcento(fam)).map(mm => mm.id);
+        const cnt = k => E.lotes.filter(l => l.etapa === k && ms.includes(l.modelo_id)).reduce((s,l) => s + Number(l.cantidad), 0);
+        hay = "surtido: el cliente deja escoger · de " + fam + " hay " + cnt("pintado") + " pintados y " + cnt("preparado") + " preparados";
+      } else if (m){
         const mismo = l => l.modelo_id === m.id && (!x.color || !l.color || l.color === x.color);
         const et = k => E.lotes.filter(l => l.etapa === k && mismo(l)).reduce((s,l) => s + Number(l.cantidad), 0);
         const pz = k => E.piezas.filter(q => q.categoria === k && mismo(q)).reduce((s,q) => s + vivoPieza(q), 0);
@@ -1414,6 +1465,7 @@ function reportePedidos(){
         const partes = [];
         if (m.tipo === "mdf") partes.push(et("mdf") + " MDF", et("mdf_pintado") + " MDF pintados");
         else partes.push(et("maquilado") + " maquilados", et("armado") + " armados", et("pintado") + " pintados");
+        partes.push(et("preparado") + " preparados");
         partes.push("puertas pintadas " + eq(pz("puertas_pintadas"), m.total_puertas), "puertas lijadas " + eq(pz("puertas_lijadas") + pz("puertas_lijadas_bisagras"), m.total_puertas), "cajones " + eq(pz("cajones_pintados"), m.cajones));
         hay = partes.join(" · ");
       }
@@ -1423,26 +1475,47 @@ function reportePedidos(){
   });
   return { titulo: "Pedidos: qué falta y qué hay", columnas: ["Falta", "Hay en el taller"], grupos, numericas: 0 };
 }
+function reporteMovimientos(){
+  const sab = Almacen.inicioSemana(); const lun = new Date(sab); lun.setDate(lun.getDate() + 2);
+  const semanas = [{ sab, titulo: "Esta semana" }];
+  if (Date.now() < lun.getTime()){ const ant = new Date(sab); ant.setDate(ant.getDate() - 7); semanas.push({ sab: ant, titulo: "Semana pasada (se borra el domingo en la noche)" }); }
+  const grupos = [];
+  semanas.forEach(w => {
+    const ini = w.sab.toISOString(); const fin = new Date(w.sab); fin.setDate(fin.getDate() + 7); const finIso = fin.toISOString();
+    const ms = E.movimientos.filter(m => m.creado >= ini && m.creado < finIso && m.tipo !== "catalogo");
+    const dias = {}; ms.forEach(m => { const d = m.creado.slice(0, 10); (dias[d] = dias[d] || []).push(m); });
+    Object.keys(dias).sort().forEach(d => {
+      const filas = dias[d].sort((a, b) => a.creado < b.creado ? -1 : 1).map(m => { const x = descMov(m); return [reloj(m.creado), (m.tipo === "traslado" ? "→" : m.delta > 0 ? "+" : "") + (m.delta || "·"), x.titulo.replace(/<[^>]+>/g, ""), x.sub.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " "), (m.persona || "?") + (m.origen ? " · " + m.origen : "")]; });
+      grupos.push({ zona: textoSemana(w.sab), titulo: fechaLarga(d), total: filas.length, filas });
+    });
+  });
+  return { titulo: "Movimientos de la semana", columnas: ["Hora", "Cant.", "Qué", "Detalle", "Capturó"], grupos, numericas: 0, conZonas: true, archivo: "movimientos-semana-" + sab.toISOString().slice(0, 10) };
+}
 function pintaReportes(){
   $("#listaReportes").innerHTML =
-    '<div class="ajuste"><h4>Muebles y piezas</h4><p>Seccionado igual que la app: Zona de muebles (una tabla por etapa) y Zona de piezas (una tabla por sección), cada una con mueble, color, cuántos hay y a cuántos juegos equivale.</p><div class="acciones"><button class="btn vino" data-rep="muebles">Todo</button><select id="repSeccion" class="btn"><option value="">Solo una sección…</option>' +
+    '<div class="ajuste"><h4>Muebles y piezas</h4><p>Seccionado igual que la app: Zona de muebles (una tabla por etapa) y Zona de piezas (una tabla por sección). Cada renglón trae el botón <b>Descontar</b>: baja del inventario ahora y queda pendiente en el Plan del día hasta que se marque listo.</p><div class="acciones"><button class="btn vino" data-rep="muebles">Todo</button><select id="repSeccion" class="btn"><option value="">Solo una sección…</option>' +
       ["Zona de muebles", "Zona de piezas"].map(z => '<optgroup label="' + z + '">' + SECCIONES_REP().filter(s => s.zona === z).map(s => '<option value="' + s.k + '">' + esc(s.nombre) + '</option>').join("") + '</optgroup>').join("") + '</select></div></div>' +
     '<div class="ajuste"><h4>Pintura y material</h4><p>Cubetas, tambos en el almacén y tambos abiertos en cabina.</p><div class="acciones"><button class="btn vino" data-rep="pintura">Ver</button></div></div>' +
-    '<div class="ajuste"><h4>Pedidos</h4><p>Por cliente: lo que falta por entregar y qué hay en el taller para cubrirlo.</p><div class="acciones"><button class="btn vino" data-rep="pedidos">Ver</button></div></div>';
+    '<div class="ajuste"><h4>Pedidos</h4><p>Por cliente: lo que falta por entregar y qué hay en el taller para cubrirlo.</p><div class="acciones"><button class="btn vino" data-rep="pedidos">Ver</button></div></div>' +
+    '<div class="ajuste"><h4>Movimientos de la semana</h4><p>Todo lo que se hizo de sábado a viernes, día por día. Bájalo en PDF antes del domingo en la noche: ese día se borra de la nube para no ocupar espacio.</p><div class="acciones"><button class="btn vino" data-rep="semana">Ver</button></div></div>';
   $("#listaReportes").querySelectorAll("[data-rep]").forEach(b => b.onclick = () => abreReporte(b.dataset.rep));
   $("#repSeccion").onchange = e => { if (e.target.value) abreReporte("muebles", e.target.value); };
 }
 const esNum = (r, i) => r.numCols ? r.numCols.includes(i) : i >= r.columnas.length - r.numericas;
 function abreReporte(cual, seccion){
-  const r = cual === "muebles" ? reporteMuebles(seccion) : cual === "pintura" ? reportePintura() : reportePedidos();
+  E.reporteAbierto = { cual, seccion };
+  const r = cual === "muebles" ? reporteMuebles(seccion) : cual === "pintura" ? reportePintura() : cual === "semana" ? reporteMovimientos() : reportePedidos();
   if (cual === "muebles") r.numCols = [2];
-  const tabla = (filas) => filas.length ? '<table class="rep"><thead><tr>' + r.columnas.map((c, i) => '<th' + (esNum(r, i) ? ' class="n"' : "") + '>' + esc(c) + '</th>').join("") + '</tr></thead><tbody>' +
-    filas.map(f => '<tr>' + f.map((v, i) => '<td' + (esNum(r, i) ? ' class="n"' : "") + '>' + esc(v) + '</td>').join("") + '</tr>').join("") + '</tbody></table>' : '<p class="rep-nada">Nada en esta sección.</p>';
+  if (cual === "semana") r.numCols = [];
+  const conAccion = cual === "muebles";
+  const tabla = (filas, refs) => filas.length ? '<table class="rep"><thead><tr>' + r.columnas.map((c, i) => '<th' + (esNum(r, i) ? ' class="n"' : "") + '>' + esc(c) + '</th>').join("") + (conAccion ? '<th class="acc"></th>' : "") + '</tr></thead><tbody>' +
+    filas.map((f, j) => '<tr>' + f.map((v, i) => '<td' + (esNum(r, i) ? ' class="n"' : "") + '>' + esc(v) + '</td>').join("") + (conAccion ? '<td class="acc">' + (refs && refs[j] && refs[j].a ? '<button class="btn chico" data-desc="' + esc(refs[j].tipo + "|" + refs[j].id) + '">Descontar</button>' : "") + '</td>' : "") + '</tr>').join("") + '</tbody></table>' : '<p class="rep-nada">Nada en esta sección.</p>';
   let zona = "";
-  const cuerpo = r.grupos ? (r.grupos.length ? r.grupos.map(g => { const z = r.conZonas && g.zona && g.zona !== zona ? '<h3 class="rep-zona">' + esc(zona = g.zona) + '</h3>' : ""; return z + '<h4 class="rep-g">' + esc(g.titulo) + (g.total != null ? ' <span>· ' + g.total + '</span>' : "") + '</h4>' + tabla(g.filas); }).join("") : '<div class="vacio"><b>Nada que reportar</b></div>') : (r.filas.length ? tabla(r.filas) : '<div class="vacio"><b>Nada que reportar</b></div>');
+  const cuerpo = r.grupos ? (r.grupos.length ? r.grupos.map(g => { const z = r.conZonas && g.zona && g.zona !== zona ? '<h3 class="rep-zona">' + esc(zona = g.zona) + '</h3>' : ""; return z + '<h4 class="rep-g">' + esc(g.titulo) + (g.total != null ? ' <span>· ' + g.total + '</span>' : "") + '</h4>' + tabla(g.filas, g.refs); }).join("") : '<div class="vacio"><b>Nada que reportar</b></div>') : (r.filas.length ? tabla(r.filas) : '<div class="vacio"><b>Nada que reportar</b></div>');
   $("#listaReportes").innerHTML = '<div class="rep-cab"><button class="btn" id="repVolver">← Reportes</button><div class="der">' + (esEscritorio() ? '<button class="btn vino" id="repImprimir">Imprimir</button>' : '<button class="btn vino" id="repPdf">Descargar PDF</button>') + '</div></div>' +
     '<div class="rep-hoja" id="repHoja"><h1>' + esc(r.titulo) + '</h1><p class="rep-fecha">' + esc((window.CONFIG || {}).TALLER || "") + ' · ' + esc(fechaHoy()) + '</p>' + cuerpo + '</div>';
-  $("#repVolver").onclick = pintaReportes;
+  $("#repVolver").onclick = () => { E.reporteAbierto = null; pintaReportes(); };
+  $("#listaReportes").querySelectorAll("[data-desc]").forEach(b => b.onclick = () => { const [tipo, id] = b.dataset.desc.split("|"); hojaDescontar(tipo, id, () => abreReporte(cual, seccion)); });
   const bi = $("#repImprimir"); if (bi) bi.onclick = () => { $("#impresion").innerHTML = $("#repHoja").innerHTML; $("#impresion").hidden = false; window.print(); setTimeout(() => { $("#impresion").hidden = true; }, 500); };
   const bp = $("#repPdf"); if (bp) bp.onclick = () => descargaPdf(r);
 }
@@ -1478,9 +1551,226 @@ async function descargaPdf(r){
       linea(r.columnas, anchos, true, true);
       g.filas.forEach(f => linea(f, anchos, false, false));
     });
-    const nombre = r.titulo.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + new Date().toISOString().slice(0, 10) + ".pdf";
+    const nombre = (r.archivo || r.titulo.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + new Date().toISOString().slice(0, 10)) + ".pdf";
     doc.save(nombre);
   } catch(e){ console.warn(e); grita("No se pudo armar el PDF. Revisa la señal e intenta de nuevo."); }
+}
+
+/* ═══════════════ PREPARAR: mueble pintado + puertas, cajones y parches pintados ═══════════════ */
+function hojaPreparar(g){
+  if (!exigeYo()) return;
+  const regla = R.responsables("preparado"); let quien = [];
+  const rec = E.ultimoQuien.preparado; if (rec && Date.now() - rec.t < 15*60*1000) quien = rec.nombres.filter(n => regla.opciones.includes(n));
+  const m = modeloDe(g.modelo_id);
+  const revisa0 = Almacen.revisaPreparar({ modelo_id: g.modelo_id, color: g.color }, 1);
+  const ini = g.lotes.length === 1 ? g.lotes[0].cantidad : 0;
+  abreHoja('<h3>Preparar</h3>' +
+    '<div class="paso-a"><span class="de">' + esc(R.ETAPAS[g.etapa].nombre) + '</span> → <span class="a">Mueble preparado</span></div>' +
+    '<p class="guia"><b>' + esc(g.modelo) + '</b> · ' + esc(nombreColor(g.color)) + ' · hay <b>' + g.total + '</b> pintados. Al preparar se descuentan del inventario sus puertas, cajones y parches pintados.</p>' +
+    '<div class="lotes">' + g.lotes.map(l => '<div class="lote" data-lote="' + esc(l.id) + '"><div class="quien">' + esc(R.firmaDe(l)) + '<small>' + esc(R.origenDe(l)) + '</small><div class="disp">' + l.cantidad + ' disponibles</div></div>' +
+      '<div class="toma"><button class="tecla" data-menos>−</button><input type="number" inputmode="numeric" min="0" max="' + l.cantidad + '" value="' + (g.lotes.length === 1 ? l.cantidad : 0) + '"><button class="tecla" data-mas>＋</button></div></div>').join("") + '</div>' +
+    '<div class="total-paso"><span>Se preparan</span><b id="pTotal">' + ini + '</b></div>' +
+    '<h3 class="mini">Se descuenta</h3><div class="lotes" id="pDesc"></div>' +
+    '<div class="grupo-h">' + esc(regla.pregunta) + '</div><div class="cats" id="pQuien">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>' +
+    '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" disabled style="margin-top:12px">Confirmar</button>',
+    h => {
+      const filas = Array.from(h.querySelectorAll("[data-lote]"));
+      const total = () => filas.reduce((s,f) => s + (Number(f.querySelector("input").value) || 0), 0);
+      const revisa = () => {
+        let mal = false;
+        filas.forEach(f => { const l = g.lotes.find(x => x.id === f.dataset.lote); const inp = f.querySelector("input"); const v = Number(inp.value) || 0; const m2 = v < 0 || v > l.cantidad || !Number.isInteger(v); inp.classList.toggle("mal", m2); if (m2) mal = true; });
+        const t = total(); h.querySelector("#pTotal").textContent = t;
+        const rv = Almacen.revisaPreparar({ modelo_id: g.modelo_id, color: g.color }, Math.max(1, t));
+        h.querySelector("#pDesc").innerHTML = rv.partes.map(pt => '<div class="lote"><div class="quien">' + esc(R.PIEZAS[pt.cat].nombre) + '<small>hay ' + pt.hay + (pt.fuentes.some(f => !f.color) && g.color ? " (incluye sin color)" : "") + '</small></div><div class="disp' + (pt.hay < pt.necesita ? '" style="color:var(--rojo)' : "") + '"><b>−' + pt.necesita + '</b></div></div>').join("") +
+          rv.sinFicha.map(c => '<div class="lote"><div class="quien" style="color:var(--rojo)">' + esc(R.PIEZAS[c].nombre) + '<small>la ficha no dice cuántos lleva: no se descuentan</small></div></div>').join("") +
+          (!rv.partes.length && !rv.sinFicha.length ? '<div class="lote"><div class="quien">Este modelo no lleva piezas</div></div>' : "");
+        const err = h.querySelector("#pError");
+        if (t > 0 && rv.faltan.length){ const f = rv.faltan[0]; err.hidden = false; err.textContent = "Faltan " + f.faltan + " " + R.PIEZAS[f.cat].nombre.toLowerCase() + " para preparar " + t; } else err.hidden = true;
+        h.querySelector("#pOk").disabled = mal || t <= 0 || !quien.length || (t > 0 && rv.faltan.length > 0);
+      };
+      filas.forEach(f => {
+        const l = g.lotes.find(x => x.id === f.dataset.lote); const inp = f.querySelector("input");
+        f.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(0, (Number(inp.value) || 0) - 1); revisa(); };
+        f.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(l.cantidad, (Number(inp.value) || 0) + 1); revisa(); };
+        inp.oninput = revisa; inp.onfocus = () => inp.select();
+      });
+      h.querySelectorAll("#pQuien [data-n]").forEach(b => b.onclick = () => { quien = quien.includes(b.dataset.n) ? [] : [b.dataset.n]; h.querySelectorAll("#pQuien [data-n]").forEach(x => x.classList.toggle("on", quien.includes(x.dataset.n))); revisa(); });
+      revisa();
+      h.querySelector("#pOk").onclick = async () => {
+        E.ultimoQuien.preparado = { nombres: quien.slice(), t: Date.now() };
+        let hechos = 0;
+        try {
+          for (const f of filas){ const n = Number(f.querySelector("input").value) || 0; if (!n) continue; await Almacen.prepara({ lote_id: f.dataset.lote, cantidad: n, preparo: quien[0] }, E.yo, origen()); hechos += n; }
+          cierraHoja(); grita(plural(hechos, "mueble preparado", "muebles preparados"));
+          E.etapa = "preparado"; E.sel = { tipo:"mueble", k: g.k, etapa: "preparado" }; irA("muebles"); pintaTodo();
+        } catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; if (hechos) pintaTodo(); }
+      };
+    });
+}
+
+/* ═══════════════ PLAN DEL DÍA ═══════════════ */
+const nombrePlan = a => NOMBRE_PLAN[a] || ((R.ETAPAS[a] || R.PIEZAS[a] || {}).nombre || a);
+const unidadPlan = p => p.tipo === "lote" ? "muebles" : (R.PIEZAS[p.de] || {}).unidad || "piezas";
+function pintaPlan(){
+  const caja = $("#listaPlan");
+  let l = E.plan.slice().sort((a,b) => (nombrePlan(a.a) + a.creado) < (nombrePlan(b.a) + b.creado) ? -1 : 1);
+  $("#resumenPlan").textContent = l.length ? plural(l.length, "pendiente", "pendientes") + " · " + fechaHoy() : fechaHoy();
+  if (q("plan")) l = Busca.busca(q("plan"), l, p => p.modelo + " " + p.color + " " + nombrePlan(p.a));
+  if (!l.length){ caja.innerHTML = q("plan") ? sinHallar("plan", "eso en el plan") : '<div class="vacio"><b>Nada pendiente para hoy</b><p>El plan se arma desde <b>Reportes → Muebles y piezas</b>: cada renglón tiene el botón «Descontar». Lo que se descuenta baja del inventario al momento y se queda aquí hasta que alguien lo marque listo.</p></div>'; return; }
+  const grupos = {}; l.forEach(p => (grupos[p.a] = grupos[p.a] || []).push(p));
+  caja.innerHTML = Object.keys(grupos).map(a => '<div class="bloque-h">' + esc(nombrePlan(a)) + '<span class="n">' + grupos[a].reduce((s,p) => s + p.cantidad, 0) + '</span></div>' + grupos[a].map(p => {
+    const m = modeloDe(p.modelo_id); const por = p.tipo === "pieza" ? R.piezasPorMueble(m, p.de) : null;
+    const eq = por > 0 ? " = " + plural(Math.floor(p.cantidad / por), "juego", "juegos") + (p.cantidad % por ? " y " + (p.cantidad % por) : "") : "";
+    return '<div class="fila plan-fila">' +
+      '<div class="nombre"><b>' + esc(p.modelo) + '</b><small>de ' + esc((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) + (p.autorizo ? ' · ' + esc(p.autorizo) : "") + '</small></div>' +
+      '<div class="sub">' + chipColor(p.color) + '</div><div class="apodos">' + chipColor(p.color) + '</div>' +
+      '<div class="cifra"><b>' + p.cantidad + '</b><small>' + esc(unidadPlan(p)) + esc(eq) + '</small></div>' +
+      '<div class="ultimo"><span>' + esc(p.de_quien || "?") + ' · ' + esc(cuando(p.creado)) + '</span></div>' +
+      '<div class="stepper"><button class="btn vino chico" data-listo="' + esc(p.id) + '">Listo</button><button class="tecla" data-edita="' + esc(p.id) + '" title="Cambiar cantidad">✎</button><button class="tecla" data-quita="' + esc(p.id) + '" title="Quitar: regresa al inventario">✕</button></div></div>';
+  }).join("")).join("");
+  caja.querySelectorAll("[data-listo]").forEach(b => b.onclick = () => hojaPlanListo(E.plan.find(x => x.id === b.dataset.listo)));
+  caja.querySelectorAll("[data-edita]").forEach(b => b.onclick = () => hojaPlanCambia(E.plan.find(x => x.id === b.dataset.edita)));
+  caja.querySelectorAll("[data-quita]").forEach(b => b.onclick = async () => { const p = E.plan.find(x => x.id === b.dataset.quita); if (!p || !exigeYo()) return; if (!confirm("¿Quitar del plan? Los " + p.cantidad + " " + unidadPlan(p) + " regresan a " + ((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) + ".")) return; await Almacen.planQuita(p.id, E.yo, origen()); grita("Regresó al inventario"); pintaTodo(); });
+}
+function hojaPlanListo(p){
+  if (!p || !exigeYo()) return;
+  const regla = R.responsables(p.a); let quien = [];
+  const rec = E.ultimoQuien[p.a]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
+  const pinta = sePintaEn(p.a);
+  abreHoja('<h3>' + esc(nombrePlan(p.a)) + '</h3><p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(nombreColor(p.color)) + ' · se descontaron <b>' + p.cantidad + '</b> ' + esc(unidadPlan(p)) + '. ¿Cuántos quedaron hechos? Lo que no, regresa a ' + esc((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) + '.</p>' +
+    '<div class="lote"><div class="quien">Se hicieron</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="0" max="' + p.cantidad + '" value="' + p.cantidad + '"><button class="tecla" data-mas>＋</button></div></div><p class="guia" id="pResto"></p>' +
+    (pinta ? '<div class="grupo-h">De qué color se pintaron</div>' + campoColor(p.color, true, "pColor") : "") +
+    (regla ? '<div class="grupo-h">' + esc(regla.pregunta) + (regla.max > 1 ? " · hasta " + regla.max : "") + '</div><div class="cats" id="pQuien">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>' : "") +
+    '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" style="margin-top:12px">Confirmar</button>',
+    h => {
+      const inp = h.querySelector("#pCant");
+      const revisa = () => { const v = Number(inp.value) || 0; const mal = v < 0 || v > p.cantidad; inp.classList.toggle("mal", mal); h.querySelector("#pResto").textContent = v < p.cantidad ? (p.cantidad - v) + " regresan a " + ((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) : ""; const colorOk = !pinta || !!h.querySelector("#pColor").value || v === 0; h.querySelector("#pOk").disabled = mal || (v > 0 && regla && !quien.length) || !colorOk; };
+      h.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(0, (Number(inp.value) || 0) - 1); revisa(); };
+      h.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(p.cantidad, (Number(inp.value) || 0) + 1); revisa(); };
+      inp.oninput = revisa; const pc = h.querySelector("#pColor"); if (pc) pc.onchange = revisa;
+      h.querySelectorAll("#pQuien [data-n]").forEach(b => b.onclick = () => { const n = b.dataset.n; if (quien.includes(n)) quien = quien.filter(x => x !== n); else if (regla.max === 1) quien = [n]; else if (quien.length < regla.max) quien.push(n); else return grita("Máximo " + regla.max); h.querySelectorAll("#pQuien [data-n]").forEach(x => x.classList.toggle("on", quien.includes(x.dataset.n))); revisa(); });
+      revisa();
+      h.querySelector("#pOk").onclick = async () => {
+        const v = Number(inp.value) || 0; const extra = {};
+        if (pinta && v > 0) extra.color = h.querySelector("#pColor").value;
+        if (regla && v > 0){ E.ultimoQuien[p.a] = { nombres: quien.slice(), t: Date.now() }; if (regla.campo === "armo") extra.armo = quien[0]; else if (regla.campo === "pinto") extra.pinto = quien.slice(); else if (regla.campo === "preparo") extra.preparo = quien[0]; else extra.hecho_por = quien.join(" y "); }
+        try { const r = await Almacen.planListo(p.id, v, extra, E.yo, origen()); cierraHoja(); grita(r.hechas ? r.hechas + " " + unidadPlan(p) + " → " + ((R.ETAPAS[p.a] || R.PIEZAS[p.a] || {}).nombre || p.a).toLowerCase() + (r.sobran ? " · " + r.sobran + " regresaron" : "") : "Todo regresó al inventario"); pintaTodo(); }
+        catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; }
+      };
+    });
+}
+function hojaPlanCambia(p){
+  if (!p || !exigeYo()) return;
+  const o = (p.tipo === "lote" ? E.lotes : E.piezas).find(x => x.id === p.origen_id); const disponible = o ? Number(o.cantidad || 0) : 0;
+  abreHoja('<h3>Cambiar cantidad</h3><p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(nombreColor(p.color)) + ' · ahora hay <b>' + p.cantidad + '</b> en el plan y quedan ' + disponible + ' en ' + esc((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) + '.</p>' +
+    '<label class="campo"><span>Cantidad en el plan</span><input id="cCant" type="number" inputmode="numeric" min="1" max="' + (p.cantidad + disponible) + '" value="' + p.cantidad + '"></label>' +
+    '<p class="sin-hallar" id="cError" hidden></p><button class="btn vino grande" id="cOk">Guardar</button>',
+    h => {
+      h.querySelector("#cCant").focus(); h.querySelector("#cCant").select();
+      h.querySelector("#cOk").onclick = async () => {
+        try { await Almacen.planCambia(p.id, Number(h.querySelector("#cCant").value), E.yo, origen()); cierraHoja(); grita("Cambiado"); pintaTodo(); }
+        catch(e){ const err = h.querySelector("#cError"); err.hidden = false; err.textContent = e.message; }
+      };
+    });
+}
+/* Desde Reportes: descontar del inventario al Plan del día */
+function hojaDescontar(tipo, id, despues){
+  if (!exigeYo()) return;
+  const x = (tipo === "lote" ? E.lotes : E.piezas).find(y => y.id === id); if (!x) return grita("Eso ya no está");
+  const a = destinoPlan(tipo, x); if (!a) return;
+  const n = tipo === "lote" ? Number(x.cantidad || 0) : vivoPieza(x);
+  const de = tipo === "lote" ? x.etapa : x.categoria;
+  const m = modeloDe(x.modelo_id); const por = tipo === "pieza" ? (R.piezasPorMueble(m, de) || 0) : 0;
+  let enJuegos = tipo === "pieza" && E.porJuego && por > 1 && n >= por;
+  const tope = () => enJuegos ? Math.floor(n / por) : n;
+  const sinBisagras = de === "puertas_lijadas";
+  abreHoja('<h3>Descontar al plan del día</h3>' +
+    '<div class="paso-a"><span class="de">' + esc((R.ETAPAS[de] || R.PIEZAS[de] || {}).nombre || de) + '</span> → <span class="a">' + esc(nombrePlan(a)) + '</span></div>' +
+    '<p class="guia"><b>' + esc(x.modelo) + '</b> · ' + esc(nombreColor(x.color)) + (tipo === "lote" ? " · " + esc(R.firmaDe(x)) : "") + ' · hay <b>' + n + '</b>. Baja del inventario ahora y queda pendiente en Plan del día hasta que se marque listo.</p>' +
+    (por > 1 ? '<div class="cats" id="pUnidad" style="margin-bottom:8px"><button class="cat' + (enJuegos ? "" : " on") + '" data-u="piezas">Por pieza</button><button class="cat' + (enJuegos ? " on" : "") + '" data-u="juegos"' + (n < por ? " disabled" : "") + '>Por juego (' + por + ')</button></div>' : "") +
+    '<div class="lote"><div class="quien" id="pCuantas">' + (enJuegos ? "Cuántos juegos" : "Cuántas") + '</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="1" max="' + tope() + '" value="' + tope() + '"><button class="tecla" data-mas>＋</button></div></div><p class="guia" id="pEq"></p>' +
+    (sinBisagras ? '<div class="candado" style="margin:8px 0"><span>Estas puertas <b>no tienen bisagras</b>. ¿Autorizas que se pinten así?</span></div><label class="interruptor" style="margin-bottom:8px"><input type="checkbox" id="pAut"><span>Sí, autorizo pintarlas sin bisagras</span></label>' : "") +
+    '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" style="margin-top:12px">Descontar</button>',
+    h => {
+      const inp = h.querySelector("#pCant");
+      const piezasDe = () => (Number(inp.value) || 0) * (enJuegos ? por : 1);
+      const revisa = () => { const v = Number(inp.value) || 0, t = tope(); inp.classList.toggle("mal", v > t || v < 1); h.querySelector("#pEq").textContent = enJuegos ? "= " + piezasDe() + " " + R.PIEZAS[de].unidad : (por > 1 && v > 0 ? R.textoEquivalencia(v, de, m).replace(/^[^=·]*/, "") : ""); const aut = !sinBisagras || h.querySelector("#pAut").checked; h.querySelector("#pOk").disabled = v > t || v < 1 || !aut; };
+      h.querySelectorAll("#pUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; h.querySelectorAll("#pUnidad [data-u]").forEach(y => y.classList.toggle("on", y === b)); h.querySelector("#pCuantas").textContent = enJuegos ? "Cuántos juegos" : "Cuántas"; inp.max = tope(); inp.value = Math.min(Number(inp.value) || 1, tope()) || 1; revisa(); });
+      h.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(1, (Number(inp.value) || 0) - 1); revisa(); };
+      h.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(tope(), (Number(inp.value) || 0) + 1); revisa(); };
+      inp.oninput = revisa; const au = h.querySelector("#pAut"); if (au) au.onchange = revisa;
+      revisa();
+      h.querySelector("#pOk").onclick = async () => {
+        try {
+          await Almacen.alPlan({ tipo, origen_id: id, cantidad: piezasDe(), a, juegos: enJuegos ? Number(inp.value) : null, autorizo: sinBisagras ? "sin bisagras, autorizó " + E.yo : "" }, E.yo, origen());
+          cierraHoja(); grita(piezasDe() + " al plan del día: " + nombrePlan(a).toLowerCase()); pintaTodo();
+        } catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; }
+      };
+    });
+}
+
+/* ═══════════════ REVISAR NOMBRES (migración) ═══════════════ */
+function limpiaNombre(n){ return String(n || "").replace(/\(\?\)|\(genérico\)|\(generico\)/gi, "").replace(/\b(de\s+)?\d+\s+cajones\b/gi, "").replace(/\s+/g, " ").trim(); }
+function sugiereModelo(nombre, lista){
+  const n = sinAcento(limpiaNombre(nombre));
+  if (/librero/.test(n)){ const mc = lista.find(m => /monte carlos 75/i.test(sinAcento(m.nombre))); if (mc) return mc; }
+  const exacto = lista.find(m => sinAcento(m.nombre) === n); if (exacto) return exacto;
+  if (/^petaquero /.test(n)){ const pm = lista.find(m => sinAcento(m.nombre) === n + " multifamiliar"); if (pm) return pm; }
+  return Busca.busca(limpiaNombre(nombre), lista, m => m.nombre)[0] || null;
+}
+function revisionNombres(){
+  const activos = modelosActivos().filter(m => !R.esExtra(m) && !m.pendiente && !/\(gen[eé]rico\)|\(\?\)/i.test(m.nombre));
+  const porNombre = {};
+  const toma = (nombre, donde, modelo_id) => { const k = sinAcento(nombre); (porNombre[k] = porNombre[k] || { nombre, pedidos: 0, lotes: 0, piezas: 0, modelo_id: modelo_id || null, cantidad: 0 }); porNombre[k][donde]++; if (modelo_id) porNombre[k].modelo_id = modelo_id; };
+  const esBueno = n => activos.some(m => sinAcento(m.nombre) === sinAcento(n));
+  E.pedidos.forEach(p => lineasDe(p).forEach(x => { if (!x.surtido && x.modelo && !esBueno(x.modelo)) toma(x.modelo, "pedidos"); }));
+  E.lotes.filter(l => Number(l.cantidad) > 0).forEach(l => { if (!esBueno(l.modelo) || (modeloDe(l.modelo_id) || {}).pendiente){ toma(l.modelo, "lotes", l.modelo_id); porNombre[sinAcento(l.modelo)].cantidad += Number(l.cantidad); } });
+  E.piezas.filter(p => vivoPieza(p) > 0).forEach(p => { if (!esBueno(p.modelo) || (modeloDe(p.modelo_id) || {}).pendiente){ toma(p.modelo, "piezas", p.modelo_id); porNombre[sinAcento(p.modelo)].cantidad += vivoPieza(p); } });
+  E.modelos.filter(m => m.activo !== false && !R.esExtra(m) && (m.pendiente || /\(gen[eé]rico\)|\(\?\)/i.test(m.nombre))).forEach(m => { if (!porNombre[sinAcento(m.nombre)]) toma(m.nombre, "lotes", m.id), porNombre[sinAcento(m.nombre)].lotes = 0; });
+  return Object.values(porNombre).map(x => Object.assign(x, { sugerido: sugiereModelo(x.nombre, activos.filter(m => m.id !== x.modelo_id)) })).sort((a,b) => sinAcento(a.nombre) < sinAcento(b.nombre) ? -1 : 1);
+}
+function tarjetaRevisarNombres(){
+  const n = revisionNombres().length;
+  return '<div class="' + (n ? "aviso" : "ajuste") + '"><' + (n ? "b" : "h4") + '>Revisar nombres' + (n ? " · " + plural(n, "nombre que no cuadra", "nombres que no cuadran") : " · todo cuadra") + '</' + (n ? "b" : "h4") + '><p>Busca en pedidos, muebles y piezas los nombres que no están tal cual en el catálogo (por la migración de la libreta) y los pasa al modelo correcto: lo que haya en inventario se junta con el modelo bueno y los genéricos se desactivan.</p><div class="pie"><button class="btn ' + (n ? "vino" : "") + '" id="ajNombres">Revisar</button></div></div>';
+}
+function hojaRevisarNombres(){
+  if (!exigeYo()) return;
+  const lista = revisionNombres();
+  const activos = modelosActivos().filter(m => !R.esExtra(m));
+  const opciones = (sel, excluir) => '<option value="">— dejar así —</option>' + activos.filter(m => m.id !== excluir).map(m => '<option value="' + esc(m.id) + '"' + (sel && sel.id === m.id ? " selected" : "") + '>' + esc(m.nombre) + (m.pendiente ? " (por revisar)" : "") + '</option>').join("");
+  abreHoja('<h3>Revisar nombres</h3><p class="guia">Cada renglón es un nombre que no está tal cual en el catálogo. Escoge a qué modelo del catálogo corresponde y toca <b>Aplicar</b>. Si no estás seguro, déjalo así.</p>' +
+    (lista.length ? '<div class="lotes">' + lista.map((x, i) => '<div class="lote rev" data-i="' + i + '"><div class="quien"><b>' + esc(x.nombre) + '</b><small>' + [x.pedidos ? plural(x.pedidos, "renglón de pedido", "renglones de pedido") : "", x.lotes ? plural(x.lotes, "lote", "lotes") : "", x.piezas ? plural(x.piezas, "pieza", "piezas") + " (" + x.cantidad + ")" : "", (!x.pedidos && !x.lotes && !x.piezas) ? "modelo genérico sin existencias" : ""].filter(Boolean).join(" · ") + '</small>' +
+      '<select class="rev-a">' + opciones(x.sugerido, x.modelo_id) + '</select></div><div class="disp"><button class="btn vino chico" data-aplica="' + i + '"' + (x.sugerido ? "" : " disabled") + '>Aplicar</button></div></div>').join("") + '</div>'
+      : '<div class="vacio"><b>Todo cuadra</b><p>No hay nombres fuera del catálogo.</p></div>') +
+    '<button class="btn fantasma grande" id="rvCerrar" style="margin-top:10px">Cerrar</button>',
+    h => {
+      h.querySelector("#rvCerrar").onclick = cierraHoja;
+      h.querySelectorAll(".rev-a").forEach(sel => sel.onchange = () => { const f = sel.closest(".lote"); f.querySelector("[data-aplica]").disabled = !sel.value; });
+      h.querySelectorAll("[data-aplica]").forEach(b => b.onclick = async () => {
+        const x = lista[Number(b.dataset.aplica)]; const aId = b.closest(".lote").querySelector(".rev-a").value; if (!aId) return;
+        const a = modeloDe(aId);
+        if (!confirm("«" + x.nombre + "» → «" + a.nombre + "». Se cambian pedidos, muebles y piezas. ¿Seguro?")) return;
+        b.disabled = true; b.textContent = "…";
+        try { const n = await Almacen.fusionaModelo({ nombre: x.nombre, modelo_id: x.modelo_id }, aId, E.yo, origen()); grita("Listo: " + plural(n, "renglón corregido", "renglones corregidos")); b.closest(".lote").remove(); pintaTodo(); }
+        catch(e){ grita(e.message); b.disabled = false; b.textContent = "Aplicar"; }
+      });
+    });
+}
+function tarjetaArreglo(){
+  const C = window.CARGA_ARREGLO; if (!C) return "";
+  const hecha = Almacen.cargaHecha(C.id);
+  const puede = Almacen.practica || (Almacen.modo === "nube" && Almacen.sesion);
+  return '<div class="' + (hecha ? "ajuste" : "aviso") + '"><' + (hecha ? "h4" : "b") + '>' + esc(C.titulo) + (hecha ? " · ya se aplicó" : "") + '</' + (hecha ? "h4" : "b") + '><p>' +
+    (hecha ? "Se aplicó " + esc(cuando(Almacen.dame("meta", C.id).hecho)) + " por " + esc(Almacen.dame("meta", C.id).por || "?") + "."
+           : "Lo que el taller aclaró de los pedidos ya cargados: Monte Carlos 75, Petaquero Mónaco Multifamiliar, el Mariana Rejilla Mixta de Josefina y sus entregas (2 Midas, 1 Mónaco), se quita la «base óvalo» de Sabino y los «surtido» quedan como surtido.") + '</p>' +
+    (hecha ? "" : '<div class="pie"><button class="btn vino" id="ajArreglo"' + (puede ? "" : " disabled") + '>Aplicar ahora</button></div>') + '</div>';
+}
+async function aplicaArreglo(){
+  if (!exigeYo()) return;
+  const C = window.CARGA_ARREGLO; if (!C || Almacen.cargaHecha(C.id)) return;
+  if (!confirm("¿Aplicar las correcciones a los pedidos?")) return;
+  const n = await Almacen.arreglaPedidos(C, E.yo);
+  pintaTodo(); grita("Listo: " + plural(n, "renglón corregido", "renglones corregidos"));
 }
 
 /* ═══════════════ detalle (computadora) ═══════════════ */
@@ -1506,8 +1796,8 @@ $("#telon").addEventListener("click", e => { if (e.target.id === "telon") cierra
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#telon").classList.contains("on")) cierraDesdeAfuera(); });
 
 /* ═══════════════ navegación ═══════════════ */
-const VISTAS = ["muebles","piezas","listos","pedidos","resumen","material","reportes","recados","bitacora","catalogo","apodos","ajustes"];
-const EN_MAS = ["listos","resumen","reportes","recados","bitacora","catalogo","apodos","ajustes"];
+const VISTAS = ["plan","muebles","piezas","listos","pedidos","material","reportes","recados","bitacora","catalogo","apodos","ajustes"];
+const EN_MAS = ["listos","reportes","recados","bitacora","catalogo","apodos","ajustes"];
 function irA(v){
   if (v === "mas"){ hojaMas(); return; }
   E.vista = v;
@@ -1518,16 +1808,15 @@ function irA(v){
   pintaVista(v); if (esEscritorio()) pintaDetalle();
 }
 function pintaVista(v){
-  if (v === "muebles") pintaMuebles(); else if (v === "piezas") pintaPiezas(); else if (v === "listos") pintaListos(); else if (v === "pedidos") pintaPedidos();
-  else if (v === "resumen") pintaResumen(); else if (v === "material") pintaMaterial(); else if (v === "recados") pintaRecados(); else if (v === "bitacora") pintaBitacora();
-  else if (v === "catalogo") pintaCatalogo(); else if (v === "apodos") pintaCatMaterial(); else if (v === "ajustes") pintaAjustes(); else if (v === "reportes") pintaReportes();
+  if (v === "plan") pintaPlan(); else if (v === "muebles") pintaMuebles(); else if (v === "piezas") pintaPiezas(); else if (v === "listos") pintaListos(); else if (v === "pedidos") pintaPedidos();
+  else if (v === "material") pintaMaterial(); else if (v === "recados") pintaRecados(); else if (v === "bitacora") pintaBitacora();
+  else if (v === "catalogo") pintaCatalogo(); else if (v === "apodos") pintaCatMaterial(); else if (v === "ajustes") pintaAjustes(); else if (v === "reportes") (E.reporteAbierto ? abreReporte(E.reporteAbierto.cual, E.reporteAbierto.seccion) : pintaReportes());
 }
 function hojaMas(){
   const rec = E.recados.filter(r => !r.hecho).length;
   abreHoja('<h3>Más</h3><div style="display:grid;gap:8px">' +
     '<button class="btn grande" data-ir="listos">Listos para preparar</button>' +
-    '<button class="btn grande" data-ir="reportes">Reportes · muebles, pintura, pedidos</button>' +
-    '<button class="btn grande" data-ir="resumen">Resumen · todo lo que hay</button>' +
+    '<button class="btn grande" data-ir="reportes">Reportes · muebles, pintura, pedidos, semana</button>' +
     '<button class="btn grande" data-ir="recados">Recados' + (rec ? " · " + rec + " sin atender" : "") + '</button>' +
     '<button class="btn grande" data-ir="bitacora">Bitácora · quién hizo qué</button>' +
     '<button class="btn grande" data-ir="catalogo">Catálogo · fichas de los modelos</button>' +
@@ -1560,6 +1849,7 @@ function pintaTodo(){
   const pend = E.pedidos.filter(p => p.estado !== "entregado").length; $("#nPed").hidden = !pend; $("#nPed").textContent = pend;
   const bajos = materiales().filter(p => estado(p)).length; $("#nMat").hidden = !bajos; $("#nMat").textContent = bajos;
   const rec = E.recados.filter(r => !r.hecho).length; $("#nRec").hidden = !rec; $("#nRec").textContent = rec;
+  $("#nPlan").hidden = !E.plan.length; $("#nPlan").textContent = E.plan.length;
   if (esEscritorio()) pintaDetalle();
 }
 
@@ -1596,11 +1886,13 @@ Almacen.mira("recado", l => { E.recados = l; if (E.vista === "recados") pintaRec
 Almacen.mira("persona", l => { E.personas = l; });
 Almacen.mira("meta", () => { if (E.vista === "ajustes") pintaAjustes(); });
 Almacen.mira("pedido", l => { E.pedidos = l; if (E.vista === "pedidos") pintaPedidos(); const n = l.filter(p => p.estado !== "entregado").length; $("#nPed").hidden = !n; $("#nPed").textContent = n; });
+Almacen.mira("plan", l => { E.plan = l; if (E.vista === "plan") pintaPlan(); $("#nPlan").hidden = !l.length; $("#nPlan").textContent = l.length; });
 Almacen.onEstado(pintaPulso);
 (async () => {
   await Almacen.arranca();
   pintaPulso();
-  const h = (location.hash || "#muebles").slice(1);
-  irA(VISTAS.includes(h) ? h : "muebles");
+  const h = (location.hash || "#plan").slice(1);
+  irA(VISTAS.includes(h) ? h : "plan");
+  Almacen.limpiaSemana().then(n => { if (n) console.log("limpieza semanal:", n); }).catch(() => {});
   if (!E.yo && !Almacen.necesitaEntrar()) hojaQuienSoy();
 })();

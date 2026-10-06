@@ -13,9 +13,13 @@
     armado:      { nombre: "Mueble armado",         corto: "Armado",      tipo: "madera", orden: 2 },
     pintado:     { nombre: "Mueble pintado",        corto: "Pintado",     tipo: "madera", orden: 3 },
     mdf:         { nombre: "Mueble de MDF",         corto: "MDF",         tipo: "mdf",    orden: 1 },
-    mdf_pintado: { nombre: "Mueble de MDF pintado", corto: "MDF pintado", tipo: "mdf",    orden: 2 }
+    mdf_pintado: { nombre: "Mueble de MDF pintado", corto: "MDF pintado", tipo: "mdf",    orden: 2 },
+    preparado:   { nombre: "Mueble preparado",      corto: "Preparado",   tipo: "ambos",  orden: 4 }
   };
-  const CADENA = { madera: ["maquilado", "armado", "pintado"], mdf: ["mdf", "mdf_pintado"] };
+  /* Preparado es la etapa final de las dos cadenas: mueble pintado + puertas, cajones y
+     parches pintados se unen y salen de sus secciones. */
+  const CADENA = { madera: ["maquilado", "armado", "pintado", "preparado"], mdf: ["mdf", "mdf_pintado", "preparado"] };
+  const ETAPAS_VISIBLES = ["maquilado", "armado", "pintado", "mdf", "mdf_pintado", "preparado"];
 
   /* ── Piezas. Las puertas llevan cadena; cajones y parches no.
      "Puertas lijadas" es UNA pestaña con dos bloques: con bisagras (arriba) y sin
@@ -26,12 +30,18 @@
     puertas_lijadas:          { nombre: "Puertas lijadas",        corto: "Lijadas",     unidad: "puertas", cadena: "puertas", orden: 3, pestana: "puertas_lijadas",  ayuda: "arriba las que ya tienen bisagras; abajo las que no", bloque: "Sin bisagras" },
     puertas_lijadas_bisagras: { nombre: "Puertas lijadas con bisagras", corto: "Con bisagras", unidad: "puertas", cadena: "puertas", orden: 3, pestana: "puertas_lijadas", ayuda: "lijadas y con bisagras: listas para pintar", bloque: "Con bisagras" },
     puertas_pintadas:         { nombre: "Puertas pintadas",       corto: "Pintadas",    unidad: "puertas", cadena: "puertas", orden: 4, pestana: "puertas_pintadas", ayuda: "" },
-    cajones_pintados:         { nombre: "Cajones pintados",       corto: "Cajones",     unidad: "cajones", cadena: "",        orden: 5, pestana: "cajones_pintados", ayuda: "" },
-    parches_pintados:         { nombre: "Parches pintados",       corto: "Parches",     unidad: "parches", cadena: "",        orden: 6, pestana: "parches_pintados", ayuda: "" }
+    cajones_armados:          { nombre: "Cajones armados",        corto: "C. armados",  unidad: "cajones", cadena: "cajones", orden: 5, pestana: "cajones_armados",  ayuda: "armados, todavía sin pintar" },
+    cajones_pintados:         { nombre: "Cajones pintados",       corto: "C. pintados", unidad: "cajones", cadena: "cajones", orden: 6, pestana: "cajones_pintados", ayuda: "" },
+    parches_por_lijar:        { nombre: "Parches por lijar",      corto: "P. por lijar", unidad: "parches", cadena: "parches", orden: 7, pestana: "parches_por_lijar", ayuda: "solo modelos cuya ficha dice cuántos parches llevan" },
+    parches_lijados:          { nombre: "Parches lijados",        corto: "P. lijados",  unidad: "parches", cadena: "parches", orden: 8, pestana: "parches_lijados",  ayuda: "" },
+    parches_pintados:         { nombre: "Parches pintados",       corto: "P. pintados", unidad: "parches", cadena: "parches", orden: 9, pestana: "parches_pintados", ayuda: "" }
   };
   /* Pestañas visibles (con bisagras vive dentro de "Puertas lijadas") */
-  const PESTANAS_PIEZA = ["puertas_uriel", "puertas_por_lijar", "puertas_lijadas", "puertas_pintadas", "cajones_pintados", "parches_pintados"];
+  const PESTANAS_PIEZA = ["puertas_uriel", "puertas_por_lijar", "puertas_lijadas", "puertas_pintadas", "cajones_armados", "cajones_pintados", "parches_por_lijar", "parches_lijados", "parches_pintados"];
   const CADENA_PUERTAS = ["puertas_uriel", "puertas_por_lijar", "puertas_lijadas", "puertas_pintadas"];
+  const CADENA_CAJONES = ["cajones_armados", "cajones_pintados"];
+  const CADENA_PARCHES = ["parches_por_lijar", "parches_lijados", "parches_pintados"];
+  const cadenaPieza = cat => { const p = PIEZAS[cat] || {}; return p.cadena === "cajones" ? CADENA_CAJONES : p.cadena === "parches" ? CADENA_PARCHES : CADENA_PUERTAS; };
   /* Nombres viejos (versión 2.0) → nuevos, para no perder lo ya capturado */
   const PIEZAS_VIEJAS = { puertas_pre_lijadas: "puertas_por_lijar", puertas_con_bisagras: "puertas_lijadas_bisagras" };
 
@@ -43,10 +53,12 @@
     pintado:                  { opciones: ["Brandon", "Antelmo", "Raúl", "Juan"],  max: 2, campo: "pinto",   pregunta: "¿Quién lo pintó?" },
     mdf:                      { opciones: ["Fernando"],                            max: 1, campo: "maquilo", pregunta: "¿Quién lo hizo?" },
     mdf_pintado:              null,                                                // no se pregunta: el lote sigue siendo de Fernando
+    preparado:                { opciones: ["César", "Raúl", "Gabino"],             max: 1, campo: "preparo", pregunta: "¿Quién lo preparó?" },
     puertas_lijadas_bisagras: { opciones: ["Miguel", "Daniel", "Luis"],            max: 1, campo: "hecho_por", pregunta: "¿Quién puso las bisagras?" },
     cajones_pintados:         { opciones: PINTORES_PIEZAS,                         max: 1, campo: "hecho_por", pregunta: "¿Quién los pintó?" },
-    // En puertas no se pregunta nada más: ni a Uriel, ni al lijar, ni al pintar.
-    puertas_uriel: null, puertas_por_lijar: null, puertas_lijadas: null, puertas_pintadas: null, parches_pintados: null
+    // En puertas no se pregunta nada más: ni a Uriel, ni al lijar, ni al pintar. Cajones armados y parches tampoco.
+    puertas_uriel: null, puertas_por_lijar: null, puertas_lijadas: null, puertas_pintadas: null,
+    cajones_armados: null, parches_por_lijar: null, parches_lijados: null, parches_pintados: null
   };
 
   const tipoDe = modelo => (modelo && modelo.tipo === "mdf") ? "mdf" : "madera";
@@ -61,15 +73,15 @@
   function siguientePieza(cat){
     if (cat === "puertas_lijadas") return null;
     if (cat === "puertas_lijadas_bisagras") return "puertas_pintadas";
-    const i = CADENA_PUERTAS.indexOf(cat);
-    return i >= 0 && i < CADENA_PUERTAS.length - 1 ? CADENA_PUERTAS[i + 1] : null;
+    const c = cadenaPieza(cat); const i = c.indexOf(cat);
+    return i >= 0 && i < c.length - 1 ? c[i + 1] : null;
   }
   /* De dónde llega cada sección (para registrar desde el destino y que se descuente solo). */
   function anteriorPieza(cat){
     if (cat === "puertas_pintadas") return "puertas_lijadas_bisagras";
     if (cat === "puertas_lijadas_bisagras") return "puertas_lijadas";
-    const i = CADENA_PUERTAS.indexOf(cat);
-    return i > 0 ? CADENA_PUERTAS[i - 1] : null;
+    const c = cadenaPieza(cat); const i = c.indexOf(cat);
+    return i > 0 ? c[i - 1] : null;
   }
   function anteriorEtapa(etapa){
     const c = CADENA[(ETAPAS[etapa] || {}).tipo] || [];
@@ -81,7 +93,11 @@
   const categoriasDePestana = pestana => Object.keys(PIEZAS).filter(c => PIEZAS[c].pestana === pestana).sort((a, b) => (PIEZAS[a].bloque === "Con bisagras" ? -1 : 1) - (PIEZAS[b].bloque === "Con bisagras" ? -1 : 1));
   /* ¿Aquí se puede registrar "de la nada"? Solo en la primera etapa. */
   const admiteAlta = etapa => etapa === "maquilado" || etapa === "mdf";
-  const admiteAltaPieza = cat => cat === "puertas_uriel" || cat === "cajones_pintados" || cat === "parches_pintados";
+  const admiteAltaPieza = cat => cat === "puertas_uriel" || cat === "cajones_armados" || cat === "parches_por_lijar";
+  /* ¿Al entrar aquí se pinta? (se pide color) */
+  const sePintaEn = destino => destino === "pintado" || destino === "mdf_pintado" || destino === "puertas_pintadas" || destino === "cajones_pintados" || destino === "parches_pintados";
+  /* Cuántos parches lleva un modelo: número nuevo, o lo viejo (sí/no) si no se ha puesto número. */
+  const parchesDe = modelo => !modelo ? null : Number.isFinite(modelo.parches) ? modelo.parches : (modelo.lleva_parches === false ? 0 : null);
   /* Piezas extras (las que el taller agrega por nombre): entran a Uriel y llegan hasta lijadas. */
   const esExtra = modelo => !!modelo && modelo.tipo === "extra";
   const extraAdmite = cat => ["puertas_uriel", "puertas_por_lijar", "puertas_lijadas", "puertas_lijadas_bisagras"].includes(cat);
@@ -94,10 +110,12 @@
     if (lote.maquilo) partes.push((lote.etapa === "mdf" || lote.etapa === "mdf_pintado" ? "hizo " : "maquiló ") + lote.maquilo);
     if (lote.armo && lote.armo !== lote.maquilo) partes.push("armó " + lote.armo);
     if (lote.pinto && lote.pinto.length) partes.push("pintó " + lote.pinto.join(" y "));
+    if (lote.preparo) partes.push("preparó " + lote.preparo);
     return partes.join(" · ") || "sin responsable registrado";
   }
   /* Etiqueta corta del lote en la etapa actual: el último responsable que lo tocó. */
   function firmaDe(lote){
+    if (lote.etapa === "preparado" && lote.preparo) return lote.preparo;
     if (lote.etapa === "pintado" && lote.pinto && lote.pinto.length) return lote.pinto.join(" y ");
     if (lote.etapa === "armado" && lote.armo) return lote.armo;
     if (lote.maquilo) return lote.maquilo;
@@ -126,7 +144,18 @@
     const p = PIEZAS[categoria] || {};
     if (p.unidad === "puertas") return Number.isFinite(modelo.total_puertas) ? modelo.total_puertas : null;
     if (p.unidad === "cajones") return Number.isFinite(modelo.cajones) ? modelo.cajones : null;
-    return null;                                          // parches: no se traducen a muebles
+    if (p.unidad === "parches") return parchesDe(modelo);
+    return null;
+  }
+  /* Qué piezas pintadas se descuentan al preparar n muebles de este modelo. null = la ficha no lo dice. */
+  function necesitaParaPreparar(modelo, n){
+    n = Number(n || 0);
+    const por = { puertas_pintadas: modelo ? (Number.isFinite(modelo.total_puertas) ? modelo.total_puertas : null) : null,
+                  cajones_pintados: modelo ? (Number.isFinite(modelo.cajones) ? modelo.cajones : null) : null,
+                  parches_pintados: parchesDe(modelo) };
+    const r = {};
+    Object.keys(por).forEach(k => { r[k] = por[k] == null ? null : por[k] * n; });
+    return r;
   }
   /* 19 puertas con 2 por mueble → 9 muebles, sobra 1, falta 1 para el siguiente */
   function equivalencia(cantidad, porMueble){
@@ -141,7 +170,6 @@
   function textoEquivalencia(cantidad, categoria, modelo){
     const p = PIEZAS[categoria] || { unidad: "piezas" };
     const base = cantidad + " " + (cantidad === 1 ? singular(p.unidad) : p.unidad);
-    if (categoria === "parches_pintados") return base;
     if (esExtra(modelo)) return base + " · pieza extra";
     const e = equivalencia(cantidad, piezasPorMueble(modelo, categoria));
     if (e.sinFicha) return base + " · sin ficha, no se puede calcular";
@@ -169,11 +197,17 @@
     }
     if (r.sinFicha){ r.listos = 0; return r; }
     r.listos = Math.max(0, tope);
-    if (modelo.lleva_parches === true && Number(piezas.parches_pintados || 0) === 0) r.faltanParches = true;
-    if (modelo.lleva_parches === null || modelo.lleva_parches === undefined) r.detalle.push("la ficha no dice si lleva parches");
+    const parches = parchesDe(modelo);
+    if (parches > 0){
+      const hayP = Number(piezas.parches_pintados || 0); const alcanzaP = Math.floor(hayP / parches);
+      r.detalle.push("parches para " + alcanzaP + (alcanzaP === 1 ? " mueble" : " muebles") + " (" + hayP + " de " + parches + " por mueble)");
+      if (alcanzaP < r.listos){ r.listos = alcanzaP; r.limitante = "parches"; }
+      if (hayP === 0) r.faltanParches = true;
+    }
+    if (parches == null) r.detalle.push("la ficha no dice cuántos parches lleva");
     if (r.listos < pintados && r.limitante){
-      const por = r.limitante === "puertas" ? modelo.total_puertas : modelo.cajones;
-      const hay = Number(piezas[r.limitante === "puertas" ? "puertas_pintadas" : "cajones_pintados"] || 0);
+      const por = r.limitante === "puertas" ? modelo.total_puertas : r.limitante === "parches" ? parchesDe(modelo) : modelo.cajones;
+      const hay = Number(piezas[r.limitante === "puertas" ? "puertas_pintadas" : r.limitante === "parches" ? "parches_pintados" : "cajones_pintados"] || 0);
       const faltan = por * (r.listos + 1) - hay;
       r.detalle.push("faltan " + faltan + " " + r.limitante + " para el siguiente");
     }
@@ -185,12 +219,12 @@
     const faltan = [];
     if (!modelo) return { completa: false, faltan: ["modelo"] };
     ["cajones", "total_puertas"].forEach(k => { if (modelo[k] == null) faltan.push(k); });
-    if (modelo.lleva_parches == null) faltan.push("lleva_parches");
+    if (parchesDe(modelo) == null) faltan.push("parches");
     return { completa: !faltan.length, faltan };
   }
 
-  const R = { ETAPAS, CADENA, PIEZAS, PESTANAS_PIEZA, CADENA_PUERTAS, PIEZAS_VIEJAS, RESPONSABLES, tipoDe, cadenaDe, primeraEtapa, siguienteEtapa, anteriorEtapa,
-    siguientePieza, siguientePiezaDe, anteriorPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, esExtra, extraAdmite,
+  const R = { ETAPAS, ETAPAS_VISIBLES, CADENA, PIEZAS, PESTANAS_PIEZA, CADENA_PUERTAS, CADENA_CAJONES, CADENA_PARCHES, PIEZAS_VIEJAS, RESPONSABLES, tipoDe, cadenaDe, primeraEtapa, siguienteEtapa, anteriorEtapa,
+    siguientePieza, siguientePiezaDe, anteriorPieza, cadenaPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, sePintaEn, parchesDe, necesitaParaPreparar, esExtra, extraAdmite,
     responsables, origenDe, firmaDe, validaTraslado, piezasPorMueble, equivalencia, textoEquivalencia, listos, ficha };
   if (typeof module !== "undefined" && module.exports) module.exports = R;
   raiz.Reglas = R;

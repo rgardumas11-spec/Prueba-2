@@ -21,8 +21,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 window.Almacen = (() => {
   "use strict";
-  const TABLAS = ["modelo", "lote", "pieza", "producto", "movimiento", "recado", "persona", "pedido", "meta"];
-  const LIMITE = { movimiento: 600, recado: 200, pedido: 400, persona: 200, producto: 2000, modelo: 600, lote: 4000, pieza: 4000, meta: 50 };
+  const TABLAS = ["modelo", "lote", "pieza", "producto", "movimiento", "recado", "persona", "pedido", "meta", "plan"];
+  const LIMITE = { movimiento: 1500, recado: 300, pedido: 400, persona: 200, producto: 2000, modelo: 600, lote: 4000, pieza: 4000, meta: 50, plan: 400 };
   let fb = null;
   let db = null, auth = null;
   let modo = "local";
@@ -52,7 +52,8 @@ window.Almacen = (() => {
   const slug = s => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   /* Las llaves de lote y pieza son deterministas: mismo origen → mismo documento.
      Así dos aparatos que suman "5 de Daniel" caen en el mismo lote y se suman. */
-  const claveLote = l => ["l", l.modelo_id, slug(l.color), l.etapa, slug(l.maquilo), slug(l.armo), (l.pinto || []).map(slug).sort().join("+")].join("~");
+  const claveLote = l => ["l", l.modelo_id, slug(l.color), l.etapa, slug(l.maquilo), slug(l.armo), (l.pinto || []).map(slug).sort().join("+")].concat(l.preparo ? [slug(l.preparo)] : []).join("~");
+  const baseLote = o => ({ modelo_id: o.modelo_id, modelo: o.modelo, color: o.color || "", etapa: o.etapa, maquilo: o.maquilo || "", armo: o.armo || "", pinto: o.pinto || [], preparo: o.preparo || "", id: o.id });
   const clavePieza = p => ["p", p.modelo_id, slug(p.color), p.categoria].join("~");
 
   function cargarTodoLocal(){ TABLAS.forEach(t => { memoria[t] = leerLocal(t); }); migraPiezasViejas(); TABLAS.forEach(avisar); }
@@ -92,7 +93,7 @@ window.Almacen = (() => {
   function consulta(t){
     let q = db.collection(t);
     if (t === "producto") return q.where("activo", "==", true).limit(LIMITE.producto);
-    if (t === "persona" || t === "modelo" || t === "pieza" || t === "meta") return q.limit(LIMITE[t]);
+    if (t === "persona" || t === "modelo" || t === "pieza" || t === "meta" || t === "plan") return q.limit(LIMITE[t]);
     if (t === "lote") return q.where("cantidad", ">", 0).limit(LIMITE.lote);
     return q.orderBy("creado", "desc").limit(LIMITE[t] || 300);
   }
@@ -362,15 +363,15 @@ window.Almacen = (() => {
       const o = memoria.lote[t.lote_id];
       ejemplo = o;
       const destino = { modelo_id: o.modelo_id, modelo: o.modelo, color: d.color_a != null ? d.color_a : (o.color || ""), etapa: d.etapa_a,
-        maquilo: o.maquilo || "", armo: d.armo != null ? d.armo : (o.armo || ""), pinto: d.pinto ? d.pinto.slice(0, 2) : (o.pinto || []) };
+        maquilo: o.maquilo || "", armo: d.armo != null ? d.armo : (o.armo || ""), pinto: d.pinto ? d.pinto.slice(0, 2) : (o.pinto || []), preparo: d.preparo != null ? d.preparo : (o.preparo || "") };
       destino.id = claveLote(destino);
-      const origenBase = { modelo_id: o.modelo_id, modelo: o.modelo, color: o.color, etapa: o.etapa, maquilo: o.maquilo || "", armo: o.armo || "", pinto: o.pinto || [], id: o.id };
+      const origenBase = baseLote(o);
       escrituras.push(["lote", o.id, incrementaLocal("lote", origenBase, -t.cantidad)]);
       escrituras.push(["lote", destino.id, incrementaLocal("lote", destino, t.cantidad)]);
       desglose.push({ de: origenDe(o), lote_id: o.id, cantidad: t.cantidad });
       total += t.cantidad; resultado = memoria.lote[destino.id].cantidad;
     }
-    const firma = [d.armo, ...(d.pinto || [])].filter(Boolean).join(" y ");
+    const firma = [d.armo, ...(d.pinto || []), d.preparo].filter(Boolean).join(" y ");
     const mov = { id: uuid(), tipo: "traslado", modelo_id: ejemplo.modelo_id, nombre: ejemplo.modelo, color: d.color_a != null ? d.color_a : (ejemplo.color || ""),
       etapa_de: ejemplo.etapa, etapa_a: d.etapa_a, delta: total, resultado, desglose, hecho_por: firma, persona, origen: origen || "", motivo: d.motivo || "", creado: ahora() };
     guardarLocal("lote"); avisar("lote"); movLocal(mov);
@@ -384,7 +385,7 @@ window.Almacen = (() => {
     delta = Math.floor(Number(delta || 0));
     const real = Math.max(0, Number(o.cantidad || 0) + delta) - Number(o.cantidad || 0);
     if (!real) return o.cantidad;
-    const base = { modelo_id: o.modelo_id, modelo: o.modelo, color: o.color, etapa: o.etapa, maquilo: o.maquilo || "", armo: o.armo || "", pinto: o.pinto || [], id: o.id };
+    const base = baseLote(o);
     const doc = incrementaLocal("lote", base, real);
     const mov = { id: uuid(), tipo: "ajuste", lote_id: id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color, etapa_a: o.etapa,
       delta: real, resultado: memoria.lote[id].cantidad, persona, motivo: motivo || "", origen: origen || "", hecho_por: firmaDe(o), creado: ahora() };
@@ -428,6 +429,232 @@ window.Almacen = (() => {
     guardarLocal("pieza"); avisar("pieza"); movLocal(mov);
     mandaBatch(escrituras, [mov]);
     return mov;
+  }
+
+
+  /* ── PREPARAR: mueble pintado + puertas, cajones y parches pintados → Mueble preparado.
+     Un solo batch. Si no alcanza algo, no se toca nada y se dice qué falta. ── */
+  function piezasPara(modelo_id, color, categoria){
+    // Primero las del mismo color, luego las que no tienen color.
+    return lista("pieza").filter(p => p.modelo_id === modelo_id && p.categoria === categoria && Number(p.cantidad || 0) > 0 && ((p.color || "") === (color || "") || !p.color))
+      .sort((a, b) => ((a.color || "") === (color || "") ? -1 : 1) - ((b.color || "") === (color || "") ? -1 : 1));
+  }
+  function revisaPreparar(lote, n){
+    const Rg = window.Reglas; const m = (memoria.modelo || {})[lote.modelo_id] || null;
+    const nec = Rg.necesitaParaPreparar(m, n);
+    const partes = [], faltan = [], sinFicha = [];
+    Object.keys(nec).forEach(cat => {
+      const necesita = nec[cat];
+      if (necesita == null){ sinFicha.push(cat); return; }
+      if (necesita === 0) return;
+      const fuentes = piezasPara(lote.modelo_id, lote.color, cat);
+      const hay = fuentes.reduce((s, p) => s + Number(p.cantidad || 0), 0);
+      partes.push({ cat, necesita, hay, fuentes });
+      if (hay < necesita) faltan.push({ cat, faltan: necesita - hay, hay, necesita });
+    });
+    return { modelo: m, partes, faltan, sinFicha };
+  }
+  async function prepara(d, persona, origen){
+    const o = (memoria.lote || {})[d.lote_id]; if (!o) throw new Error("Ese lote ya no existe");
+    const n = Math.floor(Number(d.cantidad || 0)); if (n <= 0) throw new Error("Pon cuántos se prepararon");
+    if (n > Number(o.cantidad || 0)) throw new Error("Solo hay " + o.cantidad + " pintados");
+    const rev = revisaPreparar(o, n);
+    if (rev.faltan.length){ const f = rev.faltan[0]; const Rg = window.Reglas; throw new Error("Faltan " + f.faltan + " " + Rg.PIEZAS[f.cat].nombre.toLowerCase() + " (hay " + f.hay + ", se necesitan " + f.necesita + ")"); }
+    const escrituras = [], desglose = [];
+    escrituras.push(["lote", o.id, incrementaLocal("lote", baseLote(o), -n)]);
+    const destino = Object.assign(baseLote(o), { etapa: "preparado", preparo: d.preparo || "" }); delete destino.id; destino.id = claveLote(destino);
+    escrituras.push(["lote", destino.id, incrementaLocal("lote", destino, n)]);
+    rev.partes.forEach(pt => {
+      let resta = pt.necesita;
+      pt.fuentes.forEach(p => {
+        if (resta <= 0) return;
+        const toma = Math.min(resta, Number(p.cantidad || 0)); resta -= toma;
+        const base = basePieza(p); base.minimo = Number(p.minimo || 0);
+        escrituras.push(["pieza", p.id, incrementaLocal("pieza", base, -toma)]);
+        desglose.push({ de: window.Reglas.PIEZAS[pt.cat].nombre + (p.color ? " · " + p.color : ""), pieza_id: p.id, cantidad: toma });
+      });
+    });
+    const mov = { id: uuid(), tipo: "preparado", lote_id: destino.id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color || "", etapa_de: o.etapa, etapa_a: "preparado",
+      delta: n, resultado: memoria.lote[destino.id].cantidad, desglose, hecho_por: d.preparo || "", persona, origen: origen || "",
+      motivo: rev.sinFicha.length ? "la ficha no dice cuántos " + rev.sinFicha.map(c => window.Reglas.PIEZAS[c].unidad).join(" ni ") + " lleva; no se descontaron" : "", creado: ahora() };
+    guardarLocal("lote"); guardarLocal("pieza"); avisar("lote"); avisar("pieza"); movLocal(mov);
+    await manda(escrituras, [mov]);
+    return mov;
+  }
+
+  /* ── PLAN DEL DÍA: se descuenta del origen ahora y queda pendiente hasta que alguien
+     diga "listo" (entra al destino) o lo quite (regresa al origen). ── */
+  function origenPlan(p){
+    const t = p.tipo === "lote" ? "lote" : "pieza";
+    const ex = (memoria[t] || {})[p.origen_id];
+    const base = ex ? (t === "lote" ? baseLote(ex) : Object.assign(basePieza(ex), { minimo: Number(ex.minimo || 0) })) : Object.assign({}, p.base, { id: p.origen_id });
+    return { t, base };
+  }
+  async function alPlan(d, persona, origen){
+    const t = d.tipo === "lote" ? "lote" : "pieza";
+    const o = (memoria[t] || {})[d.origen_id]; if (!o) throw new Error("Eso ya no está en el inventario");
+    const n = Math.floor(Number(d.cantidad || 0)); if (n <= 0) throw new Error("Pon cuántas");
+    if (n > Number(o.cantidad || 0)) throw new Error("Solo hay " + o.cantidad);
+    const base = t === "lote" ? baseLote(o) : Object.assign(basePieza(o), { minimo: Number(o.minimo || 0) });
+    const plan = { id: uuid(), tipo: t, origen_id: o.id, modelo_id: o.modelo_id, modelo: o.modelo, color: o.color || "", de: t === "lote" ? o.etapa : o.categoria, a: d.a,
+      cantidad: n, juegos: d.juegos || null, autorizo: d.autorizo || "", de_quien: persona, creado: ahora(), base: Object.assign({}, base, { id: undefined }) };
+    delete plan.base.id;
+    const escrituras = [[t, o.id, incrementaLocal(t, base, -n)], ["plan", plan.id, plan]];
+    memoria.plan = memoria.plan || {}; memoria.plan[plan.id] = plan;
+    const mov = { id: uuid(), tipo: "plan", [t + "_id"]: o.id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color || "", etapa_de: plan.de, etapa_a: d.a, delta: -n,
+      resultado: memoria[t][o.id].cantidad, persona, origen: origen || "", motivo: "al plan del día" + (d.autorizo ? " · " + d.autorizo : ""), creado: ahora() };
+    guardarLocal(t); guardarLocal("plan"); avisar(t); avisar("plan"); movLocal(mov);
+    await manda(escrituras, [mov]);
+    return plan;
+  }
+  async function planListo(id, hechas, extra, persona, origen){
+    const p = (memoria.plan || {})[id]; if (!p) throw new Error("Ese pendiente ya no está");
+    hechas = Math.floor(Number(hechas || 0)); if (hechas < 0 || hechas > p.cantidad) throw new Error("Pon entre 0 y " + p.cantidad);
+    extra = extra || {};
+    const { t, base } = origenPlan(p);
+    const escrituras = [["plan", id, null]], movs = [];
+    const sobran = p.cantidad - hechas;
+    if (hechas > 0){
+      let destino;
+      if (t === "lote"){
+        destino = Object.assign({}, base, { etapa: p.a, color: extra.color != null ? extra.color : base.color, armo: extra.armo != null ? extra.armo : base.armo, pinto: extra.pinto ? extra.pinto.slice(0, 2) : base.pinto, preparo: extra.preparo != null ? extra.preparo : base.preparo });
+        delete destino.id; destino.id = claveLote(destino);
+      } else {
+        destino = basePieza({ modelo_id: base.modelo_id, modelo: base.modelo, color: extra.color != null ? extra.color : base.color, categoria: p.a });
+        const exd = (memoria.pieza || {})[destino.id]; destino.minimo = exd ? Number(exd.minimo || 0) : 0;
+      }
+      escrituras.push([t, destino.id, incrementaLocal(t, destino, hechas)]);
+      movs.push({ id: uuid(), tipo: "traslado", [t + "_id"]: destino.id, modelo_id: base.modelo_id, nombre: base.modelo, color: destino.color, categoria: t === "pieza" ? p.a : undefined,
+        etapa_de: p.de, etapa_a: p.a, delta: hechas, resultado: memoria[t][destino.id].cantidad, hecho_por: extra.hecho_por || "", persona, origen: origen || "", motivo: "plan del día" + (p.autorizo ? " · " + p.autorizo : ""), creado: ahora() });
+    }
+    if (sobran > 0){
+      escrituras.push([t, base.id, incrementaLocal(t, base, sobran)]);
+      movs.push({ id: uuid(), tipo: "ajuste", [t + "_id"]: base.id, modelo_id: base.modelo_id, nombre: base.modelo, color: base.color, categoria: t === "pieza" ? p.de : undefined,
+        etapa_a: p.de, delta: sobran, resultado: memoria[t][base.id].cantidad, persona, origen: origen || "", motivo: "regresó del plan del día (no se hizo)", creado: ahora() });
+    }
+    delete memoria.plan[id];
+    guardarLocal(t); guardarLocal("plan"); avisar(t); avisar("plan"); movs.forEach(movLocal);
+    await manda(escrituras, movs);
+    return { hechas, sobran };
+  }
+  async function planCambia(id, nueva, persona, origen){
+    const p = (memoria.plan || {})[id]; if (!p) throw new Error("Ese pendiente ya no está");
+    nueva = Math.floor(Number(nueva || 0)); if (nueva <= 0) throw new Error("Pon cuántas (o quítalo con la ✕)");
+    const dif = nueva - p.cantidad; if (!dif) return p;
+    const { t, base } = origenPlan(p);
+    const disponible = Number(((memoria[t] || {})[base.id] || {}).cantidad || 0);
+    if (dif > disponible) throw new Error("Solo quedan " + disponible + " en el inventario");
+    p.cantidad = nueva; if (p.juegos && p.base) p.juegos = null;
+    const escrituras = [[t, base.id, incrementaLocal(t, base, -dif)], ["plan", id, { cantidad: nueva, juegos: p.juegos }]];
+    const mov = { id: uuid(), tipo: "plan", [t + "_id"]: base.id, modelo_id: base.modelo_id, nombre: base.modelo, color: base.color, etapa_de: p.de, etapa_a: p.a, delta: -dif,
+      resultado: memoria[t][base.id].cantidad, persona, origen: origen || "", motivo: "cambió la cantidad del plan del día", creado: ahora() };
+    guardarLocal(t); guardarLocal("plan"); avisar(t); avisar("plan"); movLocal(mov);
+    await manda(escrituras, [mov]);
+    return p;
+  }
+  async function planQuita(id, persona, origen){
+    const p = (memoria.plan || {})[id]; if (!p) return;
+    const { t, base } = origenPlan(p);
+    const escrituras = [[t, base.id, incrementaLocal(t, base, p.cantidad)], ["plan", id, null]];
+    const mov = { id: uuid(), tipo: "ajuste", [t + "_id"]: base.id, modelo_id: base.modelo_id, nombre: base.modelo, color: base.color, categoria: t === "pieza" ? p.de : undefined, etapa_a: p.de, delta: p.cantidad,
+      resultado: memoria[t][base.id].cantidad, persona, origen: origen || "", motivo: "se quitó del plan del día", creado: ahora() };
+    delete memoria.plan[id];
+    guardarLocal(t); guardarLocal("plan"); avisar(t); avisar("plan"); movLocal(mov);
+    await manda(escrituras, [mov]);
+  }
+
+  /* ── FUSIONAR NOMBRES (migración): todo lo que esté con un nombre "mal escrito" pasa
+     al modelo correcto del catálogo: renglones de pedidos, lotes y piezas. ── */
+  async function fusionaModelo(de, aId, persona, origen){
+    // de: { nombre, modelo_id? }  aId: id del modelo correcto
+    const a = (memoria.modelo || {})[aId]; if (!a) throw new Error("No existe el modelo destino");
+    const nombreDe = String(de.nombre || "").trim(); const idDe = de.modelo_id || null;
+    const escrituras = [], movs = []; let n = 0;
+    const mismoNombre = x => sinAcentoL(x) === sinAcentoL(nombreDe);
+    // pedidos
+    lista("pedido").forEach(p => {
+      let toco = false;
+      const lineas = (p.lineas || []).map(l => { if (!l.surtido && l.modelo && mismoNombre(l.modelo)){ toco = true; return Object.assign({}, l, { modelo: a.nombre }); } return l; });
+      if (toco){ p.lineas = lineas; escrituras.push(["pedido", p.id, { lineas }]); n++; }
+    });
+    // lotes y piezas
+    ["lote", "pieza"].forEach(t => {
+      lista(t).filter(x => (idDe && x.modelo_id === idDe) || (!idDe && mismoNombre(x.modelo))).forEach(x => {
+        const cant = Number(x.cantidad || 0);
+        const nuevo = t === "lote" ? baseLote(Object.assign({}, x, { modelo_id: a.id, modelo: a.nombre })) : Object.assign(basePieza(Object.assign({}, x, { modelo_id: a.id, modelo: a.nombre })), { minimo: Number(x.minimo || 0) });
+        delete nuevo.id; nuevo.id = t === "lote" ? claveLote(nuevo) : clavePieza(nuevo);
+        delete memoria[t][x.id]; escrituras.push([t, x.id, null]);
+        if (cant > 0){
+          escrituras.push([t, nuevo.id, incrementaLocal(t, nuevo, cant)]);
+          movs.push({ id: uuid(), tipo: "ajuste", [t + "_id"]: nuevo.id, modelo_id: a.id, nombre: a.nombre, color: x.color || "", etapa_a: t === "lote" ? x.etapa : x.categoria, categoria: t === "pieza" ? x.categoria : undefined,
+            delta: 0, resultado: memoria[t][nuevo.id].cantidad, persona, origen: origen || "", motivo: "corrección de nombre: «" + x.modelo + "» → «" + a.nombre + "»", creado: ahora() });
+        }
+        n++;
+      });
+    });
+    // el modelo viejo (genérico / por revisar) se desactiva si existía
+    if (idDe && idDe !== a.id && memoria.modelo[idDe]){
+      memoria.modelo[idDe] = Object.assign({}, memoria.modelo[idDe], { activo: false, editado_por: persona, actualizado: ahora(), nota: "fusionado con " + a.nombre });
+      escrituras.push(["modelo", idDe, { activo: false, editado_por: persona, actualizado: ahora(), nota: "fusionado con " + a.nombre }]);
+    }
+    movs.push({ id: uuid(), tipo: "catalogo", modelo_id: a.id, nombre: a.nombre, persona, origen: origen || "", motivo: "«" + nombreDe + "» se fusionó con «" + a.nombre + "» (" + n + " renglones)", creado: ahora() });
+    ["pedido", "lote", "pieza", "modelo"].forEach(t => { guardarLocal(t); avisar(t); }); movs.forEach(movLocal);
+    await manda(escrituras, movs);
+    return n;
+  }
+  const sinAcentoL = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+
+  /* ── Correcciones fijas a pedidos ya cargados (una vez, con meta) ── */
+  async function arreglaPedidos(arreglo, persona){
+    const escrituras = []; let n = 0;
+    lista("pedido").forEach(p => {
+      let toco = false; let lineas = (p.lineas || []).slice();
+      (arreglo.cambios || []).forEach(c => {
+        if (c.cliente && sinAcentoL(p.cliente) !== sinAcentoL(c.cliente)) return;
+        lineas = lineas.map(l => {
+          if (!l || sinAcentoL(l.modelo) !== sinAcentoL(c.modelo)) return l;
+          if (c.color != null && (l.color || "") !== c.color) return l;
+          toco = true; n++;
+          if (c.borrar) return null;
+          return Object.assign({}, l, c.pon || {});
+        }).filter(Boolean);
+      });
+      if (toco){
+        lineas = lineas.map(l => Object.assign({}, l, { entregado: Math.min(Number(l.cantidad || 0), Number(l.entregado || 0)) }));
+        const completo = lineas.length && lineas.every(l => Number(l.entregado || 0) >= Number(l.cantidad || 0));
+        p.lineas = lineas; p.estado = completo ? "entregado" : "pendiente";
+        escrituras.push(["pedido", p.id, { lineas, estado: p.estado }]);
+      }
+    });
+    const meta = { id: arreglo.id, hecho: ahora(), por: persona, renglones: n };
+    memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; escrituras.push(["meta", meta.id, meta]);
+    guardarLocal("pedido"); avisar("pedido"); guardarLocal("meta"); avisar("meta");
+    await manda(escrituras, []);
+    return n;
+  }
+
+  /* ── Semana del taller: sábado → viernes. El domingo a las 12 de la noche (lunes 00:00)
+     se borra lo de la semana pasada: recados ya hechos y movimientos; lotes y piezas en 0. ── */
+  function inicioSemana(d){
+    const x = new Date(d || Date.now()); x.setHours(0, 0, 0, 0);
+    const dia = x.getDay(); // 0 dom … 6 sáb
+    x.setDate(x.getDate() - ((dia + 1) % 7));
+    return x;
+  }
+  let limpiada = false;
+  async function limpiaSemana(){
+    if (limpiada) return 0; limpiada = true;
+    const sab = inicioSemana(); const lun = new Date(sab); lun.setDate(lun.getDate() + 2);
+    if (Date.now() < lun.getTime()) return 0;  // sábado y domingo: la semana pasada todavía se ve
+    const corte = sab.toISOString(), corteRec = lun.toISOString();
+    const escrituras = []; let n = 0;
+    lista("recado").filter(r => r.hecho && (r.hecho_en || r.creado) < corteRec).forEach(r => { delete memoria.recado[r.id]; escrituras.push(["recado", r.id, null]); n++; });
+    lista("movimiento").filter(m => (m.creado || "") < corte).forEach(m => { delete memoria.movimiento[m.id]; escrituras.push(["movimiento", m.id, null]); n++; });
+    ["lote", "pieza"].forEach(t => lista(t).filter(x => Number(x.cantidad || 0) <= 0 && (x.actualizado || x.creado || "") < corte).forEach(x => { delete memoria[t][x.id]; escrituras.push([t, x.id, null]); n++; }));
+    if (!n) return 0;
+    ["recado", "movimiento", "lote", "pieza"].forEach(t => { guardarLocal(t); avisar(t); });
+    await manda(escrituras, []);
+    return n;
   }
 
   /* ── MATERIAL: sumar o restar envases ── */
@@ -585,7 +812,7 @@ window.Almacen = (() => {
     const escrituras = [];
     memoria.pedido = memoria.pedido || {};
     (carga.pedidos || []).forEach(x => {
-      const lineas = (x.lineas || []).map(([modelo, color, cantidad, entregado]) => ({ modelo, color: color || "", cantidad: Number(cantidad || 0), entregado: Math.min(Number(cantidad || 0), Number(entregado || 0)) }));
+      const lineas = (x.lineas || []).map(([modelo, color, cantidad, entregado, extra]) => Object.assign({ modelo, color: color || "", cantidad: Number(cantidad || 0), entregado: Math.min(Number(cantidad || 0), Number(entregado || 0)) }, extra || {}));
       const completo = lineas.length && lineas.every(l => l.entregado >= l.cantidad);
       const p = { id: uuid(), cliente: x.cliente, fecha: x.fecha || null, lineas, notas: x.notas || "", estado: completo ? "entregado" : "pendiente", de: persona, origen: origen || "", creado: ahora() };
       memoria.pedido[p.id] = p; escrituras.push(["pedido", p.id, p]);
@@ -620,6 +847,7 @@ window.Almacen = (() => {
     lista, dame(t, id){ return (memoria[t] || {})[id] || null; },
     pon, parcha, borra, anota, ajusta,
     registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, aCabina,
-    cargaInicial, cargaMaterial, cargaPedidos, cargaHecha, preparaCarga, claveLote, clavePieza
+    cargaInicial, cargaMaterial, cargaPedidos, cargaHecha, preparaCarga, claveLote, clavePieza,
+    prepara, revisaPreparar, alPlan, planListo, planCambia, planQuita, fusionaModelo, arreglaPedidos, inicioSemana, limpiaSemana
   };
 })();
