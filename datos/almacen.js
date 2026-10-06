@@ -35,6 +35,7 @@ window.Almacen = (() => {
   let sueltas = [];
   let pendientes = 0;
   let sembrandoModelos = false;
+  const sinPermiso = {};   // colecciones a las que Firebase negó el acceso (falta su regla)
 
   /* ── utilidades ── */
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
@@ -112,15 +113,14 @@ window.Almacen = (() => {
         },
         err => {
           console.warn("nube", t, err && err.code);
-          if (err && (err.code === "permission-denied" || err.code === "unauthenticated")){
-            modo = "local"; avisarEstado();
-          }
+          if (err && err.code === "unauthenticated"){ modo = "local"; avisarEstado(); }
+          else if (err && err.code === "permission-denied"){ sinPermiso[t] = true; avisarEstado(); }   // una colección sin regla no tumba la sesión
         }
       );
       sueltas.push(suelta);
     });
   }
-  function dejarDeEscuchar(){ sueltas.forEach(f => { try { f(); } catch(e){} }); sueltas = []; }
+  function dejarDeEscuchar(){ sueltas.forEach(f => { try { f(); } catch(e){} }); sueltas = []; Object.keys(sinPermiso).forEach(k => delete sinPermiso[k]); }
 
   /* ── arranque ── */
   async function arranca(){
@@ -841,6 +841,7 @@ window.Almacen = (() => {
     get pendientes(){ return pendientes; },
     get enLinea(){ return enLinea(); },
     get hayNube(){ return !!db; },
+    get sinPermiso(){ return Object.keys(sinPermiso); },
     arranca, necesitaEntrar, entra, sale, setPractica,
     mira(t, cb){ (oyentes[t] = oyentes[t] || []).push(cb); cb(lista(t)); },
     onEstado(cb){ estadoCb.push(cb); },

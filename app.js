@@ -101,6 +101,7 @@ function pintaPulso(){
   const p = $("#pulso"), t = $("#pulsoTxt");
   p.className = "pulso";
   if (Almacen.practica){ p.classList.add("local"); t.textContent = "Modo práctica: datos de juguete, solo en este aparato"; }
+  else if (Almacen.modo === "nube" && Almacen.sinPermiso.length){ p.classList.add("local"); t.textContent = "Falta una regla en Firebase para: " + Almacen.sinPermiso.join(", ") + " (ve a Ajustes → Revisar este aparato)"; }
   else if (Almacen.modo === "nube" && Almacen.enLinea){ t.textContent = "Compartido en vivo con el taller" + (Almacen.pendientes ? " · subiendo " + Almacen.pendientes + " pendientes" : ""); }
   else if (Almacen.modo === "nube"){ p.classList.add("sin"); t.textContent = "Sin señal: lo que hagas se guarda aquí y se sube al volver"; }
   else if (Almacen.hayNube){ p.classList.add("local"); t.textContent = "Sin sesión: guardando solo en este aparato"; }
@@ -1372,6 +1373,7 @@ async function diagnostico(){
   const fila = (ok, t, arreglo) => filas.push('<div class="r"><span class="' + (ok === true ? "ok" : ok === false ? "no" : "duda") + '">' + (ok === true ? "✓" : ok === false ? "✗" : "?") + '</span><span>' + t + (arreglo ? '<small>' + arreglo + '</small>' : "") + '</span></div>');
   const pinta = () => { caja.innerHTML = filas.join(""); };
   fila(navigator.onLine !== false, "Conexión a internet", navigator.onLine === false ? "Sin señal ahora. Lo que hagas se guarda y se sube después." : "");
+  if (Almacen.sinPermiso.length) fila(false, "Reglas de Firebase incompletas: " + Almacen.sinPermiso.join(", "), "En console.firebase.google.com → Firestore → Rules, agrega esta línea junto a las demás y publica: " + Almacen.sinPermiso.map(c => "match /" + c + "/{id} { allow read, write: if delTaller(); }").join("  "));
   fila(Almacen.hayNube ? (Almacen.modo === "nube") : null, "Base compartida", !Almacen.hayNube ? "Faltan las llaves en config.js" : Almacen.modo !== "nube" ? "No has iniciado sesión" : "");
   const instalada = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   fila(instalada, "Instalada como app", instalada ? "" : (esApple ? "Compartir → Agregar a pantalla de inicio" : "Menú ⋮ → Instalar app"));
@@ -1616,7 +1618,8 @@ function pintaPlan(){
   let l = E.plan.slice().sort((a,b) => (nombrePlan(a.a) + a.creado) < (nombrePlan(b.a) + b.creado) ? -1 : 1);
   $("#resumenPlan").textContent = l.length ? plural(l.length, "pendiente", "pendientes") + " · " + fechaHoy() : fechaHoy();
   if (q("plan")) l = Busca.busca(q("plan"), l, p => p.modelo + " " + p.color + " " + nombrePlan(p.a));
-  if (!l.length){ caja.innerHTML = q("plan") ? sinHallar("plan", "eso en el plan") : '<div class="vacio"><b>Nada pendiente para hoy</b><p>El plan se arma desde <b>Reportes → Muebles y piezas</b>: cada renglón tiene el botón «Descontar». Lo que se descuenta baja del inventario al momento y se queda aquí hasta que alguien lo marque listo.</p></div>'; return; }
+  const aviso = Almacen.sinPermiso.includes("plan") ? '<div class="aviso" style="margin-bottom:10px"><b>Falta una regla en Firebase</b><p>El plan del día no se puede compartir todavía. En Firestore → Rules agrega: <code>match /plan/{id} { allow read, write: if delTaller(); }</code> y publica.</p></div>' : "";
+  if (!l.length){ caja.innerHTML = aviso + (q("plan") ? sinHallar("plan", "eso en el plan") : '<div class="vacio"><b>Nada pendiente para hoy</b><p>El plan se arma desde <b>Reportes → Muebles y piezas</b>: cada renglón tiene el botón «Descontar». Lo que se descuenta baja del inventario al momento y se queda aquí hasta que alguien lo marque listo.</p></div>'); return; }
   const grupos = {}; l.forEach(p => (grupos[p.a] = grupos[p.a] || []).push(p));
   caja.innerHTML = Object.keys(grupos).map(a => '<div class="bloque-h">' + esc(nombrePlan(a)) + '<span class="n">' + grupos[a].reduce((s,p) => s + p.cantidad, 0) + '</span></div>' + grupos[a].map(p => {
     const m = modeloDe(p.modelo_id); const por = p.tipo === "pieza" ? R.piezasPorMueble(m, p.de) : null;
