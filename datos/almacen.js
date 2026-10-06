@@ -436,9 +436,11 @@ window.Almacen = (() => {
   /* ── PREPARAR: mueble pintado + puertas, cajones y parches pintados → Mueble preparado.
      Un solo batch. Si no alcanza algo, no se toca nada y se dice qué falta. ── */
   function piezasPara(modelo_id, color, categoria){
-    // Primero las del mismo color, luego las que no tienen color.
-    return lista("pieza").filter(p => p.modelo_id === modelo_id && p.categoria === categoria && Number(p.cantidad || 0) > 0 && ((p.color || "") === (color || "") || !p.color))
-      .sort((a, b) => ((a.color || "") === (color || "") ? -1 : 1) - ((b.color || "") === (color || "") ? -1 : 1));
+    // Como lego: sirven las piezas del modelo de CUALQUIER color. Se toman primero las del
+    // mismo color, luego las que no tienen color, luego las demás (las que más haya).
+    const peso = p => (p.color || "") === (color || "") ? 0 : !p.color ? 1 : 2;
+    return lista("pieza").filter(p => p.modelo_id === modelo_id && p.categoria === categoria && Number(p.cantidad || 0) > 0)
+      .sort((a, b) => peso(a) - peso(b) || Number(b.cantidad || 0) - Number(a.cantidad || 0));
   }
   function revisaPreparar(lote, n, cuales){
     const Rg = window.Reglas; const m = (memoria.modelo || {})[lote.modelo_id] || null;
