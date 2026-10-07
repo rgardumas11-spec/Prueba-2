@@ -765,10 +765,12 @@ window.Almacen = (() => {
 
   /* ── GUACALES COMPARTIDOS (migración): los genéricos de la carga se vuelven guacales de
      verdad y cada variante del catálogo queda ligada a su guacal. ── */
+  if (window.Reglas && window.Reglas.conGuacalVivo) window.Reglas.conGuacalVivo(id => { const x = (memoria.modelo || {})[id]; return !!x && x.activo !== false; });
   function previaGuacales(G){
     const Rg = window.Reglas; const r = [];
     (G.guacales || []).forEach(g => {
       const ex = (memoria.modelo || {})[g.id];
+      if (ex && ex.activo === false) return;   // el taller lo quitó del catálogo: no se recrea ni se religa nada
       const variantes = (g.variantes || []).map(nombre => lista("modelo").find(m => m.activo !== false && sinAcentoL(m.nombre) === sinAcentoL(nombre))).filter(Boolean).filter(m => m.guacal !== g.id);
       r.push({ g, existe: !!ex, nombreViejo: ex ? ex.nombre : "", yaEs: !!ex && Rg.esGuacal(ex) && ex.nombre === g.nombre, variantes, lotes: lista("lote").filter(l => l.modelo_id === g.id && Number(l.cantidad) > 0).reduce((s, l) => s + Number(l.cantidad), 0) });
     });

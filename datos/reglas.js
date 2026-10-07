@@ -232,7 +232,9 @@
      Rombo… Las puertas hacen el modelo. Un modelo con `guacal` toma muebles pintados del
      modelo-guacal (es_guacal) y sus cajones/parches también pueden venir del guacal. ── */
   const esGuacal = m => !!m && m.es_guacal === true;
-  const guacalDe = m => m ? (m.guacal || m.id) : null;
+  /* Si el guacal al que apunta ya se quitó del catálogo, se ignora (el modelo queda con su propio guacal). */
+  let guacalVive = null; const conGuacalVivo = f => { guacalVive = f; };
+  const guacalDe = m => { if (!m) return null; const g = m.guacal; if (!g) return m.id; return guacalVive && !guacalVive(g) ? m.id : g; };
   const mismoGuacal = (a, b) => !!a && !!b && (a.id === b.id || guacalDe(a) === guacalDe(b));
 
   /* ── Colores. Muebles, puertas, cajones y parches se pintan por separado y solo llevan un
@@ -286,7 +288,7 @@
   const R = { ETAPAS, ETAPAS_VISIBLES, CADENA, PIEZAS, PESTANAS_PIEZA, CADENA_PUERTAS, CADENA_CAJONES, CADENA_PARCHES, PIEZAS_VIEJAS, RESPONSABLES, tipoDe, cadenaDe, primeraEtapa, siguienteEtapa, anteriorEtapa,
     siguientePieza, siguientePiezaDe, anteriorPieza, cadenaPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, sePintaEn, parchesDe, necesitaParaPreparar, componentes, faltanPartes, partesTexto, completo, esExtra, extraAdmite,
     responsables, origenDe, firmaDe, validaTraslado, piezasPorMueble, equivalencia, textoEquivalencia, listos, ficha,
-    esGuacal, guacalDe, mismoGuacal, COLORES_LISOS, mismoColor, esColorLiso, desarmaColor, colorParte, textoColores, coincideCombo };
+    esGuacal, guacalDe, mismoGuacal, conGuacalVivo, COLORES_LISOS, mismoColor, esColorLiso, desarmaColor, colorParte, textoColores, coincideCombo };
   if (typeof module !== "undefined" && module.exports) module.exports = R;
   raiz.Reglas = R;
 })(typeof window !== "undefined" ? window : globalThis);

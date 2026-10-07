@@ -294,8 +294,9 @@ function campoColor(sel, obligatorio, id){
   const lisos = coloresLisos().slice(); if (sel && !lisos.some(c => R.mismoColor(c, sel))) lisos.push(sel);
   return '<label class="campo"><span>Color' + (obligatorio ? "" : " (si ya se sabe)") + '</span><select id="' + (id || "rColor") + '"><option value="">' + (obligatorio ? "— escoge el color —" : "— todavía sin color —") + '</option>' + lisos.map(c => '<option' + (sel && R.mismoColor(sel, c) ? " selected" : "") + '>' + esc(c) + '</option>').join("") + '</select></label>';
 }
-function montaCampoModelo(h, alEscoger, conExtras, filtro){
+function montaCampoModelo(h, alEscoger, conExtras, filtro, guacalesArriba){
   const inp = h.querySelector("#rModelo"), sug = h.querySelector("#rSug");
+  const primeroGuacales = l => { const g = typeof guacalesArriba === "function" ? guacalesArriba() : guacalesArriba; return g ? l.filter(m => R.esGuacal(m)).concat(l.filter(m => !R.esGuacal(m))) : l; };
   let escogido = null;
   const fuente = () => modelosActivos().filter(m => conExtras ? true : !R.esExtra(m)).filter(m => filtro ? filtro(m) : true);
   const pinta = () => {
@@ -303,19 +304,21 @@ function montaCampoModelo(h, alEscoger, conExtras, filtro){
     if (escogido && escogido.nombre === t){ sug.hidden = true; return; }
     escogido = null; alEscoger(null);
     if (!t){ sug.hidden = true; return; }
-    const l = Busca.busca(t, fuente(), m => m.nombre).slice(0, 8);
+    const l = primeroGuacales(Busca.busca(t, fuente(), m => m.nombre)).slice(0, 12);
     sug.hidden = false;
-    sug.innerHTML = l.length ? l.map(m => '<button data-id="' + esc(m.id) + '">' + esc(m.nombre) + (m.pendiente ? ' <span class="chip revisar">por revisar</span>' : "") + '<small>' + (R.esExtra(m) ? "pieza extra" : (m.tipo === "mdf" ? "MDF · " : "") + fichaCorta(m)) + '</small></button>').join("") : '<div class="sin-hallar">No encontré ese mueble. Revisa el nombre o agrégalo en Catálogo.</div>';
+    sug.innerHTML = l.length ? l.map(m => '<button data-id="' + esc(m.id) + '">' + esc(m.nombre) + (R.esGuacal(m) ? ' <span class="chip">guacal</span>' : "") + (m.pendiente ? ' <span class="chip revisar">por revisar</span>' : "") + '<small>' + (R.esExtra(m) ? "pieza extra" : (m.tipo === "mdf" ? "MDF · " : "") + fichaCorta(m)) + '</small></button>').join("") : '<div class="sin-hallar">No encontré ese mueble. Revisa el nombre o agrégalo en Catálogo.</div>';
     sug.querySelectorAll("[data-id]").forEach(b => b.onclick = () => { escogido = modeloDe(b.dataset.id); inp.value = escogido.nombre; sug.hidden = true; alEscoger(escogido); });
   };
   inp.oninput = pinta;
   inp.onkeydown = e => { if (e.key === "Enter"){ e.preventDefault(); const b = sug.querySelector("[data-id]"); if (b && !sug.hidden) b.click(); } };
   inp.focus();
 }
+/* El guacal (activo) sobre el que se arma un modelo, o null si tiene el suyo */
+const guacalVivo = m => { if (!m) return null; const gu = R.guacalDe(m); const x = gu !== m.id ? modeloDe(gu) : null; return x && x.activo !== false ? x : null; };
 function fichaCorta(m){
   const p = [];
   if (R.esGuacal(m)) p.push("guacal: sirve para " + plural(modelosActivos().filter(x => x.guacal === m.id).length, "modelo", "modelos"));
-  else if (m.guacal && modeloDe(m.guacal)) p.push("usa el guacal " + modeloDe(m.guacal).nombre);
+  else if (guacalVivo(m)) p.push("usa el guacal " + guacalVivo(m).nombre);
   p.push(m.cajones == null ? "cajones: falta dato" : plural(m.cajones, "cajón", "cajones"));
   p.push(m.total_puertas == null ? "puertas: falta dato" : plural(m.total_puertas, "puerta", "puertas"));
   const pa = R.parchesDe(m); if (pa > 0) p.push(plural(pa, "parche", "parches"));
@@ -551,6 +554,9 @@ function hojaRegistrarPieza(){
     h.querySelector("#rUnidad [data-u=juegos]").textContent = "Por juego (" + por + ")";
     h.querySelector("#rCant").closest(".campo").querySelector("span").textContent = enJuegos ? "Cuántos juegos" : "Cuántas";
     h.querySelector("#rEq").textContent = modelo && piezasDe(h) > 0 ? R.textoEquivalencia(piezasDe(h), cat, modelo) : "";
+    const hayG = modelosActivos().some(m => R.esGuacal(m)); const deGuacal = cat === "cajones_armados" || cat === "parches_por_lijar";
+    h.querySelector("#rGuacales").hidden = !(hayG && deGuacal);
+    h.querySelectorAll("#rGuacales [data-guacal]").forEach(b => b.classList.toggle("on", !!modelo && modelo.id === b.dataset.guacal));
     const sinParches = cat === "parches_por_lijar" && modelo && !(R.parchesDe(modelo) > 0);
     h.querySelector("#rAviso").hidden = !sinParches;
     if (sinParches) h.querySelector("#rAviso").textContent = R.parchesDe(modelo) === 0 ? "Este modelo no lleva parches según su ficha." : "La ficha de este modelo no dice cuántos parches lleva. Ponlo en Catálogo primero.";
@@ -558,13 +564,15 @@ function hojaRegistrarPieza(){
   };
   abreHoja('<h3>Registrar piezas</h3><p class="guia">Las puertas entran a «Puertas Uriel» (por lijar → lijadas → con bisagras → pintadas). Los cajones entran armados y de ahí pasan a pintados. Los parches entran por lijar (lijados → pintados), solo para modelos cuya ficha dice cuántos llevan.</p>' +
     '<div class="grupo-h">Qué son</div><div class="cats" style="margin-bottom:12px">' + cats.map(c => '<button class="cat" data-cat="' + c + '">' + esc(R.PIEZAS[c].nombre) + '</button>').join("") + '</div>' +
-    campoModelo() + '<p class="sin-hallar" id="rAviso" hidden></p>' + campoColor() +
+    campoModelo() + '<div id="rGuacales" style="margin:-4px 0 10px" hidden><span class="guia" style="display:block;margin-bottom:4px">Guacales (sus cajones y parches sirven para todos sus modelos):</span><div class="cats">' + modelosActivos().filter(m => R.esGuacal(m)).map(m => '<button class="cat" data-guacal="' + esc(m.id) + '">' + esc(m.nombre) + '</button>').join("") + '</div></div>' +
+    '<p class="sin-hallar" id="rAviso" hidden></p>' + campoColor() +
     '<div class="cats" id="rUnidad" style="margin-bottom:8px" hidden><button class="cat on" data-u="piezas">Por pieza</button><button class="cat" data-u="juegos">Por juego</button></div>' +
     '<label class="campo"><span>Cuántas</span><input id="rCant" type="number" inputmode="numeric" min="1" value="1"></label><p class="guia" id="rEq"></p>' +
     '<div id="rQuien"></div><button class="btn vino grande" id="rOk" disabled style="margin-top:14px">Registrar</button>',
     h => {
       h.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { cat = b.dataset.cat; quien = []; pinta(); });
-      montaCampoModelo(h, m => { modelo = m; pinta(); }, true);
+      montaCampoModelo(h, m => { modelo = m; pinta(); }, true, null, () => cat === "cajones_armados" || cat === "parches_por_lijar");
+      h.querySelectorAll("#rGuacales [data-guacal]").forEach(b => b.onclick = () => { modelo = modeloDe(b.dataset.guacal); h.querySelector("#rModelo").value = modelo ? modelo.nombre : ""; h.querySelector("#rSug").hidden = true; pinta(); });
       h.querySelector("#rColor").onchange = e => { color = e.target.value; pinta(); };
       h.querySelector("#rCant").oninput = pinta;
       h.querySelectorAll("#rUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; pinta(); });
@@ -1174,7 +1182,7 @@ function hojaModelo(m, nombreSugerido){
     '<label class="interruptor" style="margin:0 0 10px"><input type="checkbox" id="mEsGuacal"' + (m.es_guacal ? " checked" : "") + '> <span>Este modelo es un guacal: sirve para varios modelos (las puertas hacen el modelo)</span></label>' +
     '<div id="mCompat"' + (m.es_guacal ? "" : " hidden") + ' style="margin:0 0 12px"><div class="grupo-h">Modelos que se arman con este guacal</div><p class="guia">Marca del catálogo los modelos a los que se les cuelgan sus puertas sobre este guacal. Puedes agregar o quitar cuando quieras.</p>' +
       campoBuscaLista("Buscar modelo…") + '<div class="cats" id="mCompatSel"></div><div class="sugerencias" id="mCompatLista"></div></div>' +
-    (m.guacal && modeloDe(m.guacal) ? '<p class="guia" style="margin:-4px 0 10px">Este modelo se arma sobre el guacal <b>' + esc(modeloDe(m.guacal).nombre) + '</b>. Eso se cambia desde la ficha de ese guacal.</p>' : "") +
+    (guacalVivo(m) ? '<p class="guia" style="margin:-4px 0 10px">Este modelo se arma sobre el guacal <b>' + esc(guacalVivo(m).nombre) + '</b>. Eso se cambia desde la ficha de ese guacal.</p>' : "") +
     num("mCajones", "Cajones", m.cajones) +
     '<div class="grupo-h">Puertas</div><div class="dupla">' + num("mPG", "Grandes", m.puertas_grandes) + num("mPGL", "Grandes con luna", m.puertas_grandes_luna) + '</div>' +
     '<div class="dupla">' + num("mPC", "Chicas", m.puertas_chicas) + num("mPCL", "Chicas con luna", m.puertas_chicas_luna) + '</div>' +
@@ -1192,7 +1200,7 @@ function hojaModelo(m, nombreSugerido){
         const q = g("#rBusca").value.trim(); const todos = candidatos();
         g("#mCompatSel").innerHTML = compat.map(id => modeloDe(id)).filter(Boolean).map(x => '<button class="cat on" data-c="' + esc(x.id) + '">' + esc(x.nombre) + ' ✕</button>').join("") || '<span class="guia">Todavía ninguno.</span>';
         const l = (q ? Busca.busca(q, todos, x => x.nombre) : todos.filter(x => x.familia === (g("#mFamilia").value.trim() || m.familia))).filter(x => !compat.includes(x.id)).slice(0, 12);
-        g("#mCompatLista").innerHTML = l.map(x => '<button data-c="' + esc(x.id) + '">' + esc(x.nombre) + '<small>' + esc(fichaCorta(x)) + (x.guacal && x.guacal !== m.id && modeloDe(x.guacal) ? ' · ya usa el guacal ' + esc(modeloDe(x.guacal).nombre) + ' (se cambia)' : "") + '</small></button>').join("") || (q ? '<div class="sin-hallar">No encontré ese modelo.</div>' : '<div class="sin-hallar">Escribe arriba para buscar en todo el catálogo.</div>');
+        g("#mCompatLista").innerHTML = l.map(x => '<button data-c="' + esc(x.id) + '">' + esc(x.nombre) + '<small>' + esc(fichaCorta(x)) + (guacalVivo(x) && x.guacal !== m.id ? ' · ya usa el guacal ' + esc(guacalVivo(x).nombre) + ' (se cambia)' : "") + '</small></button>').join("") || (q ? '<div class="sin-hallar">No encontré ese modelo.</div>' : '<div class="sin-hallar">Escribe arriba para buscar en todo el catálogo.</div>');
         h.querySelectorAll("#mCompat [data-c]").forEach(b => b.onclick = () => { const id = b.dataset.c; compat = compat.includes(id) ? compat.filter(x => x !== id) : compat.concat(id); pintaCompat(); });
       };
       g("#rBusca").oninput = pintaCompat; pintaCompat();
@@ -1224,9 +1232,11 @@ function hojaModelo(m, nombreSugerido){
         cierraHoja(); grita(nuevo ? "Modelo agregado" : "Ficha guardada"); pintaTodo();
       };
       const qb = g("#mQuita"); if (qb) qb.onclick = async () => {
-        if (!confirm("¿Quitar «" + m.nombre + "» del catálogo? Las existencias que ya tenga se conservan.")) return;
+        const ligados = E.modelos.filter(x => x.guacal === m.id);
+        if (!confirm("¿Quitar «" + m.nombre + "» del catálogo? Las existencias que ya tenga se conservan." + (ligados.length ? " Los " + ligados.length + " modelos que se arman sobre este guacal quedan sin guacal." : ""))) return;
         await Almacen.parcha("modelo", m.id, { activo:false, editado_por: E.yo });
-        await Almacen.anota({ tipo:"catalogo", modelo_id: m.id, nombre: m.nombre, persona: E.yo, motivo: "quitado del catálogo", origen: origen() });
+        ligados.forEach(x => Almacen.parcha("modelo", x.id, { guacal: null }));
+        await Almacen.anota({ tipo:"catalogo", modelo_id: m.id, nombre: m.nombre, persona: E.yo, motivo: "quitado del catálogo" + (ligados.length ? " · se desligaron: " + ligados.map(x => x.nombre).join(", ") : ""), origen: origen() });
         cierraHoja(); pintaTodo();
       };
       g("#mNombre").focus();

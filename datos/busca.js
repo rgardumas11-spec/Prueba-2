@@ -63,9 +63,12 @@
   function busca(q, lista, textoDe, umbral){
     umbral = umbral == null ? 0.6 : umbral;
     if (!normaliza(q)) return lista.slice();
-    return lista.map((x, i) => ({ x, i, s: puntaje(q, textoDe(x)) }))
+    // Desempate: a igual puntaje gana el nombre con menos palabras de sobra (el más parecido a lo
+    // escrito) y el que empieza igual. Así "Petaquero Multifamiliar" le gana a "Petaquero X Multifamiliar".
+    const nq = normaliza(q); const nqs = nq.split(" ").length;
+    return lista.map((x, i) => { const t = normaliza(textoDe(x)); return { x, i, s: puntaje(q, t), sobra: Math.max(0, t.split(" ").length - nqs), inicia: t.startsWith(nq) ? 0 : 1 }; })
       .filter(r => r.s >= umbral)
-      .sort((a, b) => b.s - a.s || a.i - b.i)
+      .sort((a, b) => b.s - a.s || a.sobra - b.sobra || a.inicia - b.inicia || a.i - b.i)
       .map(r => r.x);
   }
 
