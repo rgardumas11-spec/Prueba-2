@@ -188,7 +188,13 @@
     const e = equivalencia(cantidad, piezasPorMueble(modelo, categoria));
     if (e.sinFicha) return base + " · sin ficha, no se puede calcular";
     if (e.noLleva) return base + " · este modelo no lleva " + p.unidad;
-    return base + " = " + e.muebles + (e.muebles === 1 ? " juego" : " juegos") + (e.sobran ? " · sobra" + (e.sobran === 1 ? "" : "n") + " " + e.sobran + " suelta" + (e.sobran === 1 ? "" : "s") + " (falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para otro juego)" : "");
+    // Primero juegos, luego piezas; si un juego está incompleto se dice cuántas FALTAN (no cuántas sobran)
+    return e.muebles + (e.muebles === 1 ? " juego" : " juegos") + " · " + base + (e.sobran ? " · " + textoFaltan(e, p.unidad) : "");
+  }
+  /* "faltan 2 puertas para el juego" (cuando no alcanza ni para uno) / "…para otro juego" */
+  function textoFaltan(e, unidad){
+    if (!e || !e.sobran) return "";
+    return "falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " " + (e.faltan === 1 ? singular(unidad) : unidad) + (e.muebles ? " para otro juego" : " para el juego");
   }
 
   /* ── Listos para preparar ──
@@ -287,7 +293,7 @@
 
   const R = { ETAPAS, ETAPAS_VISIBLES, CADENA, PIEZAS, PESTANAS_PIEZA, CADENA_PUERTAS, CADENA_CAJONES, CADENA_PARCHES, PIEZAS_VIEJAS, RESPONSABLES, tipoDe, cadenaDe, primeraEtapa, siguienteEtapa, anteriorEtapa,
     siguientePieza, siguientePiezaDe, anteriorPieza, cadenaPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, sePintaEn, parchesDe, necesitaParaPreparar, componentes, faltanPartes, partesTexto, completo, esExtra, extraAdmite,
-    responsables, origenDe, firmaDe, validaTraslado, piezasPorMueble, equivalencia, textoEquivalencia, listos, ficha,
+    responsables, origenDe, firmaDe, validaTraslado, piezasPorMueble, equivalencia, textoEquivalencia, textoFaltan, listos, ficha,
     esGuacal, guacalDe, mismoGuacal, conGuacalVivo, COLORES_LISOS, mismoColor, esColorLiso, desarmaColor, colorParte, textoColores, coincideCombo };
   if (typeof module !== "undefined" && module.exports) module.exports = R;
   raiz.Reglas = R;

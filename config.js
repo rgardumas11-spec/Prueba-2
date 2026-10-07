@@ -20,6 +20,6 @@ window.CONFIG = {
     messagingSenderId: "395213548379",
     appId: "1:395213548379:web:a3dacad90292462154487e"
   },
-  VERSION: "3.3.3 · 2026-10-07",
+  VERSION: "3.4 · 2026-10-07",
   TALLER: "Muebles San Bernardo"
 };

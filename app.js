@@ -429,10 +429,12 @@ function pintaEtapasPieza(){
 function filaPiezaHtml(p){
   const m = modeloDe(p.modelo_id); const n = vivoPieza(p); const cat = p.categoria;
   const sig = R.siguientePiezaDe(cat, m); const emb = R.embisagra(cat);
-  const txt = R.textoEquivalencia(n, cat, m);
   const e = R.equivalencia(n, R.piezasPorMueble(m, cat));
-  const eq = R.esExtra(m) ? "pieza extra" : e.sinFicha ? "sin ficha, no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad
-    : "=&nbsp;<b>" + plural(e.muebles, "juego", "juegos") + "</b>" + (e.sobran ? ' <span class="sello roj" title="Faltan ' + e.faltan + ' para otro juego">sobran ' + e.sobran + '</span>' : "");
+  const u = R.PIEZAS[cat].unidad; const piezasTxt = n + " " + (n === 1 ? u.replace(/s$/, "").replace(/cajone$/, "cajón") : u);
+  const conJuegos = !R.esExtra(m) && !e.sinFicha && !e.noLleva;
+  // Primero los JUEGOS en grande; las piezas van debajo. Si falta para completar un juego, se dice cuántas faltan.
+  const eq = R.esExtra(m) ? "pieza extra" : e.sinFicha ? "sin ficha, no se puede calcular" : e.noLleva ? "este modelo no lleva " + u
+    : "<b>" + esc(piezasTxt) + "</b>" + (e.sobran ? ' <span class="sello roj">' + esc(R.textoFaltan(e, u)) + '</span>' : "");
   const sel = E.sel && E.sel.tipo === "pieza" && E.sel.id === p.id;
   const paso = pasoPieza(p, m);
   let botones = "";
@@ -444,7 +446,7 @@ function filaPiezaHtml(p){
     '<div class="nombre"><b>' + esc(p.modelo) + '</b>' + (R.esExtra(m) ? '<small>pieza extra</small>' : "") + '</div>' +
     '<div class="sub">' + chipColor(p.color) + '</div>' +
     '<div class="apodos">' + chipColor(p.color) + '</div>' +
-    '<div class="cifra"><b>' + n + '</b><small>' + esc(txt.replace(/^\d+ /, "").split(/ [=·] /)[0]) + '</small></div>' +
+    '<div class="cifra">' + (conJuegos ? '<b>' + e.muebles + '</b><small>' + (e.muebles === 1 ? "juego" : "juegos") + '</small>' : '<b>' + n + '</b><small>' + esc(u) + '</small>') + '</div>' +
     '<div class="ultimo"><span>' + eq + '</span></div>' +
     '<div class="stepper">' + botones + '</div></div>';
 }
@@ -472,7 +474,7 @@ function pintaPiezas(){
     caja.innerHTML = '<div class="vacio"><b>No hay ' + esc(P.nombre.toLowerCase()) + '</b><p>' + (R.admiteAltaPieza(pest) ? "Regístralas con el botón de arriba." : "Se registran aquí con el botón de arriba y el sistema las descuenta solo de «" + esc(R.PIEZAS[ant].nombre) + "».") + '</p></div>';
     return;
   }
-  const enc = '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="d">Hay</span><span>Equivale a</span><span></span></div>';
+  const enc = '<div class="encabezado-lista"><span>Mueble</span><span>Color</span><span class="d">Juegos</span><span>Piezas</span><span></span></div>';
   caja.innerHTML = enc + grupos.map(g => {
     const bloque = R.PIEZAS[g.cat].bloque;
     const cab = bloque ? '<div class="bloque-h' + (bloque === "Sin bisagras" ? " suave" : "") + '">' + esc(bloque) + '<span class="n">' + g.filas.reduce((s,p) => s + vivoPieza(p), 0) + '</span></div>' : "";
@@ -495,7 +497,9 @@ function htmlDetallePieza(){
   const movs = E.movimientos.filter(x => x.pieza_id === p.id || (x.modelo_id === p.modelo_id && (x.color || "") === (p.color || "") && x.categoria === cat)).sort((a,b) => a.creado < b.creado ? 1 : -1).slice(0,10);
   const e = R.equivalencia(n, R.piezasPorMueble(m, cat));
   return '<h2>' + esc(p.modelo) + '</h2><div class="sub">' + chipColor(p.color) + ' &nbsp;' + esc(R.PIEZAS[cat].nombre) + '</div>' +
-    '<div class="grande-cant"><b>' + n + '</b><span>' + esc(R.PIEZAS[cat].unidad) + (cat !== "parches_pintados" && !R.esExtra(m) ? "<br>" + (e.sinFicha ? "sin ficha: no se puede calcular" : e.noLleva ? "este modelo no lleva " + R.PIEZAS[cat].unidad : "= <b style='font-size:13px;color:var(--tinta2)'>" + plural(e.muebles, "juego", "juegos") + "</b>" + (e.sobran ? "<br><span class='sello roj'>sobran " + e.sobran + " suelta" + (e.sobran === 1 ? "" : "s") + "</span><br>falta" + (e.faltan === 1 ? "" : "n") + " " + e.faltan + " para otro juego" : "")) : R.esExtra(m) ? "<br>pieza extra" : "") + '</span></div>' +
+    (!R.esExtra(m) && !e.sinFicha && !e.noLleva
+      ? '<div class="grande-cant"><b>' + e.muebles + '</b><span>' + (e.muebles === 1 ? "juego" : "juegos") + '<br>= <b style="font-size:13px;color:var(--tinta2)">' + n + ' ' + esc(R.PIEZAS[cat].unidad) + '</b>' + (e.sobran ? "<br><span class='sello roj'>" + esc(R.textoFaltan(e, R.PIEZAS[cat].unidad)) + "</span>" : "") + '</span></div>'
+      : '<div class="grande-cant"><b>' + n + '</b><span>' + esc(R.PIEZAS[cat].unidad) + (R.esExtra(m) ? "<br>pieza extra" : e.sinFicha ? "<br>sin ficha: no se puede calcular" : e.noLleva ? "<br>este modelo no lleva " + esc(R.PIEZAS[cat].unidad) : "") + '</span></div>') +
     '<dl class="ficha">' + (m ? (R.esExtra(m) ? '<dt>Qué es</dt><dd>pieza extra del catálogo (sin ficha de mueble)</dd>' : '<dt>Por mueble</dt><dd>' + esc(fichaCorta(m)) + '</dd>') : '<dt>Ficha</dt><dd style="color:var(--rojo)">este modelo no está en el catálogo</dd>') + '</dl>' +
     '<div class="acciones">' + (emb ? '<button class="btn vino" data-emb>Embisagrar</button>' : "") + (sig ? '<button class="btn' + (emb ? "" : " vino") + '" data-pasar>Pasar a ' + esc(R.PIEZAS[sig].corto.toLowerCase()) + ' →</button>' : "") + '<button class="btn" data-corrige>Corregir cantidad</button>' + (e.sinFicha && m && !R.esExtra(m) ? '<button class="btn" data-ficha>Completar ficha</button>' : "") + '</div>' +
     '<h3>Últimos movimientos</h3>' + (movs.length ? movs.map(lineaMov).join("") : '<div class="vacio" style="padding:14px"><p style="margin:0">Todavía nada.</p></div>');
@@ -629,7 +633,7 @@ function hojaPasarPieza(p, destino){
     h => {
       const inp = h.querySelector("#pCant");
       const piezasDe = () => (Number(inp.value) || 0) * (enJuegos ? por : 1);
-      const revisa = () => { const v = Number(inp.value) || 0, t = tope(); inp.classList.toggle("mal", v > t || v < 1); const err = h.querySelector("#pError"); err.hidden = v <= t; err.textContent = enJuegos ? "Solo hay " + n + " (" + t + " juegos completos)" : "Solo hay " + n + " disponibles"; h.querySelector("#pEq").textContent = enJuegos ? "= " + piezasDe() + " " + R.PIEZAS[p.categoria].unidad : (por > 1 && v > 0 ? R.textoEquivalencia(v, p.categoria, modeloDe(p.modelo_id)).replace(/^[^=·]*/, "") : ""); const colorOk = !sePintaEn(destino) || !!h.querySelector("#pColor").value; h.querySelector("#pOk").disabled = v > t || v < 1 || (regla && !quien.length) || !colorOk; };
+      const revisa = () => { const v = Number(inp.value) || 0, t = tope(); inp.classList.toggle("mal", v > t || v < 1); const err = h.querySelector("#pError"); err.hidden = v <= t; err.textContent = enJuegos ? "Solo hay " + n + " (" + t + " juegos completos)" : "Solo hay " + n + " disponibles"; h.querySelector("#pEq").textContent = enJuegos ? "= " + piezasDe() + " " + R.PIEZAS[p.categoria].unidad : (por > 1 && v > 0 ? "= " + R.textoEquivalencia(v, p.categoria, modeloDe(p.modelo_id)).replace(/ · \d+ \S+(?= ·|$)/, "") : ""); const colorOk = !sePintaEn(destino) || !!h.querySelector("#pColor").value; h.querySelector("#pOk").disabled = v > t || v < 1 || (regla && !quien.length) || !colorOk; };
       const pc = h.querySelector("#pColor"); if (pc) pc.onchange = revisa;
       h.querySelectorAll("#pUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; h.querySelectorAll("#pUnidad [data-u]").forEach(x => x.classList.toggle("on", x === b)); h.querySelector("#pCuantas").textContent = (enJuegos ? "Cuántos juegos " : "Cuántas ") + (esEmb ? "se embisagraron" : "pasan"); inp.max = tope(); inp.value = Math.min(Number(inp.value) || 1, tope()) || 1; revisa(); });
       h.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(1, (Number(inp.value) || 0) - 1); revisa(); };
@@ -651,16 +655,24 @@ function hojaPasarPieza(p, destino){
 }
 function hojaCorregirPieza(p){
   if (!exigeYo()) return;
-  const n = vivoPieza(p);
-  abreHoja('<h3>Corregir cantidad</h3><p class="guia">' + esc(p.modelo) + ' · ' + esc(nombreColor(p.color)) + ' · ' + esc(R.PIEZAS[p.categoria].nombre) + ' · ahora hay <b>' + n + '</b>.</p>' +
-    '<label class="campo"><span>Contado</span><input id="cCant" type="number" inputmode="numeric" min="0" value="' + n + '"></label>' +
+  const n = vivoPieza(p); const m = modeloDe(p.modelo_id); const u = R.PIEZAS[p.categoria].unidad;
+  const por = R.piezasPorMueble(m, p.categoria) || 0; let enJuegos = por > 1;   // primero juegos; también se puede por pieza
+  const e0 = R.equivalencia(n, por || null);
+  abreHoja('<h3>Corregir cantidad</h3><p class="guia">' + esc(p.modelo) + ' · ' + esc(nombreColor(p.color)) + ' · ' + esc(R.PIEZAS[p.categoria].nombre) + ' · ahora hay ' + (por > 1 ? '<b>' + plural(e0.muebles, "juego", "juegos") + '</b> (' + n + ' ' + esc(u) + (e0.sobran ? ", " + esc(R.textoFaltan(e0, u)) : "") + ')' : '<b>' + n + '</b> ' + esc(u)) + '.</p>' +
+    (por > 1 ? '<div class="cats" id="cUnidad" style="margin-bottom:8px"><button class="cat on" data-u="juegos">Por juego (' + por + ')</button><button class="cat" data-u="piezas">Por pieza</button></div>' : "") +
+    '<label class="campo"><span id="cQue">Contado' + (por > 1 ? " (juegos)" : "") + '</span><input id="cCant" type="number" inputmode="numeric" min="0" value="' + (por > 1 ? e0.muebles : n) + '"></label><p class="guia" id="cEq"></p>' +
     '<label class="campo"><span>Motivo (obligatorio)</span><input id="cMot" placeholder="conteo físico, se rompieron 2…"></label>' +
     '<button class="btn vino grande" id="cOk">Guardar</button>',
     h => {
-      h.querySelector("#cCant").focus(); h.querySelector("#cCant").select();
+      const inp = h.querySelector("#cCant");
+      const piezasNuevas = () => Math.max(0, Math.floor(Number(inp.value || 0))) * (enJuegos ? por : 1);
+      const traduce = () => { const v = piezasNuevas(); const e = R.equivalencia(v, por || null); h.querySelector("#cEq").textContent = por > 1 ? (enJuegos ? Math.floor(Number(inp.value || 0)) + " juegos = " + v + " " + u : v + " " + u + " = " + plural(e.muebles, "juego", "juegos") + (e.sobran ? ", " + R.textoFaltan(e, u) : "")) : ""; };
+      h.querySelectorAll("#cUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; h.querySelectorAll("#cUnidad [data-u]").forEach(x => x.classList.toggle("on", x === b)); h.querySelector("#cQue").textContent = enJuegos ? "Contado (juegos)" : "Contado (" + u + ")"; inp.value = enJuegos ? Math.floor(n / por) : n; traduce(); inp.focus(); inp.select(); });
+      inp.oninput = traduce; traduce();
+      inp.focus(); inp.select();
       h.querySelector("#cOk").onclick = async () => {
         const mot = h.querySelector("#cMot").value.trim(); if (!mot) return grita("Escribe el motivo");
-        const nuevo = Math.max(0, Math.floor(Number(h.querySelector("#cCant").value || 0)));
+        const nuevo = piezasNuevas();
         cierraHoja();
         if (nuevo !== n){ E.pend.delete(p.id); await Almacen.ajustaPieza(p, nuevo - n, E.yo, mot, origen(), "", "ajuste"); }
         grita("Guardado"); pintaTodo();
@@ -1547,7 +1559,9 @@ function reporteMuebles(seccion){
       refs = ls.map(l => ({ tipo: "lote", id: l.id, a: destinoPlan("lote", l) }));
     } else {
       const ps = E.piezas.filter(p => p.categoria === s.k && vivoPieza(p) > 0).sort(orden);
-      filas = ps.map(p => { const n = vivoPieza(p); total += n; return [p.modelo, nombreColor(p.color), n, R.textoEquivalencia(n, s.k, modeloDe(p.modelo_id)).replace(/^\d+ \S+ ?/, "").replace(/^· /, "")]; });
+      filas = ps.map(p => { const n = vivoPieza(p); total += n; const m = modeloDe(p.modelo_id); const e = R.equivalencia(n, R.piezasPorMueble(m, s.k)); const u = R.PIEZAS[s.k].unidad;
+        const conJ = !R.esExtra(m) && !e.sinFicha && !e.noLleva;
+        return [p.modelo, nombreColor(p.color), conJ ? plural(e.muebles, "juego", "juegos") : n, conJ ? n + " " + u + (e.sobran ? " · " + R.textoFaltan(e, u) : "") : R.textoEquivalencia(n, s.k, m).replace(/^.*?· /, "")]; });
       refs = ps.map(p => ({ tipo: "pieza", id: p.id, a: destinoPlan("pieza", p) }));
     }
     return { zona: s.zona, titulo: s.nombre, total, filas, refs };
@@ -1938,7 +1952,7 @@ function hojaDescontar(tipo, id, despues){
     h => {
       const inp = h.querySelector("#pCant");
       const piezasDe = () => (Number(inp.value) || 0) * (enJuegos ? por : 1);
-      const revisa = () => { const v = Number(inp.value) || 0, t = tope(); inp.classList.toggle("mal", v > t || v < 1); h.querySelector("#pEq").textContent = enJuegos ? "= " + piezasDe() + " " + R.PIEZAS[de].unidad : (por > 1 && v > 0 ? R.textoEquivalencia(v, de, m).replace(/^[^=·]*/, "") : ""); const aut = !sinBisagras || h.querySelector("#pAut").checked; h.querySelector("#pOk").disabled = v > t || v < 1 || !aut; };
+      const revisa = () => { const v = Number(inp.value) || 0, t = tope(); inp.classList.toggle("mal", v > t || v < 1); h.querySelector("#pEq").textContent = enJuegos ? "= " + piezasDe() + " " + R.PIEZAS[de].unidad : (por > 1 && v > 0 ? "= " + R.textoEquivalencia(v, de, m).replace(/ · \d+ \S+(?= ·|$)/, "") : ""); const aut = !sinBisagras || h.querySelector("#pAut").checked; h.querySelector("#pOk").disabled = v > t || v < 1 || !aut; };
       h.querySelectorAll("#pUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; h.querySelectorAll("#pUnidad [data-u]").forEach(y => y.classList.toggle("on", y === b)); h.querySelector("#pCuantas").textContent = enJuegos ? "Cuántos juegos" : "Cuántas"; inp.max = tope(); inp.value = Math.min(Number(inp.value) || 1, tope()) || 1; revisa(); });
       h.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(1, (Number(inp.value) || 0) - 1); revisa(); };
       h.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(tope(), (Number(inp.value) || 0) + 1); revisa(); };
