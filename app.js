@@ -1393,7 +1393,8 @@ function pintaCatMaterial(){
 function pintaAjustes(){
   const C = window.CONFIG || {};
   $("#ajustes").innerHTML =
-    tarjetaGuacales() + tarjetaColores() + tarjetaArregloPuertas() + tarjetaRevisarNombres() + tarjetaArreglo() + tarjetaPedidosLibreta() + tarjetaCarga() + tarjetaPintura() +
+    /* Las tarjetas de migración (guacales, colores lisos, correcciones del 6 de octubre, revisar
+       nombres, cargas de la libreta) ya se aplicaron en el taller y se quitaron de aquí (3.3.3). */
     '<div class="ajuste"><h4>Quién soy</h4><p>' + (E.yo ? "Estás como <b>" + esc(E.yo) + "</b>." : "Todavía no has dicho quién eres.") + '</p><div class="acciones"><button class="btn" id="ajYo">Cambiar de persona</button>' + (Almacen.sesion ? '<button class="btn fantasma" id="ajSalir">Cerrar sesión</button>' : "") + '</div></div>' +
     '<div class="ajuste"><h4>Modo práctica</h4><p>Para jugar sin miedo: datos de juguete, solo en este aparato. El inventario real ni se entera.</p><label class="interruptor"><input type="checkbox" id="ajPractica"' + (Almacen.practica ? " checked" : "") + '> <span>' + (Almacen.practica ? "Practicando" : "Apagado") + '</span></label></div>' +
     '<div class="ajuste"><h4>Hoja de conteo para imprimir</h4><p>Para caminar el almacén con papel y comparar contra el sistema.</p><div class="acciones"><button class="btn" data-imprime="mueble">Muebles</button><button class="btn" data-imprime="pieza">Piezas</button><button class="btn" data-imprime="material">Material</button></div></div>' +
