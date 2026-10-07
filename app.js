@@ -1162,15 +1162,19 @@ function hojaExtra(m){
 function hojaModelo(m, nombreSugerido){
   if (!exigeYo()) return;
   const nuevo = !m; m = m || { nombre: nombreSugerido || "", familia: "", tipo: "madera", cajones: null, puertas_grandes: null, puertas_grandes_luna: null, puertas_chicas: null, puertas_chicas_luna: null, total_puertas: null, parches: null, lleva_parches: null, lleva_respaldo: null, guacal: null, es_guacal: false };
-  const guacales = modelosActivos().filter(x => R.esGuacal(x) && x.id !== m.id);
+  // Modelos que se arman con este guacal (se escogen aquí, en la ficha del guacal)
+  const candidatos = () => modelosActivos().filter(x => !R.esExtra(x) && !R.esGuacal(x) && x.id !== m.id);
+  let compat = m.id ? candidatos().filter(x => x.guacal === m.id).map(x => x.id) : [];
   const num = (id, txt, v) => '<label class="campo"><span>' + txt + '</span><input id="' + id + '" type="number" inputmode="numeric" min="0" value="' + (v == null ? "" : v) + '" placeholder="falta dato"></label>';
   const siNo = (id, txt, v) => '<div class="campo"><span>' + txt + '</span><div class="opcion-si-no" id="' + id + '"><button class="cat' + (v === true ? " on" : "") + '" data-v="1">Sí</button><button class="cat' + (v === false ? " on" : "") + '" data-v="0">No</button><button class="cat' + (v == null ? " on" : "") + '" data-v="">No sé</button></div></div>';
   abreHoja('<h3>' + (nuevo ? "Modelo nuevo" : "Ficha del modelo") + '</h3>' + (m.pendiente ? '<div class="candado" style="margin-bottom:10px"><span><b>Por revisar.</b> ' + esc(m.nota || "Entró con la carga del 2 de octubre; confirma el nombre y la ficha.") + ' Al guardar se quita la marca.</span></div>' : "") + '<p class="guia">Con esta ficha el sistema traduce puertas y cajones a muebles. Si no sabes un dato, déjalo vacío: el sistema dirá «falta dato» en vez de inventar.</p>' +
     '<label class="campo"><span>Nombre</span><input id="mNombre" value="' + esc(m.nombre) + '" placeholder="Monarca Midas"></label>' +
     '<div class="dupla"><label class="campo"><span>Familia</span><input id="mFamilia" value="' + esc(m.familia || "") + '" placeholder="Monarca"></label>' +
     '<div class="campo"><span>Material</span><div class="opcion-si-no" id="mTipo"><button class="cat' + (m.tipo !== "mdf" ? " on" : "") + '" data-v="madera">Madera</button><button class="cat' + (m.tipo === "mdf" ? " on" : "") + '" data-v="mdf">MDF</button></div></div></div>' +
-    '<label class="campo"><span>Comparte guacal con…</span><select id="mGuacal"><option value="">— tiene su propio guacal —</option>' + guacales.map(x => '<option value="' + esc(x.id) + '"' + (m.guacal === x.id ? " selected" : "") + '>' + esc(x.nombre) + '</option>').join("") + '</select></label>' +
     '<label class="interruptor" style="margin:0 0 10px"><input type="checkbox" id="mEsGuacal"' + (m.es_guacal ? " checked" : "") + '> <span>Este modelo es un guacal: sirve para varios modelos (las puertas hacen el modelo)</span></label>' +
+    '<div id="mCompat"' + (m.es_guacal ? "" : " hidden") + ' style="margin:0 0 12px"><div class="grupo-h">Modelos que se arman con este guacal</div><p class="guia">Marca del catálogo los modelos a los que se les cuelgan sus puertas sobre este guacal. Puedes agregar o quitar cuando quieras.</p>' +
+      campoBuscaLista("Buscar modelo…") + '<div class="cats" id="mCompatSel"></div><div class="sugerencias" id="mCompatLista"></div></div>' +
+    (m.guacal && modeloDe(m.guacal) ? '<p class="guia" style="margin:-4px 0 10px">Este modelo se arma sobre el guacal <b>' + esc(modeloDe(m.guacal).nombre) + '</b>. Eso se cambia desde la ficha de ese guacal.</p>' : "") +
     num("mCajones", "Cajones", m.cajones) +
     '<div class="grupo-h">Puertas</div><div class="dupla">' + num("mPG", "Grandes", m.puertas_grandes) + num("mPGL", "Grandes con luna", m.puertas_grandes_luna) + '</div>' +
     '<div class="dupla">' + num("mPC", "Chicas", m.puertas_chicas) + num("mPCL", "Chicas con luna", m.puertas_chicas_luna) + '</div>' +
@@ -1184,6 +1188,15 @@ function hojaModelo(m, nombreSugerido){
       const marca = (cont, v) => cont.querySelectorAll("[data-v]").forEach(b => b.classList.toggle("on", b.dataset.v === (v == null ? "" : String(v === true ? 1 : v === false ? 0 : v))));
       g("#mTipo").querySelectorAll("[data-v]").forEach(b => b.onclick = () => { tipo = b.dataset.v; marca(g("#mTipo"), tipo); });
       g("#mRespaldo").querySelectorAll("[data-v]").forEach(b => b.onclick = () => { respaldo = b.dataset.v === "" ? null : b.dataset.v === "1"; marca(g("#mRespaldo"), respaldo); });
+      const pintaCompat = () => {
+        const q = g("#rBusca").value.trim(); const todos = candidatos();
+        g("#mCompatSel").innerHTML = compat.map(id => modeloDe(id)).filter(Boolean).map(x => '<button class="cat on" data-c="' + esc(x.id) + '">' + esc(x.nombre) + ' ✕</button>').join("") || '<span class="guia">Todavía ninguno.</span>';
+        const l = (q ? Busca.busca(q, todos, x => x.nombre) : todos.filter(x => x.familia === (g("#mFamilia").value.trim() || m.familia))).filter(x => !compat.includes(x.id)).slice(0, 12);
+        g("#mCompatLista").innerHTML = l.map(x => '<button data-c="' + esc(x.id) + '">' + esc(x.nombre) + '<small>' + esc(fichaCorta(x)) + (x.guacal && x.guacal !== m.id && modeloDe(x.guacal) ? ' · ya usa el guacal ' + esc(modeloDe(x.guacal).nombre) + ' (se cambia)' : "") + '</small></button>').join("") || (q ? '<div class="sin-hallar">No encontré ese modelo.</div>' : '<div class="sin-hallar">Escribe arriba para buscar en todo el catálogo.</div>');
+        h.querySelectorAll("#mCompat [data-c]").forEach(b => b.onclick = () => { const id = b.dataset.c; compat = compat.includes(id) ? compat.filter(x => x !== id) : compat.concat(id); pintaCompat(); });
+      };
+      g("#rBusca").oninput = pintaCompat; pintaCompat();
+      g("#mEsGuacal").onchange = e => { g("#mCompat").hidden = !e.target.checked; };
       const suma = () => { const vs = ["#mPG", "#mPGL", "#mPC", "#mPCL"].map(id => g(id).value); if (vs.every(v => v !== "")) g("#mTotal").value = vs.reduce((s,v) => s + Number(v), 0); };
       ["#mPG", "#mPGL", "#mPC", "#mPCL"].forEach(id => g(id).oninput = suma);
       const leeNum = id => g(id).value === "" ? null : Math.max(0, Math.floor(Number(g(id).value)));
@@ -1191,14 +1204,23 @@ function hojaModelo(m, nombreSugerido){
         const nombre = g("#mNombre").value.trim(); if (!nombre) return grita("Falta el nombre");
         const repetido = E.modelos.find(x => x.id !== m.id && x.activo !== false && sinAcento(x.nombre) === sinAcento(nombre)); if (repetido) return grita("Ya existe un modelo con ese nombre");
         const esG = g("#mEsGuacal").checked;
-        const datos = { nombre, familia: g("#mFamilia").value.trim() || nombre.split(" ")[0], tipo, pendiente: false, nota: "", guacal: esG ? null : (g("#mGuacal").value || null), es_guacal: esG, cajones: leeNum("#mCajones"), puertas_grandes: leeNum("#mPG"), puertas_grandes_luna: leeNum("#mPGL"), puertas_chicas: leeNum("#mPC"), puertas_chicas_luna: leeNum("#mPCL"), total_puertas: leeNum("#mTotal"), parches: leeNum("#mParches"), lleva_parches: leeNum("#mParches") == null ? null : leeNum("#mParches") > 0, lleva_respaldo: respaldo, editado_por: E.yo };
+        if (!esG && m.es_guacal && compat.length && !confirm("Al dejar de ser guacal, " + plural(compat.length, "modelo", "modelos") + " se desligan. ¿Seguro?")) return;
+        const datos = { nombre, familia: g("#mFamilia").value.trim() || nombre.split(" ")[0], tipo, pendiente: false, nota: "", guacal: esG ? null : (m.guacal || null), es_guacal: esG, cajones: leeNum("#mCajones"), puertas_grandes: leeNum("#mPG"), puertas_grandes_luna: leeNum("#mPGL"), puertas_chicas: leeNum("#mPC"), puertas_chicas_luna: leeNum("#mPCL"), total_puertas: leeNum("#mTotal"), parches: leeNum("#mParches"), lleva_parches: leeNum("#mParches") == null ? null : leeNum("#mParches") > 0, lleva_respaldo: respaldo, editado_por: E.yo };
         const vale = k => k === "es_guacal" ? !!m[k] : (m[k] == null ? null : m[k]);
         const cambios = nuevo ? "modelo nuevo" : Object.keys(datos).filter(k => !["editado_por", "pendiente", "nota"].includes(k) && JSON.stringify(datos[k]) !== JSON.stringify(vale(k))).map(k => k.replace(/_/g, " ") + ": " + (vale(k) == null ? "vacío" : vale(k)) + " → " + (datos[k] == null ? "vacío" : datos[k])).join(" · ");
-        if (!nuevo && !cambios && !m.pendiente){ cierraHoja(); return; }
+        const ligaCambia = E.modelos.some(x => x.id !== m.id && ((esG && compat.includes(x.id)) !== (x.guacal === m.id)));
+        if (!nuevo && !cambios && !m.pendiente && !ligaCambia){ cierraHoja(); return; }
         let id = m.id;
         if (nuevo){ const f = await Almacen.pon("modelo", Object.assign({ id: "N" + Date.now().toString(36), activo: true }, datos)); id = f.id; }
         else { await Almacen.parcha("modelo", id, datos); if (datos.nombre !== m.nombre) renombraEnTodo(id, datos.nombre); }
-        await Almacen.anota({ tipo:"catalogo", modelo_id: id, nombre, persona: E.yo, motivo: cambios, origen: origen() });
+        // liga guacal → modelos: lo marcado queda con guacal = este; lo desmarcado se desliga
+        const quiere = esG ? compat : []; const mas = [], menos = [];
+        E.modelos.filter(x => x.id !== id).forEach(x => {
+          if (quiere.includes(x.id) && x.guacal !== id){ Almacen.parcha("modelo", x.id, { guacal: id }); mas.push(x.nombre); }
+          else if (!quiere.includes(x.id) && x.guacal === id){ Almacen.parcha("modelo", x.id, { guacal: null }); menos.push(x.nombre); }
+        });
+        const motivo = [cambios, mas.length ? "se arman con este guacal: +" + mas.join(", +") : "", menos.length ? "ya no: −" + menos.join(", −") : ""].filter(Boolean).join(" · ");
+        if (motivo) await Almacen.anota({ tipo:"catalogo", modelo_id: id, nombre, persona: E.yo, motivo, origen: origen() });
         cierraHoja(); grita(nuevo ? "Modelo agregado" : "Ficha guardada"); pintaTodo();
       };
       const qb = g("#mQuita"); if (qb) qb.onclick = async () => {
@@ -1734,7 +1756,7 @@ function hojaPreparar(g, opc){
   if (R.esGuacal(m) && !completar){
     const variantes = modelosActivos().filter(x => x.guacal === m.id);
     abreHoja('<h3>Preparar</h3><p class="guia"><b>' + esc(g.modelo) + '</b> es un guacal: sirve para varios modelos. ¿Cuál se arma?</p>' + campoModelo() +
-      (variantes.length ? '<div class="grupo-h">Modelos de este guacal</div><div class="sugerencias">' + variantes.map(v => '<button data-id="' + esc(v.id) + '">' + esc(v.nombre) + '<small>' + esc(fichaCorta(v)) + '</small></button>').join("") + '</div>' : '<p class="sin-hallar">Ningún modelo del catálogo usa este guacal todavía. Ponlo en la ficha del modelo («Comparte guacal con…»).</p>'),
+      (variantes.length ? '<div class="grupo-h">Modelos de este guacal</div><div class="sugerencias">' + variantes.map(v => '<button data-id="' + esc(v.id) + '">' + esc(v.nombre) + '<small>' + esc(fichaCorta(v)) + '</small></button>').join("") + '</div>' : '<p class="sin-hallar">Ningún modelo del catálogo usa este guacal todavía. Márcalos en la ficha de este guacal (Catálogo).</p>'),
       h => { montaCampoModelo(h, x => { if (x) hojaPreparar(g, Object.assign({}, opc, { modelo: x })); }, false, x => x.guacal === m.id); h.querySelectorAll(".sugerencias [data-id]").forEach(b => b.onclick = () => hojaPreparar(g, Object.assign({}, opc, { modelo: modeloDe(b.dataset.id) }))); });
     return;
   }
@@ -2014,7 +2036,7 @@ function hojaArregloPuertas(){
 function tarjetaGuacales(){
   const G = window.CARGA_GUACALES; if (!G) return "";
   const pv = Almacen.previaGuacales(G); const pend = pv.filter(x => !x.yaEs || x.variantes.length);
-  if (!pend.length) return '<div class="ajuste"><h4>Guacales compartidos · activos</h4><p>' + esc(pv.map(x => x.g.nombre).join(", ")) + ' son guacales: sus muebles pintados sirven para los modelos que los usan (las puertas hacen el modelo). Se cambia en la ficha de cada modelo, en «Comparte guacal con…».</p></div>';
+  if (!pend.length) return '<div class="ajuste"><h4>Guacales compartidos · activos</h4><p>' + esc(pv.map(x => x.g.nombre).join(", ")) + ' son guacales: sus muebles pintados sirven para los modelos que los usan (las puertas hacen el modelo). Se cambia en la ficha del guacal: ahí se marcan los modelos que se arman con él.</p></div>';
   return '<div class="aviso"><b>' + esc(G.titulo) + '</b><p>Según la lista de precios, «Mariana 3 cajones», «Mariana 2 lunas y 6 cajones» y «Petaquero Multifamiliar 1 pieza» son UN guacal para varios modelos. Los genéricos de la carga se vuelven ese guacal y cada modelo queda ligado: así a un guacal pintado se le cuelgan las puertas de Abanico, Cisne, Rombo… Hazlo ANTES de «Revisar nombres».</p><div class="pie"><button class="btn vino" id="ajGuacales">Ver y activar</button></div></div>';
 }
 function hojaGuacales(){
