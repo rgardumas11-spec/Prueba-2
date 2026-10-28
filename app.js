@@ -59,7 +59,7 @@ const sePintaEn = destino => R.sePintaEn(destino);
 const E = {
   yo: localStorage.getItem("alm.yo") || "",
   vista: "plan",
-  modelos: [], lotes: [], piezas: [], productos: [], movimientos: [], recados: [], personas: [], pedidos: [], plan: [],
+  modelos: [], lotes: [], piezas: [], productos: [], movimientos: [], recados: [], personas: [], pedidos: [], plan: [], kpi: [], kpiRango: "semana",
   etapa: "maquilado", catPieza: "puertas_uriel", catMat: "",
   busca: {}, buscaAbierta: {},
   sel: null,                       // {tipo, ...llaves}
@@ -145,9 +145,11 @@ function gruposMueble(etapa){
     (g[k] = g[k] || { k, modelo_id: l.modelo_id, modelo: l.modelo, color: l.color || "", etapa, total: 0, lotes: [], partes: l.partes || {}, colores: l.colores || {} });
     g[k].total += Number(l.cantidad); g[k].lotes.push(l);
   });
-  return Object.values(g).map(x => { x.lotes.sort((a,b) => b.cantidad - a.cantidad); return x; })
-    .sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1);
+  const r = Object.values(g).map(x => { x.lotes.sort((a,b) => b.cantidad - a.cantidad); x.reciente = x.lotes.reduce((m, l) => (l.actualizado || l.creado || "") > m ? (l.actualizado || l.creado || "") : m, ""); return x; });
+  // En Preparado lo más reciente va primero (hoy, luego ayer, luego antier…); en las demás etapas por nombre
+  return etapa === "preparado" ? r.sort((a,b) => a.reciente < b.reciente ? 1 : a.reciente > b.reciente ? -1 : 0) : r.sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1);
 }
+const masRecientePrimero = l => l.slice().sort((a,b) => (a.reciente || "") < (b.reciente || "") ? 1 : (a.reciente || "") > (b.reciente || "") ? -1 : 0);
 const totalEtapa = etapa => E.lotes.filter(l => l.etapa === etapa).reduce((s,l) => s + Number(l.cantidad || 0), 0);
 const piezasDe = (modelo_id, color) => { const r = {}; E.piezas.filter(p => p.modelo_id === modelo_id).forEach(p => { r[p.categoria] = (r[p.categoria] || 0) + Number(p.cantidad || 0); }); return r; };
 const vivoPieza = p => Math.max(0, Number(p.cantidad || 0) + (E.pend.get(p.id) || 0));
@@ -410,8 +412,10 @@ function hojaCorregirLote(g){
 }
 
 /* ═══════════════ PIEZAS ═══════════════ */
+const crudoPieza = p => Number(p.cantidad || 0) + (E.pend.get(p.id) || 0);
 function gruposPieza(cat){
-  return E.piezas.filter(p => p.categoria === cat && vivoPieza(p) > 0).map(p => Object.assign({}, p, { k: llaveMC(p) }))
+  // También las que quedaron en negativo (dos aparatos restaron lo mismo): se ven en rojo para corregirlas
+  return E.piezas.filter(p => p.categoria === cat && crudoPieza(p) !== 0).map(p => Object.assign({}, p, { k: llaveMC(p) }))
     .sort((a,b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1);
 }
 const totalCat = cat => E.piezas.filter(p => p.categoria === cat).reduce((s,p) => s + vivoPieza(p), 0);
@@ -443,7 +447,7 @@ function filaPiezaHtml(p){
   if (sig) botones += '<button class="btn suave" data-pasar="' + esc(p.id) + '"' + (emb || R.admiteAltaPieza(cat) ? ' style="margin-left:6px"' : "") + '>Pasar a ' + esc(R.PIEZAS[sig].corto.toLowerCase()) + ' →</button>';
   if (!sig && !emb && !R.admiteAltaPieza(cat)) botones += (["puertas_pintadas", "cajones_pintados", "parches_pintados"].includes(cat) && !R.esExtra(m) ? '<button class="btn suave" data-colgar="' + esc(p.id) + '">' + (cat === "puertas_pintadas" ? "Colgar" : "Poner") + ' en mueble →</button>' : '<span class="sello ver">final</span>');
   return '<div class="fila' + (sel ? " sel" : "") + (E.pend.get(p.id) ? " pend" : "") + '" data-abre="' + esc(p.id) + '">' +
-    '<div class="nombre"><b>' + esc(p.modelo) + '</b>' + (R.esExtra(m) ? '<small>pieza extra</small>' : "") + '</div>' +
+    '<div class="nombre"><b>' + esc(p.modelo) + '</b>' + (R.esExtra(m) ? '<small>pieza extra</small>' : "") + (crudoPieza(p) < 0 ? '<small><span class="sello roj">cuenta en negativo (' + crudoPieza(p) + '): corrígela</span></small>' : "") + '</div>' +
     '<div class="sub">' + chipColor(p.color) + '</div>' +
     '<div class="apodos">' + chipColor(p.color) + '</div>' +
     '<div class="cifra">' + (conJuegos ? '<b>' + e.muebles + '</b><small>' + (e.muebles === 1 ? "juego" : "juegos") + '</small>' : '<b>' + n + '</b><small>' + esc(u) + '</small>') + '</div>' +
@@ -1650,7 +1654,7 @@ function pintaReportes(){
 const esNum = (r, i) => r.numCols ? r.numCols.includes(i) : i >= r.columnas.length - r.numericas;
 function abreReporte(cual, seccion){
   E.reporteAbierto = { cual, seccion };
-  const r = cual === "muebles" ? reporteMuebles(seccion) : cual === "pintura" ? reportePintura() : cual === "semana" ? reporteMovimientos() : reportePedidos();
+  const r = cual === "muebles" ? reporteMuebles(seccion) : cual === "pintura" ? reportePintura() : cual === "semana" ? reporteMovimientos() : cual === "kpi" ? reporteKpi(seccion) : reportePedidos();
   if (cual === "muebles") r.numCols = [2];
   if (cual === "semana") r.numCols = [];
   const conAccion = cual === "muebles";
@@ -1712,8 +1716,8 @@ function hojaColgar(p){
   const comp = R.componentes(m).find(c => c.k === k);
   if (!comp) return grita("Según la ficha, " + m.nombre + " no lleva " + k);
   const gu = R.guacalDe(m); const guacal = gu !== m.id ? modeloDe(gu) : null;
-  const grupos = gruposMueble("pintado").concat(gruposMueble("mdf_pintado")).filter(g => g.modelo_id === m.id || (guacal && g.modelo_id === guacal.id))
-    .concat(gruposMueble("preparado").filter(g => g.modelo_id === m.id && !(g.partes || {})[k]));
+  const grupos = masRecientePrimero(gruposMueble("pintado").concat(gruposMueble("mdf_pintado")).filter(g => g.modelo_id === m.id || (guacal && g.modelo_id === guacal.id))
+    .concat(gruposMueble("preparado").filter(g => g.modelo_id === m.id && !(g.partes || {})[k])));
   if (!grupos.length) return grita("No hay muebles pintados de " + m.nombre + (guacal ? " ni de su guacal (" + guacal.nombre + ")" : "") + " para ponerles " + k + ". Primero pasa el mueble a pintado." + (!guacal && R.esGuacal(m) === false ? " Si este modelo se arma sobre un guacal compartido, ponlo en su ficha." : ""));
   abreHoja('<h3>' + (k === "puertas" ? "Colgar puertas" : "Poner " + k) + '</h3><p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(nombreColor(p.color)) + ' · hay <b>' + vivoPieza(p) + '</b> ' + esc(R.PIEZAS[p.categoria].unidad) + ' (' + esc(R.textoEquivalencia(vivoPieza(p), p.categoria, m).replace(/^[^=]*= /, "")) + '). ¿A qué muebles se les ponen? No importa el color del mueble.</p>' +
     '<div class="sugerencias">' + grupos.map((g, i) => '<button data-g="' + i + '">' + esc(g.modelo) + (guacal && g.modelo_id === guacal.id ? ' <span class="chip">guacal</span>' : "") + ' · ' + esc(nombreColor(g.color)) + ' · ' + esc(R.ETAPAS[g.etapa].nombre) + (g.etapa === "preparado" ? " (con " + esc(R.partesTexto(m, g) || "nada") + ")" : "") + '<small>' + g.total + ' disponibles · ' + esc(g.lotes.map(l => R.firmaDe(l) + " " + l.cantidad).join(" · ")) + '</small></button>').join("") + '</div>',
@@ -1751,7 +1755,7 @@ function hojaQuePreparar(g, opc){
 /* Escoger de qué muebles pintados sale: del modelo o de su guacal (m puede faltar: cualquiera) */
 function hojaEscogerPintado(m, pedido){
   const gu = m ? R.guacalDe(m) : null;
-  const disponibles = gruposMueble("pintado").concat(gruposMueble("mdf_pintado")).filter(g => !m || g.modelo_id === m.id || g.modelo_id === gu);
+  const disponibles = masRecientePrimero(gruposMueble("pintado").concat(gruposMueble("mdf_pintado")).filter(g => !m || g.modelo_id === m.id || g.modelo_id === gu));
   abreHoja('<h3>' + (m ? "Preparar " + esc(m.nombre) : "Armar mueble que no es pedido") + '</h3>' +
     (pedido ? '<p class="guia">Para <b>' + esc(pedido.cliente) + '</b>' + (pedido.color ? " · " + esc(pedido.color) : "") + ' · faltan <b>' + pedido.faltan + '</b>.</p>' : "") +
     '<div class="paso-a"><span class="de">Mueble pintado / MDF pintado</span> → <span class="a">Mueble preparado</span></div>' +
@@ -1863,6 +1867,81 @@ function hojaPreparar(g, opc){
         } catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; if (hechos) pintaTodo(); }
       };
     });
+}
+
+/* ═══════════════ KPI: qué produjo el taller (se cuenta solo desde los movimientos) ═══════════════ */
+const KPI_QUE = [
+  { k: "preparado",        nombre: "Muebles preparados",     unidad: "muebles" },
+  { k: "pintado",          nombre: "Guacales pintados",      unidad: "muebles" },
+  { k: "armado",           nombre: "Muebles armados",        unidad: "muebles" },
+  { k: "maquilado",        nombre: "Muebles maquilados",     unidad: "muebles" },
+  { k: "puertas_pintadas", nombre: "Puertas pintadas",       unidad: "puertas", cat: "puertas_pintadas" },
+  { k: "embisagradas",     nombre: "Puertas embisagradas",   unidad: "puertas", cat: "puertas_lijadas_bisagras" },
+  { k: "puertas_lijadas",  nombre: "Puertas lijadas",        unidad: "puertas", cat: "puertas_lijadas" },
+  { k: "cajones_pintados", nombre: "Cajones pintados",       unidad: "cajones", cat: "cajones_pintados" },
+  { k: "parches_pintados", nombre: "Parches pintados",       unidad: "parches", cat: "parches_pintados" }
+];
+const diaIso = d => { const z = new Date(d); return new Date(z.getTime() - z.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+function rangoKpi(cual){
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  if (cual === "semana"){ const sab = Almacen.inicioSemana(); const vie = new Date(sab); vie.setDate(vie.getDate() + 6); return { de: diaIso(sab), a: diaIso(vie), titulo: "Esta semana · " + fechaCorta(diaIso(sab)) + " al " + fechaCorta(diaIso(vie)) }; }
+  if (cual === "mes"){ const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1); const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0); return { de: diaIso(ini), a: diaIso(fin), titulo: "Este mes · " + ini.toLocaleDateString("es-MX", { month: "long", year: "numeric" }) }; }
+  const ini = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1); const fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+  return { de: diaIso(ini), a: diaIso(fin), titulo: "Mes pasado · " + ini.toLocaleDateString("es-MX", { month: "long", year: "numeric" }) };
+}
+const fechaCorta = iso => { const [a, m, d] = iso.split("-"); return d + "/" + m; };
+function kpiEn(de, a){ return E.kpi.filter(x => x.dia >= de && x.dia <= a && Number(x.cantidad || 0) !== 0); }
+function sumaKpi(l){ const r = {}; KPI_QUE.forEach(q => r[q.k] = 0); l.forEach(x => { if (r[x.que] != null) r[x.que] += Number(x.cantidad || 0); }); return r; }
+/* Piezas → juegos: por modelo, con su ficha */
+function juegosKpi(l, q){
+  const porModelo = {}; l.filter(x => x.que === q.k).forEach(x => { porModelo[x.modelo_id] = (porModelo[x.modelo_id] || 0) + Number(x.cantidad || 0); });
+  let juegos = 0, sinFicha = false;
+  Object.keys(porModelo).forEach(id => { const por = R.piezasPorMueble(modeloDe(id), q.cat); if (por > 0) juegos += Math.floor(porModelo[id] / por); else if (porModelo[id] > 0) sinFicha = true; });
+  return { juegos, sinFicha };
+}
+function topKpi(l, que, llave){
+  const g = {}; l.filter(x => x.que === que && Number(x.cantidad) > 0).forEach(x => { const k = llave(x); if (!k) return; g[k] = (g[k] || 0) + Number(x.cantidad); });
+  return Object.keys(g).map(k => ({ k, n: g[k] })).sort((a, b) => b.n - a.n).slice(0, 3);
+}
+function semanasDe(de, a){
+  const r = []; let s = new Date(de + "T00:00:00"); s.setDate(s.getDate() - ((s.getDay() + 1) % 7));   // al sábado anterior o igual
+  const fin = new Date(a + "T00:00:00");
+  while (s <= fin){ const v = new Date(s); v.setDate(v.getDate() + 6); r.push({ de: diaIso(s) < de ? de : diaIso(s), a: diaIso(v) > a ? a : diaIso(v), etiqueta: "sáb " + fechaCorta(diaIso(s)) + " – vie " + fechaCorta(diaIso(v)) }); s = new Date(v); s.setDate(s.getDate() + 1); }
+  return r;
+}
+function pintaKpi(){
+  const caja = $("#listaKpi"); const cual = E.kpiRango || "semana"; const rg = rangoKpi(cual);
+  const l = kpiEn(rg.de, rg.a); const tot = sumaKpi(l);
+  $("#resumenKpi").textContent = rg.titulo;
+  const aviso = Almacen.sinPermiso.includes("kpi") ? '<div class="aviso"><b>Falta una regla en Firebase</b><p>Los KPI no se pueden compartir todavía. En Firestore → Rules agrega: <code>match /kpi/{id} { allow read, write: if delTaller(); }</code> y publica.</p></div>' : "";
+  const tabs = '<div class="cats" style="margin-bottom:12px">' + [["semana", "Esta semana"], ["mes", "Este mes"], ["pasado", "Mes pasado"]].map(([k, n]) => '<button class="cat' + (cual === k ? " on" : "") + '" data-rango="' + k + '">' + n + '</button>').join("") + '<button class="btn" id="kpiPdf" style="margin-left:auto">Ver como reporte / PDF</button></div>';
+  const tarjetas = '<div class="kpi-grid">' + KPI_QUE.map(q => { const j = q.cat ? juegosKpi(l, q) : null;
+    return '<div class="kpi-card"><b>' + tot[q.k] + '</b><span>' + esc(q.nombre) + '</span><small>' + (j ? (j.juegos ? "≈ " + plural(j.juegos, "juego", "juegos") : "") + (j.sinFicha ? " · hay modelos sin ficha" : "") : esc(q.unidad)) + '</small></div>'; }).join("") + '</div>';
+  const top = (titulo, lista, unidad) => '<div class="ajuste"><h4>' + titulo + '</h4>' + (lista.length ? '<ol class="kpi-top">' + lista.map(x => '<li><b>' + esc(x.k) + '</b><span>' + x.n + ' ' + unidad + '</span></li>').join("") + '</ol>' : '<p>Todavía nada en este periodo.</p>') + '</div>';
+  const mas = '<div class="kpi-dos">' +
+    top("Modelo más preparado", topKpi(l, "preparado", x => x.modelo), "muebles") + top("Color más preparado", topKpi(l, "preparado", x => x.color || "sin color"), "muebles") +
+    top("Modelo con más puertas pintadas", topKpi(l, "puertas_pintadas", x => x.modelo), "puertas") + top("Color más pintado en puertas", topKpi(l, "puertas_pintadas", x => x.color || "sin color"), "puertas") +
+    top("Guacal más pintado", topKpi(l, "pintado", x => x.modelo + (x.color ? " · " + x.color : "")), "muebles") + top("Cajones más pintados (modelo)", topKpi(l, "cajones_pintados", x => x.modelo), "cajones") + '</div>';
+  const cols = ["preparado", "pintado", "puertas_pintadas", "cajones_pintados", "armado", "maquilado"];
+  const cab = '<tr><th>' + (cual === "semana" ? "Día" : "Semana") + '</th>' + cols.map(k => '<th class="n">' + esc(KPI_QUE.find(q => q.k === k).nombre.replace("Muebles ", "").replace("Guacales ", "guacales ")) + '</th>').join("") + '</tr>';
+  let filas;
+  if (cual === "semana"){ const dias = []; for (let d = new Date(rg.de + "T00:00:00"); diaIso(d) <= rg.a; d.setDate(d.getDate() + 1)) dias.push(diaIso(d));
+    filas = dias.map(d => { const t = sumaKpi(l.filter(x => x.dia === d)); return { etiqueta: fechaLarga(d), t }; }); }
+  else filas = semanasDe(rg.de, rg.a).map(s => ({ etiqueta: s.etiqueta, t: sumaKpi(l.filter(x => x.dia >= s.de && x.dia <= s.a)) }));
+  const tabla = '<div class="ajuste"><h4>Por ' + (cual === "semana" ? "día" : "semana") + '</h4><table class="rep"><thead>' + cab + '</thead><tbody>' + filas.map(f => '<tr><td>' + esc(f.etiqueta) + '</td>' + cols.map(k => '<td class="n">' + (f.t[k] || "") + '</td>').join("") + '</tr>').join("") + '<tr class="tot"><td><b>Total</b></td>' + cols.map(k => '<td class="n"><b>' + tot[k] + '</b></td>').join("") + '</tr></tbody></table></div>';
+  caja.innerHTML = aviso + tabs + tarjetas + mas + tabla + '<p class="guia">Se cuenta solo: cada paso que se registra (pintar, embisagrar, preparar…) suma aquí al momento; Deshacer resta. Nadie tiene que capturar nada.</p>';
+  caja.querySelectorAll("[data-rango]").forEach(b => b.onclick = () => { E.kpiRango = b.dataset.rango; pintaKpi(); });
+  $("#kpiPdf").onclick = () => { irA("reportes"); abreReporte("kpi", cual); };
+}
+function reporteKpi(cual){
+  const rg = rangoKpi(cual || "semana"); const l = kpiEn(rg.de, rg.a); const tot = sumaKpi(l);
+  const grupos = [];
+  grupos.push({ titulo: "Totales del periodo", filas: KPI_QUE.map(q => { const j = q.cat ? juegosKpi(l, q) : null; return [q.nombre, tot[q.k], j && j.juegos ? "≈ " + plural(j.juegos, "juego", "juegos") : (q.cat ? "" : q.unidad)]; }) });
+  const periodos = cual === "semana" ? (() => { const dias = []; for (let d = new Date(rg.de + "T00:00:00"); diaIso(d) <= rg.a; d.setDate(d.getDate() + 1)) dias.push({ de: diaIso(d), a: diaIso(d), etiqueta: fechaLarga(diaIso(d)) }); return dias; })() : semanasDe(rg.de, rg.a);
+  grupos.push({ titulo: cual === "semana" ? "Por día" : "Por semana", filas: periodos.map(p => { const t = sumaKpi(l.filter(x => x.dia >= p.de && x.dia <= p.a)); return [p.etiqueta, t.preparado + " preparados · " + t.pintado + " guacales pintados · " + t.armado + " armados · " + t.maquilado + " maquilados", t.puertas_pintadas + " puertas pintadas · " + t.embisagradas + " embisagradas · " + t.puertas_lijadas + " lijadas · " + t.cajones_pintados + " cajones · " + t.parches_pintados + " parches"]; }) });
+  const t3 = (que, llave, u) => topKpi(l, que, llave).map(x => [x.k, x.n, u]);
+  grupos.push({ titulo: "Lo que más se hizo", filas: [].concat(t3("preparado", x => "Preparado: " + x.modelo, "muebles"), t3("preparado", x => "Preparado color: " + (x.color || "sin color"), "muebles"), t3("puertas_pintadas", x => "Puertas pintadas: " + x.modelo, "puertas"), t3("puertas_pintadas", x => "Puertas color: " + (x.color || "sin color"), "puertas"), t3("pintado", x => "Guacal pintado: " + x.modelo + (x.color ? " · " + x.color : ""), "muebles")) });
+  return { titulo: "KPI · " + rg.titulo, columnas: ["Qué", "Cuánto", "Detalle"], grupos, numericas: 0, numCols: [1], archivo: "kpi-" + rg.de };
 }
 
 /* ═══════════════ PLAN DEL DÍA ═══════════════ */
@@ -2135,8 +2214,8 @@ $("#telon").addEventListener("click", e => { if (e.target.id === "telon") cierra
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#telon").classList.contains("on")) cierraDesdeAfuera(); });
 
 /* ═══════════════ navegación ═══════════════ */
-const VISTAS = ["plan","muebles","piezas","listos","pedidos","material","reportes","recados","bitacora","catalogo","apodos","ajustes"];
-const EN_MAS = ["listos","reportes","recados","bitacora","catalogo","apodos","ajustes"];
+const VISTAS = ["plan","muebles","piezas","listos","pedidos","material","reportes","kpi","recados","bitacora","catalogo","apodos","ajustes"];
+const EN_MAS = ["listos","reportes","kpi","recados","bitacora","catalogo","apodos","ajustes"];
 function irA(v){
   if (v === "mas"){ hojaMas(); return; }
   E.vista = v;
@@ -2148,7 +2227,7 @@ function irA(v){
 }
 function pintaVista(v){
   if (v === "plan") pintaPlan(); else if (v === "muebles") pintaMuebles(); else if (v === "piezas") pintaPiezas(); else if (v === "listos") pintaListos(); else if (v === "pedidos") pintaPedidos();
-  else if (v === "material") pintaMaterial(); else if (v === "recados") pintaRecados(); else if (v === "bitacora") pintaBitacora();
+  else if (v === "material") pintaMaterial(); else if (v === "recados") pintaRecados(); else if (v === "bitacora") pintaBitacora(); else if (v === "kpi") pintaKpi();
   else if (v === "catalogo") pintaCatalogo(); else if (v === "apodos") pintaCatMaterial(); else if (v === "ajustes") pintaAjustes(); else if (v === "reportes") (E.reporteAbierto ? abreReporte(E.reporteAbierto.cual, E.reporteAbierto.seccion) : pintaReportes());
 }
 function hojaMas(){
@@ -2156,6 +2235,7 @@ function hojaMas(){
   abreHoja('<h3>Más</h3><div style="display:grid;gap:8px">' +
     '<button class="btn grande" data-ir="listos">Listos para preparar</button>' +
     '<button class="btn grande" data-ir="reportes">Reportes · muebles, pintura, pedidos, semana</button>' +
+    '<button class="btn grande" data-ir="kpi">KPI · cuánto se produjo</button>' +
     '<button class="btn grande" data-ir="recados">Recados' + (rec ? " · " + rec + " sin atender" : "") + '</button>' +
     '<button class="btn grande" data-ir="bitacora">Bitácora · quién hizo qué</button>' +
     '<button class="btn grande" data-ir="catalogo">Catálogo · fichas de los modelos</button>' +
@@ -2226,6 +2306,7 @@ Almacen.mira("persona", l => { E.personas = l; });
 Almacen.mira("meta", () => { if (E.vista === "ajustes") pintaAjustes(); });
 Almacen.mira("pedido", l => { E.pedidos = l; if (E.vista === "pedidos") pintaPedidos(); const n = l.filter(p => p.estado !== "entregado").length; $("#nPed").hidden = !n; $("#nPed").textContent = n; });
 Almacen.mira("plan", l => { E.plan = l; if (E.vista === "plan") pintaPlan(); $("#nPlan").hidden = !l.length; $("#nPlan").textContent = l.length; });
+Almacen.mira("kpi", l => { E.kpi = l; if (E.vista === "kpi") pintaKpi(); });
 Almacen.onEstado(pintaPulso);
 (async () => {
   await Almacen.arranca();
@@ -2233,5 +2314,7 @@ Almacen.onEstado(pintaPulso);
   const h = (location.hash || "#plan").slice(1);
   irA(VISTAS.includes(h) ? h : "plan");
   Almacen.limpiaSemana().then(n => { if (n) console.log("limpieza semanal:", n); }).catch(() => {});
+  Almacen.limpiaPreparados(E.yo).then(n => { if (n){ grita(plural(n, "renglón de preparados", "renglones de preparados") + " con más de una semana salieron del almacén (ver Bitácora)"); pintaTodo(); } }).catch(() => {});
+  Almacen.kpiArranque().then(n => { if (n) console.log("kpi arranque:", n); }).catch(() => {});
   if (!E.yo && !Almacen.necesitaEntrar()) hojaQuienSoy();
 })();

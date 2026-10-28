@@ -29,6 +29,7 @@ service cloud.firestore {
     match /persona/{id}    { allow read, write: if delTaller(); }
     match /meta/{id}       { allow read, write: if delTaller(); }
     match /plan/{id}       { allow read, write: if delTaller(); }
+    match /kpi/{id}        { allow read, write: if delTaller(); }
 
     // Todo lo demás, cerrado.
     match /{document=**}   { allow read, write: if false; }

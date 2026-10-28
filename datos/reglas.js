@@ -54,7 +54,7 @@
     mdf:                      { opciones: ["Fernando"],                            max: 1, campo: "maquilo", pregunta: "¿Quién lo hizo?" },
     mdf_pintado:              null,                                                // no se pregunta: el lote sigue siendo de Fernando
     preparado:                { opciones: ["César", "Raúl", "Gabino"],             max: 1, campo: "preparo", pregunta: "¿Quién lo preparó?" },
-    puertas_lijadas_bisagras: { opciones: ["Miguel", "Daniel", "Luis"],            max: 1, campo: "hecho_por", pregunta: "¿Quién puso las bisagras?" },
+    puertas_lijadas_bisagras: { opciones: ["Miguel", "Daniel", "Luis", "Fernando", "Gabino", "César"], max: 1, campo: "hecho_por", pregunta: "¿Quién puso las bisagras?" },
     cajones_pintados:         { opciones: PINTORES_PIEZAS,                         max: 1, campo: "hecho_por", pregunta: "¿Quién los pintó?" },
     // En puertas no se pregunta nada más: ni a Uriel, ni al lijar, ni al pintar. Cajones armados y parches tampoco.
     puertas_uriel: null, puertas_por_lijar: null, puertas_lijadas: null, puertas_pintadas: null,

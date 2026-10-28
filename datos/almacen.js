@@ -21,8 +21,10 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 window.Almacen = (() => {
   "use strict";
-  const TABLAS = ["modelo", "lote", "pieza", "producto", "movimiento", "recado", "persona", "pedido", "meta", "plan"];
-  const LIMITE = { movimiento: 1500, recado: 300, pedido: 400, persona: 200, producto: 2000, modelo: 600, lote: 4000, pieza: 4000, meta: 50, plan: 400 };
+  const TABLAS = ["modelo", "lote", "pieza", "producto", "movimiento", "recado", "persona", "pedido", "meta", "plan", "kpi"];
+  const LIMITE = { movimiento: 1500, recado: 300, pedido: 400, persona: 200, producto: 2000, modelo: 600, lote: 4000, pieza: 4000, meta: 50, plan: 400, kpi: 8000 };
+  const recibido = {};          // colecciones que YA llegaron de la nube en esta sesión (para no limpiar con la copia vieja del aparato)
+  const esperando = [];
   let fb = null;
   let db = null, auth = null;
   let modo = "local";
@@ -96,7 +98,7 @@ window.Almacen = (() => {
   function consulta(t){
     let q = db.collection(t);
     if (t === "producto") return q.where("activo", "==", true).limit(LIMITE.producto);
-    if (t === "persona" || t === "modelo" || t === "pieza" || t === "meta" || t === "plan") return q.limit(LIMITE[t]);
+    if (t === "persona" || t === "modelo" || t === "pieza" || t === "meta" || t === "plan" || t === "kpi") return q.limit(LIMITE[t]);
     if (t === "lote") return q.where("cantidad", ">", 0).limit(LIMITE.lote);
     return q.orderBy("creado", "desc").limit(LIMITE[t] || 300);
   }
@@ -110,19 +112,29 @@ window.Almacen = (() => {
           memoria[t] = mapa;
           if (t === "pieza") migraPiezasViejas();
           guardarLocal(t);
+          recibido[t] = true; revisaEspera();
           avisar(t);
           if (t === "modelo" && !Object.keys(mapa).length) sembrarModelos();
         },
         err => {
           console.warn("nube", t, err && err.code);
           if (err && err.code === "unauthenticated"){ modo = "local"; avisarEstado(); }
-          else if (err && err.code === "permission-denied"){ sinPermiso[t] = true; avisarEstado(); }   // una colección sin regla no tumba la sesión
+          else if (err && err.code === "permission-denied"){ sinPermiso[t] = true; recibido[t] = true; revisaEspera(); avisarEstado(); }   // una colección sin regla no tumba la sesión
         }
       );
       sueltas.push(suelta);
     });
   }
-  function dejarDeEscuchar(){ sueltas.forEach(f => { try { f(); } catch(e){} }); sueltas = []; Object.keys(sinPermiso).forEach(k => delete sinPermiso[k]); }
+  function dejarDeEscuchar(){ sueltas.forEach(f => { try { f(); } catch(e){} }); sueltas = []; Object.keys(sinPermiso).forEach(k => delete sinPermiso[k]); Object.keys(recibido).forEach(k => delete recibido[k]); }
+  /* Promesa que se cumple cuando TODAS las colecciones llegaron de la nube (o de inmediato en modo local).
+     Lo que borra o cuenta cosas espera esto: nunca se decide con la copia vieja del aparato. */
+  const nubeCompleta = () => TABLAS.every(t => recibido[t]);
+  function revisaEspera(){ if (!nubeCompleta()) return; esperando.splice(0).forEach(f => f(true)); }
+  function esperaNube(ms){
+    if (modo !== "nube") return Promise.resolve(true);   // sin nube, la memoria es la única verdad
+    if (nubeCompleta()) return Promise.resolve(true);
+    return new Promise(res => { esperando.push(res); setTimeout(() => { const i = esperando.indexOf(res); if (i >= 0){ esperando.splice(i, 1); res(false); } }, ms || 25000); });
+  }
 
   /* ── arranque ── */
   async function arranca(){
@@ -294,6 +306,46 @@ window.Almacen = (() => {
     memoria.movimiento = memoria.movimiento || {};
     memoria.movimiento[mov.id] = mov; podar();
     guardarLocal("movimiento"); avisar("movimiento");
+    try { cuentaKpi(mov, 1); } catch(e){ console.warn("kpi", e); }
+  }
+  /* ── KPI: qué produjo el taller, contado solo a partir de los movimientos. Un documento por
+     día + qué + modelo + color; `cantidad` se suma con increment. Deshacer resta. ── */
+  function queKpi(mov){
+    if (!mov || mov.deshecho || mov.producto_id) return null;
+    if (mov.tipo === "alta" && (mov.etapa_a === "maquilado" || mov.etapa_a === "mdf")) return "maquilado";
+    if (mov.tipo === "traslado" && !mov.pieza_id && !mov.categoria){
+      if (mov.etapa_a === "armado") return "armado";
+      if (mov.etapa_a === "pintado" || mov.etapa_a === "mdf_pintado") return "pintado";
+      return null;
+    }
+    if (mov.tipo === "traslado" && (mov.pieza_id || mov.categoria)){
+      const a = mov.etapa_a || mov.categoria;
+      if (a === "puertas_lijadas") return "puertas_lijadas";
+      if (a === "puertas_lijadas_bisagras") return "embisagradas";
+      if (a === "puertas_pintadas" || a === "cajones_pintados" || a === "parches_pintados") return a;
+      return null;
+    }
+    if (mov.tipo === "preparado") return "preparado";
+    return null;
+  }
+  function cuentaKpi(mov, signo){
+    const que = queKpi(mov); if (!que) return;
+    const n = Math.abs(Number(mov.delta || 0)) * (signo || 1); if (!n) return;
+    const dia = String(mov.creado || ahora()).slice(0, 10);
+    const base = { dia, que, modelo_id: mov.modelo_id || "", modelo: mov.nombre || "", color: mov.color || "" };
+    base.id = ["k", dia, que, base.modelo_id, slug(base.color)].join("~");
+    const doc = incrementaLocal("kpi", base, n);
+    guardarLocal("kpi"); avisar("kpi");
+    mandaBatch([["kpi", base.id, doc]], []);
+  }
+  /* Una sola vez: lo que ya está en la bitácora al estrenar los KPI se cuenta para no empezar en cero. */
+  async function kpiArranque(){
+    const ok = await esperaNube(); if (!ok) return 0;
+    if ((memoria.meta || {})["kpi-arranque"]) return 0;
+    const meta = { id: "kpi-arranque", hecho: ahora() }; memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; guardarLocal("meta");
+    if (modo === "nube" && db) await enCamino(db.collection("meta").doc(meta.id).set(meta));
+    let n = 0; lista("movimiento").forEach(m => { if (queKpi(m)){ cuentaKpi(m, 1); n++; } });
+    return n;
   }
   async function anota(mov){
     const f = Object.assign({ id: uuid(), creado: ahora(), delta:0, tipo:"ajuste" }, mov);
@@ -341,7 +393,7 @@ window.Almacen = (() => {
     const n = Math.max(0, Math.floor(Number(d.cantidad || 0)));
     if (!n) return null;
     const doc = incrementaLocal("lote", l, n);
-    const mov = { id: uuid(), tipo: "alta", lote_id: l.id, modelo_id: l.modelo_id, nombre: l.modelo, color: l.color,
+    const mov = { id: uuid(), tipo: "alta", lote_id: l.id, base: baseLote(l), modelo_id: l.modelo_id, nombre: l.modelo, color: l.color,
       etapa_a: l.etapa, delta: n, resultado: memoria.lote[l.id].cantidad, persona, origen: origen || "",
       hecho_por: [l.maquilo, l.armo].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(" y "), motivo: d.motivo || "", creado: ahora() };
     guardarLocal("lote"); avisar("lote"); movLocal(mov);
@@ -370,7 +422,7 @@ window.Almacen = (() => {
       const origenBase = baseLote(o);
       escrituras.push(["lote", o.id, incrementaLocal("lote", origenBase, -t.cantidad)]);
       escrituras.push(["lote", destino.id, incrementaLocal("lote", destino, t.cantidad)]);
-      desglose.push({ de: origenDe(o), lote_id: o.id, cantidad: t.cantidad });
+      desglose.push({ de: origenDe(o), lote_id: o.id, cantidad: t.cantidad, base: origenBase });
       total += t.cantidad; resultado = memoria.lote[destino.id].cantidad; ultimoDestino = destino.id;
     }
     const firma = [d.armo, ...(d.pinto || []), d.preparo].filter(Boolean).join(" y ");
@@ -389,7 +441,7 @@ window.Almacen = (() => {
     if (!real) return o.cantidad;
     const base = baseLote(o);
     const doc = incrementaLocal("lote", base, real);
-    const mov = { id: uuid(), tipo: "ajuste", lote_id: id, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color, etapa_a: o.etapa,
+    const mov = { id: uuid(), tipo: "ajuste", lote_id: id, base, modelo_id: o.modelo_id, nombre: o.modelo, color: o.color, etapa_a: o.etapa,
       delta: real, resultado: memoria.lote[id].cantidad, persona, motivo: motivo || "", origen: origen || "", hecho_por: firmaDe(o), creado: ahora() };
     guardarLocal("lote"); avisar("lote"); movLocal(mov);
     mandaBatch([["lote", id, doc]], [mov]);
@@ -503,7 +555,7 @@ window.Almacen = (() => {
     });
     const destino = Object.assign(baseLote(o), { modelo_id: m ? m.id : o.modelo_id, modelo: m ? m.nombre : o.modelo, etapa: "preparado", preparo: d.preparo || o.preparo || "", partes: union, colores }); delete destino.id; destino.id = claveLote(destino);
     escrituras.push(["lote", destino.id, incrementaLocal("lote", destino, n)]);
-    const mov = { id: uuid(), tipo: "preparado", lote_id: destino.id, lote_de: o.id, modelo_id: destino.modelo_id, nombre: destino.modelo, modelo_de: o.modelo_id, nombre_de: o.modelo, color: o.color || "", colores, etapa_de: o.etapa, etapa_a: "preparado",
+    const mov = { id: uuid(), tipo: "preparado", lote_id: destino.id, lote_de: o.id, base_de: baseLote(o), modelo_id: destino.modelo_id, nombre: destino.modelo, modelo_de: o.modelo_id, nombre_de: o.modelo, color: o.color || "", colores, etapa_de: o.etapa, etapa_a: "preparado",
       delta: n, resultado: memoria.lote[destino.id].cantidad, desglose, hecho_por: d.preparo || o.preparo || "", persona, origen: origen || "", pedido_id: d.pedido_id || "", cliente: d.cliente || "",
       motivo: "se puso: " + Object.keys(nuevas).join(", ") + (d.cliente ? " · para " + d.cliente : "") + (destino.modelo_id !== o.modelo_id ? " · sobre guacal " + o.modelo : "") + (rev.sinFicha.length ? " · la ficha no dice cuántos " + rev.sinFicha.map(c => Rg.PIEZAS[c].unidad).join(" ni ") + " lleva; no se descontaron" : ""), creado: ahora() };
     guardarLocal("lote"); guardarLocal("pieza"); avisar("lote"); avisar("pieza"); movLocal(mov);
@@ -613,8 +665,19 @@ window.Almacen = (() => {
     const ajustaDoc = (t, base, delta) => { const doc = incrementaLocal(t, base, delta); escrituras.push([t, base.id, doc]); tocadas.add(t); };
     const baseDeMov = () => {
       if (mov.pieza_id){ const ex = (memoria.pieza || {})[mov.pieza_id]; if (ex) return ["pieza", Object.assign(basePieza(ex), { minimo: Number(ex.minimo || 0) })]; const b = basePieza({ modelo_id: mov.modelo_id, modelo: mov.nombre, color: mov.color || "", categoria: mov.categoria || mov.etapa_a }); b.id = mov.pieza_id; return ["pieza", b]; }
-      if (mov.lote_id){ const ex = (memoria.lote || {})[mov.lote_id]; if (ex) return ["lote", baseLote(ex)]; return null; }
+      if (mov.lote_id){ const ex = (memoria.lote || {})[mov.lote_id]; if (ex) return ["lote", baseLote(ex)]; if (mov.base) return ["lote", Object.assign({}, mov.base, { id: mov.lote_id })]; return null; }
       return null;
+    };
+    // Lote de origen de un paso de etapa cuando ya no está en memoria (quedó en cero): lo guardado en
+    // el movimiento, o se reconstruye desde el lote destino con la etapa anterior.
+    const loteOrigen = (x, dest) => {
+      const ex = (memoria.lote || {})[x.lote_id]; if (ex) return baseLote(ex);
+      if (x.base) return Object.assign({}, x.base, { id: x.lote_id });
+      if (!dest) return null;
+      const bo = baseLote(dest); bo.etapa = mov.etapa_de; delete bo.partes; delete bo.colores; bo.preparo = "";
+      if (["maquilado", "armado", "mdf"].includes(mov.etapa_de)){ bo.pinto = []; bo.color = ""; }
+      if (mov.etapa_de === "maquilado") bo.armo = "";
+      delete bo.id; bo.id = x.lote_id || claveLote(bo); return bo;
     };
     const d = Number(mov.delta || 0);
     if (mov.tipo === "ajuste" || mov.tipo === "alta" || mov.tipo === "entrada" || mov.tipo === "salida"){
@@ -630,16 +693,20 @@ window.Almacen = (() => {
       if (mov.producto_id) throw new Error("Los tambos se corrigen con − y +");
       let destId = mov.lote_a;
       if (!destId){ const o = (memoria.lote || {})[(mov.desglose[0] || {}).lote_id]; if (!o) throw new Error("No encuentro el lote de origen"); const dd = Object.assign(baseLote(o), { etapa: mov.etapa_a, color: mov.color || o.color }); delete dd.id; destId = claveLote(dd); }
-      const dest = (memoria.lote || {})[destId]; if (!dest) throw new Error("No encuentro el lote al que llegó");
-      ajustaDoc("lote", baseLote(dest), -d);
-      mov.desglose.forEach(x => { const o = (memoria.lote || {})[x.lote_id]; if (!o) throw new Error("No encuentro el lote de origen " + (x.de || "")); ajustaDoc("lote", baseLote(o), Number(x.cantidad || 0)); });
+      const dest = (memoria.lote || {})[destId];
+      if (!dest){ if (!mov.desglose[0] || !mov.desglose[0].base) throw new Error("No encuentro el lote al que llegó"); }
+      const bd = dest ? baseLote(dest) : Object.assign({}, mov.desglose[0].base, { etapa: mov.etapa_a, color: mov.color || "", id: destId });
+      ajustaDoc("lote", bd, -d);
+      mov.desglose.forEach(x => { const o = loteOrigen(x, dest); if (!o) throw new Error("No encuentro el lote de origen " + (x.de || "")); ajustaDoc("lote", o, Number(x.cantidad || 0)); });
     } else if (mov.tipo === "preparado"){
       const dest = (memoria.lote || {})[mov.lote_id]; if (!dest) throw new Error("No encuentro el lote preparado");
       let ori = mov.lote_de ? (memoria.lote || {})[mov.lote_de] : null;
+      if (!ori && mov.base_de) ori = Object.assign({}, mov.base_de, { id: mov.lote_de });
       if (!ori){ const bo = baseLote(dest); bo.etapa = mov.etapa_de; bo.preparo = ""; delete bo.partes; delete bo.colores; if (mov.modelo_de){ bo.modelo_id = mov.modelo_de; bo.modelo = mov.nombre_de || bo.modelo; } delete bo.id; bo.id = claveLote(bo); ori = (memoria.lote || {})[bo.id] || bo; }
       ajustaDoc("lote", baseLote(dest), -d); ajustaDoc("lote", baseLote(ori), d);
       (mov.desglose || []).forEach(x => { if (!x.pieza_id) return; const pz = (memoria.pieza || {})[x.pieza_id]; if (!pz) throw new Error("No encuentro la pieza " + (x.de || "")); ajustaDoc("pieza", Object.assign(basePieza(pz), { minimo: Number(pz.minimo || 0) }), Number(x.cantidad || 0)); });
     } else throw new Error("Ese tipo de movimiento no se deshace desde aquí");
+    try { cuentaKpi(mov, -1); } catch(e){}
     mov.deshecho = true; mov.deshecho_por = persona; escrituras.push(["movimiento", mov.id, { deshecho: true, deshecho_por: persona }]);
     const nuevo = { id: uuid(), tipo: "deshecho", de_mov: mov.id, modelo_id: mov.modelo_id, nombre: mov.nombre, color: mov.color || "", etapa_a: mov.etapa_de || mov.etapa_a || mov.categoria, categoria: mov.categoria, delta: -d,
       persona, origen: origen || "", motivo: "deshizo: " + (mov.tipo === "traslado" ? "paso " + (mov.etapa_de || "") + " → " + (mov.etapa_a || "") : mov.tipo) + " de " + (mov.persona || "?") + (mov.motivo ? " (" + mov.motivo + ")" : ""), creado: ahora() };
@@ -810,17 +877,40 @@ window.Almacen = (() => {
   let limpiada = false;
   async function limpiaSemana(){
     if (limpiada) return 0; limpiada = true;
+    // SOLO con la nube completa: antes se corría con la copia vieja del aparato y borraba en la
+    // nube renglones que en realidad sí tenían piezas (por eso "desaparecían").
+    const ok = await esperaNube(); if (!ok) return 0;
     const sab = inicioSemana(); const lun = new Date(sab); lun.setDate(lun.getDate() + 2);
     if (Date.now() < lun.getTime()) return 0;  // sábado y domingo: la semana pasada todavía se ve
     const corte = sab.toISOString(), corteRec = lun.toISOString();
     const escrituras = []; let n = 0;
     lista("recado").filter(r => r.hecho && (r.hecho_en || r.creado) < corteRec).forEach(r => { delete memoria.recado[r.id]; escrituras.push(["recado", r.id, null]); n++; });
     lista("movimiento").filter(m => (m.creado || "") < corte).forEach(m => { delete memoria.movimiento[m.id]; escrituras.push(["movimiento", m.id, null]); n++; });
-    ["lote", "pieza"].forEach(t => lista(t).filter(x => Number(x.cantidad || 0) <= 0 && (x.actualizado || x.creado || "") < corte).forEach(x => { delete memoria[t][x.id]; escrituras.push([t, x.id, null]); n++; }));
+    // Lotes y piezas en cero ya NO se borran: no estorban y borrarlos era peligroso.
     if (!n) return 0;
-    ["recado", "movimiento", "lote", "pieza"].forEach(t => { guardarLocal(t); avisar(t); });
+    ["recado", "movimiento"].forEach(t => { guardarLocal(t); avisar(t); });
     await manda(escrituras, []);
     return n;
+  }
+  /* Muebles preparados COMPLETOS que llevan más de una semana sin que se les sume nada: salen del
+     almacén solos (ya se entregaron). Queda en bitácora como "salida" y se puede Deshacer. */
+  let limpiados = false;
+  async function limpiaPreparados(persona, forzar){
+    if (limpiados && !forzar) return 0; limpiados = true;
+    const ok = await esperaNube(); if (!ok) return 0;
+    const Rg = window.Reglas; const corte = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+    const viejos = lista("lote").filter(l => l.etapa === "preparado" && Number(l.cantidad || 0) > 0 && (l.actualizado || l.creado || "") < corte && Rg.completo((memoria.modelo || {})[l.modelo_id], l));
+    if (!viejos.length) return 0;
+    const escrituras = [], movs = [];
+    viejos.forEach(l => {
+      const n = Number(l.cantidad); const base = baseLote(l);
+      escrituras.push(["lote", l.id, incrementaLocal("lote", base, -n)]);
+      movs.push({ id: uuid(), tipo: "salida", lote_id: l.id, base, modelo_id: l.modelo_id, nombre: l.modelo, color: l.color || "", colores: l.colores || {}, etapa_a: "preparado", delta: -n, resultado: 0,
+        persona: persona || "sistema", origen: "automático", hecho_por: l.preparo || "", motivo: "salió del almacén: una semana preparado (desde " + String(l.actualizado || l.creado || "").slice(0, 10) + ")", creado: ahora() });
+    });
+    guardarLocal("lote"); avisar("lote"); movs.forEach(movLocal);
+    await manda(escrituras, movs);
+    return viejos.length;
   }
 
   /* ── MATERIAL: sumar o restar envases ── */
@@ -1016,6 +1106,7 @@ window.Almacen = (() => {
     registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, aCabina,
     cargaInicial, cargaMaterial, cargaPedidos, cargaHecha, preparaCarga, claveLote, clavePieza,
     prepara, revisaPreparar, piezasPara, deshaz, alPlan, planListo, planCambia, planQuita, fusionaModelo, arreglaPedidos, inicioSemana, limpiaSemana,
-    previaColores, simplificaColores, previaGuacales, aplicaGuacales
+    previaColores, simplificaColores, previaGuacales, aplicaGuacales, limpiaPreparados, esperaNube, kpiArranque, queKpi,
+    _olvida(t, id){ if (memoria[t]) delete memoria[t][id]; avisar(t); }   // solo para pruebas: simula que la nube ya no manda un renglón en cero
   };
 })();

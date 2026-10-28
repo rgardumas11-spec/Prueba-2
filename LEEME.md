@@ -39,6 +39,8 @@ Cuando se publica una versión nueva, la app avisa arriba en verde y se actualiz
 | **Catálogo** | La ficha de cada modelo agrupada por familia (Mariana, Monarca… y MDF hasta abajo). Se edita aquí; si falta un dato se marca en rojo y el sistema no lo inventa. Al final, **Piezas extras**: piezas que se agregan solo por nombre, entran a Puertas Uriel y llegan hasta lijadas. |
 | **Color** | Lo que todavía no se pinta no tiene color (es stock almacenado). Muebles, puertas, cajones y parches solo llevan un color **liso** (Negro, Negro brilloso, Café, Gris, Blanco, Nogal, Rojo, Crema, Amarillo, Azul, Rosa, Naranja), porque cada cosa se pinta por separado. Las combinaciones ("Negro puertas grises") solo se escogen en el **pedido**, y al preparar se decide de qué color va cada parte. |
 | **Catálogo de material** | Todo el material con **litros · nombre · apodo**, editable al tocarlo. El apodo es el nombre con el que se ve en Material. |
+| **KPI** | Cuánto se produjo, contado solo a partir de los movimientos (nadie captura nada): muebles preparados, guacales pintados, armados, maquilados, puertas pintadas/embisagradas/lijadas, cajones y parches pintados; por día en la semana (sáb→vie) y por semana en el mes; modelo y color que más se hizo. Deshacer resta. Necesita la regla `kpi` en Firebase. |
+| **Preparados viejos** | Un mueble preparado completo que lleva más de una semana sin que se le sume nada sale solo del almacén (queda en Bitácora como salida y se puede Deshacer). |
 | **Ajustes** | Quién soy, modo práctica, hojas de conteo para imprimir, revisar el aparato, versión y tema. (Las tarjetas de migración de octubre ya se aplicaron y se quitaron.) |
 
 La búsqueda está detrás de la lupa de cada pantalla y perdona faltas de ortografía
@@ -52,6 +54,7 @@ La búsqueda está detrás de la lupa de cada pantalla y perdona faltas de ortog
 | Mueble armado | Giovanni · Luis · Daniel (uno) |
 | Mueble pintado | Brandon · Antelmo · Raúl · Juan (hasta dos) |
 | Mueble preparado | César · Raúl · Gabino (uno) |
+| Puertas con bisagras | Miguel · Daniel · Luis · Fernando · Gabino · César (uno) |
 | Mueble de MDF | Fernando (maquila y arma); al pintarlo no se pregunta |
 | Embisagrar puertas | Miguel · Daniel · Luis (uno). Ningún otro paso de puertas pregunta |
 | Cajones pintados | Brandon · Juan · Antelmo · Raúl · Ángel · Daniel · Jorge (uno) |

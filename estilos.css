@@ -504,3 +504,11 @@ table.rep .n{text-align:right;font-family:var(--mono);white-space:nowrap}
 .chip.partes{background:var(--vino-tinte);border-color:var(--vino-medio);color:var(--vino)}
 .lote.comp select.sel-color{margin-top:6px;width:100%;max-width:260px;font-size:13px;padding:6px 8px;border:1px solid var(--linea);border-radius:8px;background:var(--hoja);color:var(--tinta)}
 .lote.comp.no select.sel-color{opacity:1}
+
+/* 3.5: KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kpi-card{background:var(--hoja);border:1px solid var(--linea);border-radius:var(--r);padding:12px 14px}
+.kpi-card b{display:block;font:600 30px/1 var(--mono);color:var(--vino)} .kpi-card span{display:block;font-size:13.5px;font-weight:600;margin-top:6px} .kpi-card small{display:block;font-size:12px;color:var(--tinta2);min-height:14px}
+.kpi-dos{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px} .kpi-dos .ajuste{margin-bottom:0}
+.kpi-top{margin:0;padding-left:20px;font-size:14px} .kpi-top li{display:flex;justify-content:space-between;gap:10px;padding:3px 0} .kpi-top span{color:var(--tinta2);font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+#listaKpi table.rep{width:100%} #listaKpi tr.tot td{border-top:2px solid var(--linea)}
