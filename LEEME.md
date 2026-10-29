@@ -40,7 +40,7 @@ Cuando se publica una versión nueva, la app avisa arriba en verde y se actualiz
 | **Color** | Lo que todavía no se pinta no tiene color (es stock almacenado). Muebles, puertas, cajones y parches solo llevan un color **liso** (Negro, Negro brilloso, Café, Gris, Blanco, Nogal, Rojo, Crema, Amarillo, Azul, Rosa, Naranja), porque cada cosa se pinta por separado. Las combinaciones ("Negro puertas grises") solo se escogen en el **pedido**, y al preparar se decide de qué color va cada parte. |
 | **Catálogo de material** | Todo el material con **litros · nombre · apodo**, editable al tocarlo. El apodo es el nombre con el que se ve en Material. |
 | **KPI** | Cuánto se produjo, contado solo a partir de los movimientos (nadie captura nada): muebles preparados, guacales pintados, armados, maquilados, puertas pintadas/embisagradas/lijadas, cajones y parches pintados; por día en la semana (sáb→vie) y por semana en el mes; modelo y color que más se hizo. Deshacer resta. Necesita la regla `kpi` en Firebase. |
-| **Preparados viejos** | Un mueble preparado completo que lleva más de una semana sin que se le sume nada sale solo del almacén (queda en Bitácora como salida y se puede Deshacer). |
+| **Preparados viejos** | Un mueble preparado con **puertas y cajones puestos** (y parches si lleva) que lleva 7 días o más sin que se le sume nada sale solo del almacén; la bitácora dice desde qué fecha estaba. Si la ficha no dice cuántas puertas o cajones lleva, no se toca. Se puede Deshacer. |
 | **Ajustes** | Quién soy, modo práctica, hojas de conteo para imprimir, revisar el aparato, versión y tema. (Las tarjetas de migración de octubre ya se aplicaron y se quitaron.) |
 
 La búsqueda está detrás de la lupa de cada pantalla y perdona faltas de ortografía

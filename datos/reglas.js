@@ -164,6 +164,17 @@
   const faltanPartes = (modelo, lote) => componentes(modelo).filter(c => c.por !== null && !partesDe(lote)[c.k]);
   const partesTexto = (modelo, lote) => componentes(modelo).filter(c => partesDe(lote)[c.k]).map(c => c.k).join(", ");
   const completo = (modelo, lote) => !!modelo && componentes(modelo).every(c => c.por === null || partesDe(lote)[c.k]);
+  /* Completo DE VERDAD (para sacarlo del almacén solo): tiene puertas y cajones puestos, y parches si
+     la ficha dice que lleva. Si la ficha no dice cuántas puertas o cajones lleva, NO cuenta como completo. */
+  function preparadoCompletoDeVerdad(modelo, lote){
+    if (!modelo || !lote || lote.etapa !== "preparado") return false;
+    const p = partesDe(lote); const puertas = piezasPorMueble(modelo, "puertas_pintadas"), cajones = piezasPorMueble(modelo, "cajones_pintados"), parches = parchesDe(modelo);
+    if (puertas == null || cajones == null) return false;
+    if (puertas > 0 && !p.puertas) return false;
+    if (cajones > 0 && !p.cajones) return false;
+    if (parches > 0 && !p.parches) return false;
+    return true;
+  }
   /* Qué piezas pintadas se descuentan al preparar n muebles con estas partes. null = la ficha no lo dice. */
   function necesitaParaPreparar(modelo, n, partes){
     n = Number(n || 0); partes = partes || { puertas: true, cajones: true, parches: true };
@@ -292,7 +303,7 @@
   }
 
   const R = { ETAPAS, ETAPAS_VISIBLES, CADENA, PIEZAS, PESTANAS_PIEZA, CADENA_PUERTAS, CADENA_CAJONES, CADENA_PARCHES, PIEZAS_VIEJAS, RESPONSABLES, tipoDe, cadenaDe, primeraEtapa, siguienteEtapa, anteriorEtapa,
-    siguientePieza, siguientePiezaDe, anteriorPieza, cadenaPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, sePintaEn, parchesDe, necesitaParaPreparar, componentes, faltanPartes, partesTexto, completo, esExtra, extraAdmite,
+    siguientePieza, siguientePiezaDe, anteriorPieza, cadenaPieza, embisagra, pestanaDe, categoriasDePestana, admiteAlta, admiteAltaPieza, sePintaEn, parchesDe, necesitaParaPreparar, componentes, faltanPartes, partesTexto, completo, preparadoCompletoDeVerdad, esExtra, extraAdmite,
     responsables, origenDe, firmaDe, validaTraslado, piezasPorMueble, equivalencia, textoEquivalencia, textoFaltan, listos, ficha,
     esGuacal, guacalDe, mismoGuacal, conGuacalVivo, COLORES_LISOS, mismoColor, esColorLiso, desarmaColor, colorParte, textoColores, coincideCombo };
   if (typeof module !== "undefined" && module.exports) module.exports = R;

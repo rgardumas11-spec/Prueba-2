@@ -897,16 +897,22 @@ window.Almacen = (() => {
   let limpiados = false;
   async function limpiaPreparados(persona, forzar){
     if (limpiados && !forzar) return 0; limpiados = true;
+    if (modo !== "nube" && !forzar) return 0;          // solo con la nube: en "solo este aparato" no sirve de nada
     const ok = await esperaNube(); if (!ok) return 0;
     const Rg = window.Reglas; const corte = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-    const viejos = lista("lote").filter(l => l.etapa === "preparado" && Number(l.cantidad || 0) > 0 && (l.actualizado || l.creado || "") < corte && Rg.completo((memoria.modelo || {})[l.modelo_id], l));
+    const dma = iso => { const [a, m, d] = String(iso || "").slice(0, 10).split("-"); return d ? d + "/" + m + "/" + a : "?"; };
+    // Se quita SOLO si: está en preparado, tiene puertas y cajones puestos de verdad (y parches si lleva),
+    // y la última vez que se le sumó algo fue hace 7 días o más. Un día o dos: no se toca.
+    const viejos = lista("lote").filter(l => l.etapa === "preparado" && Number(l.cantidad || 0) > 0 && (l.actualizado || l.creado || "") < corte && Rg.preparadoCompletoDeVerdad((memoria.modelo || {})[l.modelo_id], l));
     if (!viejos.length) return 0;
     const escrituras = [], movs = [];
     viejos.forEach(l => {
       const n = Number(l.cantidad); const base = baseLote(l);
+      const desde = l.actualizado || l.creado || "";                 // ANTES de descontar (descontar cambia la fecha)
+      const partes = Object.keys(l.partes || {}).filter(k => l.partes[k]);
       escrituras.push(["lote", l.id, incrementaLocal("lote", base, -n)]);
-      movs.push({ id: uuid(), tipo: "salida", lote_id: l.id, base, modelo_id: l.modelo_id, nombre: l.modelo, color: l.color || "", colores: l.colores || {}, etapa_a: "preparado", delta: -n, resultado: 0,
-        persona: persona || "sistema", origen: "automático", hecho_por: l.preparo || "", motivo: "salió del almacén: una semana preparado (desde " + String(l.actualizado || l.creado || "").slice(0, 10) + ")", creado: ahora() });
+      movs.push({ id: uuid(), tipo: "salida", lote_id: l.id, base, modelo_id: l.modelo_id, nombre: l.modelo, color: l.color || "", colores: l.colores || {}, partes: l.partes || {}, desde, etapa_a: "preparado", delta: -n, resultado: 0,
+        persona: persona || "sistema", origen: "automático", hecho_por: l.preparo || "", motivo: "salió del almacén: preparado completo (" + partes.join(", ") + ") desde el " + dma(desde) + ", más de una semana", creado: ahora() });
     });
     guardarLocal("lote"); avisar("lote"); movs.forEach(movLocal);
     await manda(escrituras, movs);
