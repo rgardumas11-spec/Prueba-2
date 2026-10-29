@@ -341,10 +341,20 @@ window.Almacen = (() => {
   /* Una sola vez: lo que ya está en la bitácora al estrenar los KPI se cuenta para no empezar en cero. */
   async function kpiArranque(){
     const ok = await esperaNube(); if (!ok) return 0;
-    if ((memoria.meta || {})["kpi-arranque"]) return 0;
-    const meta = { id: "kpi-arranque", hecho: ahora() }; memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; guardarLocal("meta");
-    if (modo === "nube" && db) await enCamino(db.collection("meta").doc(meta.id).set(meta));
+    if (modo === "nube" && sinPermiso.kpi) return 0;      // sin regla en Firebase lo contado se perdería: mejor esperar
+    const hecho = (memoria.meta || {})["kpi-arranque"];
+    // Si ya se "arrancó" pero la colección está vacía (la regla no existía cuando se contó), se recuenta.
+    if (hecho && lista("kpi").length) return 0;
+    return recuentaKpi();
+  }
+  /* Borra lo contado y lo vuelve a contar desde la bitácora que hay (esta semana). */
+  async function recuentaKpi(){
+    const ok = await esperaNube(); if (!ok) return 0;
+    const escrituras = lista("kpi").map(k => ["kpi", k.id, null]); memoria.kpi = {};
+    const meta = { id: "kpi-arranque", hecho: ahora() }; memoria.meta = memoria.meta || {}; memoria.meta[meta.id] = meta; guardarLocal("meta"); escrituras.push(["meta", meta.id, meta]);
+    await manda(escrituras, []);
     let n = 0; lista("movimiento").forEach(m => { if (queKpi(m)){ cuentaKpi(m, 1); n++; } });
+    guardarLocal("kpi"); avisar("kpi");
     return n;
   }
   async function anota(mov){
@@ -1112,7 +1122,7 @@ window.Almacen = (() => {
     registra, traslada, ajustaLote, ajustaPieza, trasladaPieza, aCabina,
     cargaInicial, cargaMaterial, cargaPedidos, cargaHecha, preparaCarga, claveLote, clavePieza,
     prepara, revisaPreparar, piezasPara, deshaz, alPlan, planListo, planCambia, planQuita, fusionaModelo, arreglaPedidos, inicioSemana, limpiaSemana,
-    previaColores, simplificaColores, previaGuacales, aplicaGuacales, limpiaPreparados, esperaNube, kpiArranque, queKpi,
+    previaColores, simplificaColores, previaGuacales, aplicaGuacales, limpiaPreparados, esperaNube, kpiArranque, recuentaKpi, queKpi,
     _olvida(t, id){ if (memoria[t]) delete memoria[t][id]; avisar(t); }   // solo para pruebas: simula que la nube ya no manda un renglón en cero
   };
 })();

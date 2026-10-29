@@ -193,7 +193,8 @@ function pintaMuebles(){
       let quien = Object.keys(porFirma).map(f => esc(f) + " " + porFirma[f]).join(" · ");
       let accion = R.siguienteEtapa(g.etapa) === "preparado" ? '<button class="btn suave" data-pasar="' + esc(g.k) + '">Preparar →</button>' : R.siguienteEtapa(g.etapa) ? '<button class="btn suave" data-pasar="' + esc(g.k) + '">Pasar a ' + esc(R.ETAPAS[R.siguienteEtapa(g.etapa)].corto.toLowerCase()) + ' →</button>' : '<span class="sello ver">final</span>';
       if (g.etapa === "preparado"){ const m = modeloDe(g.modelo_id); const fal = R.faltanPartes(m, g); const con = R.partesTexto(m, g);
-        quien += (con ? ' <span class="sello ver">con ' + esc(con) + '</span>' : "") + (fal.length ? ' <span class="sello roj">faltan: ' + esc(fal.map(c => c.k).join(", ")) + '</span>' : (m ? ' <span class="sello ver">completo</span>' : ""));
+        const desde = g.lotes.reduce((d, l) => (l.creado || "") && (!d || l.creado < d) ? l.creado : d, "");
+        quien = (desde ? '<small style="display:block;color:var(--tinta3)">desde el ' + esc(cuando(desde)) + '</small>' : "") + quien + (con ? ' <span class="sello ver">con ' + esc(con) + '</span>' : "") + (fal.length ? ' <span class="sello roj">faltan: ' + esc(fal.map(c => c.k).join(", ")) + '</span>' : (m ? ' <span class="sello ver">completo</span>' : ""));
         accion = fal.length ? '<button class="btn suave" data-pasar="' + esc(g.k) + '">Completar →</button>' : '<span class="sello ver">completo</span>'; }
       return '<div class="fila' + (sel ? " sel" : "") + '" data-abre="' + esc(g.k) + '">' +
         '<div class="nombre"><b>' + esc(g.modelo) + '</b></div>' +
@@ -1343,6 +1344,8 @@ function descMov(m){
   let titulo_ = esc(m.nombre || m.tipo) + (m.color ? " · " + esc(m.color) : "");
   let sub = "";
   if (m.tipo === "deshecho") sub = esc(m.motivo || "se deshizo un movimiento");
+  else if (m.tipo === "salida" && m.lote_id){ const pt = (m.base && m.base.partes) || m.partes || {}; const con = Object.keys(pt).filter(k => pt[k]); const fal = R.faltanPartes(modeloDe(m.modelo_id), { partes: pt }).map(c => c.k);
+    sub = esc(m.motivo || "salió del almacén") + " · tenía: " + esc(con.join(", ") || "nada marcado") + (fal.length ? ' · <span class="sello roj">le faltaban: ' + esc(fal.join(", ")) + '</span>' : ' · <span class="sello ver">completo</span>'); }
   else if (m.tipo === "preparado") sub = "se preparó · salió de " + esc(et(m.etapa_de)) + (m.hecho_por ? " · preparó " + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · descontó: " + m.desglose.map(d => d.cantidad + " " + esc(d.de)).join(", ") : "") + (m.motivo ? " · " + esc(m.motivo) : "");
   else if (m.tipo === "plan") sub = esc(et(m.etapa_de)) + " → plan del día (" + esc(et(m.etapa_a)) + ")" + (m.motivo ? " · " + esc(m.motivo) : "");
   else if (m.tipo === "traslado") sub = esc(et(m.etapa_de)) + " → " + esc(et(m.etapa_a)) + (m.hecho_por ? " · " + esc(m.etapa_a === "puertas_lijadas_bisagras" ? "bisagras: " : m.etapa_a === "armado" ? "armó " : "pintó ") + esc(m.hecho_por) : "") + (m.desglose && m.desglose.length ? " · de: " + m.desglose.map(d => esc(d.de) + " " + d.cantidad).join(", ") : "");
@@ -1411,6 +1414,7 @@ function pintaAjustes(){
   $("#ajustes").innerHTML =
     /* Las tarjetas de migración (guacales, colores lisos, correcciones del 6 de octubre, revisar
        nombres, cargas de la libreta) ya se aplicaron en el taller y se quitaron de aquí (3.3.3). */
+    tarjetaSalidas() +
     '<div class="ajuste"><h4>Quién soy</h4><p>' + (E.yo ? "Estás como <b>" + esc(E.yo) + "</b>." : "Todavía no has dicho quién eres.") + '</p><div class="acciones"><button class="btn" id="ajYo">Cambiar de persona</button>' + (Almacen.sesion ? '<button class="btn fantasma" id="ajSalir">Cerrar sesión</button>' : "") + '</div></div>' +
     '<div class="ajuste"><h4>Modo práctica</h4><p>Para jugar sin miedo: datos de juguete, solo en este aparato. El inventario real ni se entera.</p><label class="interruptor"><input type="checkbox" id="ajPractica"' + (Almacen.practica ? " checked" : "") + '> <span>' + (Almacen.practica ? "Practicando" : "Apagado") + '</span></label></div>' +
     '<div class="ajuste"><h4>Hoja de conteo para imprimir</h4><p>Para caminar el almacén con papel y comparar contra el sistema.</p><div class="acciones"><button class="btn" data-imprime="mueble">Muebles</button><button class="btn" data-imprime="pieza">Piezas</button><button class="btn" data-imprime="material">Material</button></div></div>' +
@@ -1424,6 +1428,7 @@ function pintaAjustes(){
   const ar = $("#ajArreglo"); if (ar) ar.onclick = aplicaArreglo;
   const ap = $("#ajPuertas"); if (ap) ap.onclick = hojaArregloPuertas;
   const gq = $("#ajGuacales"); if (gq) gq.onclick = hojaGuacales;
+  const sa = $("#ajSalidas"); if (sa) sa.onclick = hojaSalidas;
   const cl = $("#ajColores"); if (cl) cl.onclick = hojaColores;
   $("#ajYo").onclick = hojaQuienSoy;
   const s = $("#ajSalir"); if (s) s.onclick = async () => { await Almacen.sale(); pintaPulso(); pintaTodo(); };
@@ -1914,7 +1919,7 @@ function pintaKpi(){
   const l = kpiEn(rg.de, rg.a); const tot = sumaKpi(l);
   $("#resumenKpi").textContent = rg.titulo;
   const aviso = Almacen.sinPermiso.includes("kpi") ? '<div class="aviso"><b>Falta una regla en Firebase</b><p>Los KPI no se pueden compartir todavía. En Firestore → Rules agrega: <code>match /kpi/{id} { allow read, write: if delTaller(); }</code> y publica.</p></div>' : "";
-  const tabs = '<div class="cats" style="margin-bottom:12px">' + [["semana", "Esta semana"], ["mes", "Este mes"], ["pasado", "Mes pasado"]].map(([k, n]) => '<button class="cat' + (cual === k ? " on" : "") + '" data-rango="' + k + '">' + n + '</button>').join("") + '<button class="btn" id="kpiPdf" style="margin-left:auto">Ver como reporte / PDF</button></div>';
+  const tabs = '<div class="cats" style="margin-bottom:12px">' + [["semana", "Esta semana"], ["mes", "Este mes"], ["pasado", "Mes pasado"]].map(([k, n]) => '<button class="cat' + (cual === k ? " on" : "") + '" data-rango="' + k + '">' + n + '</button>').join("") + '<button class="btn" id="kpiPdf" style="margin-left:auto">Ver como reporte / PDF</button><button class="btn fantasma" id="kpiRecuenta" title="Borra lo contado y lo vuelve a contar con la bitácora de esta semana">Recontar</button></div>';
   const tarjetas = '<div class="kpi-grid">' + KPI_QUE.map(q => { const j = q.cat ? juegosKpi(l, q) : null;
     return '<div class="kpi-card"><b>' + tot[q.k] + '</b><span>' + esc(q.nombre) + '</span><small>' + (j ? (j.juegos ? "≈ " + plural(j.juegos, "juego", "juegos") : "") + (j.sinFicha ? " · hay modelos sin ficha" : "") : esc(q.unidad)) + '</small></div>'; }).join("") + '</div>';
   const top = (titulo, lista, unidad) => '<div class="ajuste"><h4>' + titulo + '</h4>' + (lista.length ? '<ol class="kpi-top">' + lista.map(x => '<li><b>' + esc(x.k) + '</b><span>' + x.n + ' ' + unidad + '</span></li>').join("") + '</ol>' : '<p>Todavía nada en este periodo.</p>') + '</div>';
@@ -1932,6 +1937,7 @@ function pintaKpi(){
   caja.innerHTML = aviso + tabs + tarjetas + mas + tabla + '<p class="guia">Se cuenta solo: cada paso que se registra (pintar, embisagrar, preparar…) suma aquí al momento; Deshacer resta. Nadie tiene que capturar nada.</p>';
   caja.querySelectorAll("[data-rango]").forEach(b => b.onclick = () => { E.kpiRango = b.dataset.rango; pintaKpi(); });
   $("#kpiPdf").onclick = () => { irA("reportes"); abreReporte("kpi", cual); };
+  $("#kpiRecuenta").onclick = async () => { if (!exigeYo()) return; if (!confirm("¿Volver a contar los KPI con la bitácora de esta semana? Lo de semanas anteriores ya no está en la bitácora y no se recupera.")) return; const n = await Almacen.recuentaKpi(); grita("Recontado: " + plural(n, "movimiento", "movimientos")); pintaKpi(); };
 }
 function reporteKpi(cual){
   const rg = rangoKpi(cual || "semana"); const l = kpiEn(rg.de, rg.a); const tot = sumaKpi(l);
@@ -2137,6 +2143,31 @@ function hojaArregloPuertas(){
     });
 }
 /* ── Guacales compartidos (datos/carga-inicial.js → CARGA_GUACALES) ── */
+/* ── Salidas automáticas: revisar cuáles de verdad estaban completas y regresar las que no ── */
+function salidasAuto(){
+  return E.movimientos.filter(m => m.tipo === "salida" && m.lote_id && m.origen === "automático" && !m.deshecho).map(m => { const pt = (m.base && m.base.partes) || m.partes || {}; const fal = R.faltanPartes(modeloDe(m.modelo_id), { partes: pt }).map(c => c.k); const ok = R.preparadoCompletoDeVerdad(modeloDe(m.modelo_id), Object.assign({ etapa: "preparado" }, m.base || {}, { partes: pt })); return { m, pt, fal, ok }; });
+}
+function tarjetaSalidas(){
+  const l = salidasAuto(); if (!l.length) return "";
+  const malas = l.filter(x => !x.ok);
+  return '<div class="' + (malas.length ? "aviso" : "ajuste") + '"><' + (malas.length ? "b" : "h4") + '>Salidas automáticas de preparados · ' + plural(l.length, "renglón", "renglones") + (malas.length ? " · " + malas.length + " sin estar completos" : " · todos completos") + '</' + (malas.length ? "b" : "h4") + '><p>Revisa qué tenía cada mueble cuando salió. Los que no tenían puertas y cajones puestos de verdad se pueden regresar de un jalón.</p><div class="pie"><button class="btn ' + (malas.length ? "vino" : "") + '" id="ajSalidas">Ver' + (malas.length ? " y regresar" : "") + '</button></div></div>';
+}
+function hojaSalidas(){
+  if (!exigeYo()) return;
+  const l = salidasAuto(); const malas = l.filter(x => !x.ok);
+  abreHoja('<h3>Salidas automáticas</h3><p class="guia">Cada renglón dice qué tenía el mueble al salir. En rojo los que NO estaban completos (con la regla nueva no habrían salido).</p>' +
+    '<div class="lotes" style="max-height:50vh;overflow:auto">' + l.map(x => '<div class="lote"><div class="quien">' + esc(x.m.nombre) + ' · ' + esc(nombreColor(x.m.color)) + '<small>' + esc(cuando(x.m.creado)) + ' · tenía: ' + esc(Object.keys(x.pt).filter(k => x.pt[k]).join(", ") || "nada marcado") + '</small>' + (x.ok ? '<small><span class="sello ver">completo</span></small>' : '<small><span class="sello roj">' + (x.fal.length ? "le faltaban: " + esc(x.fal.join(", ")) : "la ficha no dice cuántas puertas o cajones lleva") + '</span></small>') + '</div><div class="disp"><b>' + Math.abs(x.m.delta) + '</b></div></div>').join("") + '</div>' +
+    (malas.length ? '<p class="sin-hallar" id="sError" hidden></p><button class="btn vino grande" id="sOk" style="margin-top:12px">Regresar los ' + malas.length + ' que no estaban completos</button>' : "") + '<button class="btn fantasma grande" id="sNo" style="margin-top:8px">Cerrar</button>',
+    h => {
+      h.querySelector("#sNo").onclick = cierraHoja;
+      const b = h.querySelector("#sOk"); if (b) b.onclick = async () => {
+        b.disabled = true; let ok = 0; const fallas = [];
+        for (const x of malas){ try { await Almacen.deshaz(x.m.id, E.yo, origen()); ok++; } catch(e){ fallas.push(x.m.nombre + ": " + e.message); } }
+        cierraHoja(); pintaTodo();
+        if (fallas.length) alert("Regresaron " + ok + ". No se pudieron " + fallas.length + ":\n" + fallas.join("\n")); else grita("Regresaron " + plural(ok, "mueble", "muebles") + " a Preparado");
+      };
+    });
+}
 function tarjetaGuacales(){
   const G = window.CARGA_GUACALES; if (!G) return "";
   const pv = Almacen.previaGuacales(G); const pend = pv.filter(x => !x.yaEs || x.variantes.length);
