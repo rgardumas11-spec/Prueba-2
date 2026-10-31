@@ -21,13 +21,30 @@ const esApple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platf
 const plural = (n, uno, varios) => n + " " + (n === 1 ? uno : varios);
 
 function reloj(iso){ return new Date(iso).toLocaleTimeString("es-MX", {hour:"2-digit", minute:"2-digit"}); }
+/* "hoy" / "ayer" / "antier" se deciden por FECHA DE CALENDARIO (no por "menos de 24 horas"): a las 7 a.m.
+   algo de ayer a las 11 a.m. dice "ayer 11:23 a.m.", nunca "hoy". La hora es la que guardó el aparato que capturó. */
+const diaLocal = x => { const d = new Date(x); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 function cuando(iso){
-  const d = Math.floor((Date.now() - new Date(iso).getTime())/1000);
-  if (d < 60) return "ahorita";
-  if (d < 3600) return "hace " + Math.floor(d/60) + " min";
-  if (d < 86400) return "hoy " + reloj(iso);
-  if (d < 172800) return "ayer " + reloj(iso);
+  const t = new Date(iso).getTime(); if (isNaN(t)) return "";
+  const d = Math.floor((Date.now() - t)/1000);
+  if (d >= 0 && d < 60) return "ahorita";
+  if (d >= 0 && d < 3600) return "hace " + Math.floor(d/60) + " min";
+  const hoy = diaLocal(Date.now()), ayer = diaLocal(Date.now() - 864e5), antier = diaLocal(Date.now() - 2*864e5), dia = diaLocal(t);
+  if (dia === hoy) return "hoy " + reloj(iso);
+  if (dia === ayer) return "ayer " + reloj(iso);
+  if (dia === antier) return "antier " + reloj(iso);
   return new Date(iso).toLocaleDateString("es-MX", {day:"numeric", month:"short"}) + " " + reloj(iso);
+}
+/* Aviso de registro repetido: si HOY ya se capturó lo mismo (mismo modelo, mismo destino, misma cantidad,
+   mismo responsable), pregunta antes de volverlo a agregar. Devuelve true si se puede seguir. */
+function avisaRepetido(q){
+  const hoy = diaLocal(Date.now());
+  const igual = E.movimientos.find(m => !m.deshecho && m.tipo === q.tipo && diaLocal(m.creado) === hoy && m.modelo_id === q.modelo_id &&
+    (m.etapa_a || m.categoria || "") === (q.destino || "") && Math.abs(Number(m.delta || 0)) === Number(q.cantidad || 0) &&
+    sinAcento(m.hecho_por || "") === sinAcento(q.quien || ""));
+  if (!igual) return true;
+  const dest = (R.ETAPAS[q.destino] || R.PIEZAS[q.destino] || {}).nombre || q.destino;
+  return confirm("OJO: esto ya se registró hoy a las " + reloj(igual.creado) + " por " + (igual.persona || "alguien") + ":\n" + q.cantidad + " " + (q.nombre || "") + (q.color ? " · " + q.color : "") + " → " + dest + (q.quien ? " (" + q.quien + ")" : "") + ".\n\n¿De todos modos agregarlo OTRA VEZ?");
 }
 const hoyIso = () => new Date().toISOString().slice(0,10);
 function isoADma(iso){ if (!iso) return ""; const [a,m,d] = String(iso).slice(0,10).split("-"); return d + "/" + m + "/" + a; }
@@ -58,7 +75,7 @@ const sePintaEn = destino => R.sePintaEn(destino);
 /* ── estado de pantalla ── */
 const E = {
   yo: localStorage.getItem("alm.yo") || "",
-  vista: "plan",
+  vista: "muebles",
   modelos: [], lotes: [], piezas: [], productos: [], movimientos: [], recados: [], personas: [], pedidos: [], plan: [], kpi: [], kpiRango: "semana",
   etapa: "maquilado", catPieza: "puertas_uriel", catMat: "",
   busca: {}, buscaAbierta: {},
@@ -283,6 +300,7 @@ function hojaRegistrarMueble(){
         const tipo = R.tipoDe(modelo); const etapa = R.primeraEtapa(tipo);
         const d = { modelo_id: modelo.id, modelo: modelo.nombre, color, etapa, cantidad: n };
         if (tipo === "mdf"){ d.maquilo = quien[0]; d.armo = quien[0]; } else d.maquilo = quien[0];
+        if (!avisaRepetido({ tipo: "alta", modelo_id: modelo.id, nombre: modelo.nombre, color, destino: etapa, cantidad: n, quien: quien[0] })) return;
         await Almacen.registra(d, E.yo, origen());
         anotaTrabajo("maquilado", quien[0], modelo, color, n);
         cierraHoja(); E.etapa = etapa; E.sel = { tipo:"mueble", k: modelo.id + "|" + color, etapa }; irA("muebles"); pintaTodo();
@@ -384,6 +402,8 @@ function hojaPasar(g){
         const d = { etapa_a: sig, tomas: filas.map(f => ({ lote_id: f.dataset.lote, cantidad: Number(f.querySelector("input").value) || 0 })) };
         if (sePintaEn(sig)) d.color_a = h.querySelector("#pColor").value;
         if (regla){ if (regla.campo === "armo") d.armo = quien[0]; if (regla.campo === "pinto") d.pinto = quien.slice(); E.ultimoQuien[sig] = { nombres: quien.slice(), t: Date.now() }; }
+        const totalPasa = d.tomas.reduce((s2, x) => s2 + x.cantidad, 0);
+        if (!avisaRepetido({ tipo: "traslado", modelo_id: g.modelo_id, nombre: g.modelo, color: d.color_a != null ? d.color_a : g.color, destino: sig, cantidad: totalPasa, quien: [d.armo, ...(d.pinto || [])].filter(Boolean).join(" y ") })) return;
         try {
           const mov = await Almacen.traslada(d, E.yo, origen());
           if (sig === "armado" && d.armo) anotaTrabajo("armado", d.armo, modeloDe(g.modelo_id) || { nombre: g.modelo, familia: g.modelo.split(" ")[0] }, g.color, mov.delta);
@@ -588,6 +608,7 @@ function hojaRegistrarPieza(){
       pinta();
       h.querySelector("#rOk").onclick = async () => {
         const n = piezasDe(h); if (!modelo || n <= 0) return;
+        if (!avisaRepetido({ tipo: "alta", modelo_id: modelo.id, nombre: modelo.nombre, color, destino: cat, cantidad: n, quien: quien.join(" y ") })) return;
         await Almacen.ajustaPieza({ modelo_id: modelo.id, modelo: modelo.nombre, color, categoria: cat }, n, E.yo, "", origen(), quien.join(" y "), "alta");
         cierraHoja(); E.catPieza = R.pestanaDe(cat); E.sel = { tipo:"pieza", id: Almacen.clavePieza({ modelo_id: modelo.id, color, categoria: cat }) }; irA("piezas"); pintaTodo();
         grita("Listo: " + n + " " + R.PIEZAS[cat].unidad);
@@ -651,6 +672,7 @@ function hojaPasarPieza(p, destino){
           if (regla) E.ultimoQuien[destino] = { nombres: quien.slice(), t: Date.now() };
           const d = { pieza_id: p.id, cantidad: piezasDe(), categoria_a: destino, hecho_por: quien.join(" y ") };
           if (sePintaEn(destino)) d.color_a = h.querySelector("#pColor").value;
+          if (!avisaRepetido({ tipo: "traslado", modelo_id: p.modelo_id, nombre: p.modelo, color: d.color_a != null ? d.color_a : p.color, destino, cantidad: d.cantidad, quien: d.hecho_por })) return;
           const mov = await Almacen.trasladaPieza(d, E.yo, origen());
           cierraHoja(); grita(mov.delta + " " + R.PIEZAS[destino].unidad + " → " + R.PIEZAS[destino].nombre.toLowerCase());
           E.catPieza = R.pestanaDe(destino); E.sel = { tipo:"pieza", id: mov.pieza_id }; irA("piezas"); pintaTodo();
@@ -1525,6 +1547,12 @@ async function diagnostico(){
     catch(e){ fila(false, "Cámara", e.name === "NotAllowedError" ? (esApple ? "iPhone: Ajustes → Safari → Cámara → Permitir" : "Android: toca el candado en la barra de dirección → Permisos → Cámara") : "No se encontró cámara."); }
     pinta();
   }
+  // Reloj del aparato contra la hora del servidor: si está mal, las horas de la bitácora salen mal
+  try {
+    const r = await fetch(location.href.split("#")[0] + "?reloj=" + Date.now(), { method: "HEAD", cache: "no-store" }); const srv = r.headers.get("date") ? new Date(r.headers.get("date")).getTime() : 0;
+    if (srv){ const dif = Math.round((Date.now() - srv) / 60000); fila(Math.abs(dif) <= 5, "Reloj del aparato" + (Math.abs(dif) > 5 ? ": " + Math.abs(dif) + " min " + (dif > 0 ? "adelantado" : "atrasado") : ""), Math.abs(dif) > 5 ? "Corrige la fecha y hora del aparato (ajústalo en automático); si no, lo que capture aquí queda con la hora mal." : ""); }
+    else fila(null, "Reloj del aparato", "No se pudo comparar con el servidor.");
+  } catch(e){ fila(null, "Reloj del aparato", "No se pudo comparar con el servidor."); }
   fila(true, "Versión instalada: " + esc((window.CONFIG || {}).VERSION || "?"));
   pinta();
 }
@@ -1547,13 +1575,6 @@ const SECCIONES_REP = () => [
   ...[["puertas_uriel"], ["puertas_por_lijar"], ["puertas_lijadas", "Puertas lijadas · sin bisagras"], ["puertas_lijadas_bisagras", "Puertas lijadas · con bisagras"], ["puertas_pintadas"], ["cajones_armados"], ["cajones_pintados"], ["parches_por_lijar"], ["parches_lijados"], ["parches_pintados"]]
     .map(([k, n]) => ({ k, zona: "Zona de piezas", nombre: n || R.PIEZAS[k].nombre }))
 ];
-/* A dónde va cada cosa cuando se descuenta desde el reporte al Plan del día (null = no se puede) */
-function destinoPlan(tipo, x){
-  if (tipo === "lote"){ const sig = R.siguienteEtapa(x.etapa); return sig && sig !== "preparado" ? sig : null; }
-  if (x.categoria === "puertas_lijadas") return "puertas_pintadas";       // sin bisagras: pide autorización
-  if (R.esExtra(modeloDe(x.modelo_id))) return R.siguientePiezaDe(x.categoria, modeloDe(x.modelo_id));
-  return R.siguientePieza(x.categoria);
-}
 const NOMBRE_PLAN = { puertas_por_lijar: "Puertas a pre lijar (Uriel)", puertas_lijadas: "Puertas a lijar", puertas_pintadas: "Puertas a pintar", armado: "Muebles a armar", pintado: "Muebles a pintar", mdf_pintado: "MDF a pintar", cajones_pintados: "Cajones a pintar", parches_lijados: "Parches a lijar", parches_pintados: "Parches a pintar" };
 function reporteMuebles(seccion){
   const orden = (a, b) => sinAcento(a.modelo + a.color) < sinAcento(b.modelo + b.color) ? -1 : 1;
@@ -1565,13 +1586,13 @@ function reporteMuebles(seccion){
       filas = ls.map(l => { total += Number(l.cantidad); const q = R.firmaDe(l); let quien = /sin nombre|sin responsable/.test(q || "") ? "" : (q || "");
         if (s.k === "preparado"){ const m = modeloDe(l.modelo_id); const con = R.partesTexto(m, l), fal = R.faltanPartes(m, l); quien = [quien, con ? "con " + con : "", fal.length ? "faltan " + fal.map(c => c.k).join(", ") : "completo"].filter(Boolean).join(" · "); }
         return [l.modelo, nombreColor(l.color) + (R.textoColores(l) ? " · " + R.textoColores(l) : ""), Number(l.cantidad), quien]; });
-      refs = ls.map(l => ({ tipo: "lote", id: l.id, a: destinoPlan("lote", l) }));
+      refs = [];
     } else {
       const ps = E.piezas.filter(p => p.categoria === s.k && vivoPieza(p) > 0).sort(orden);
       filas = ps.map(p => { const n = vivoPieza(p); total += n; const m = modeloDe(p.modelo_id); const e = R.equivalencia(n, R.piezasPorMueble(m, s.k)); const u = R.PIEZAS[s.k].unidad;
         const conJ = !R.esExtra(m) && !e.sinFicha && !e.noLleva;
         return [p.modelo, nombreColor(p.color), conJ ? plural(e.muebles, "juego", "juegos") : n, conJ ? n + " " + u + (e.sobran ? " · " + R.textoFaltan(e, u) : "") : R.textoEquivalencia(n, s.k, m).replace(/^.*?· /, "")]; });
-      refs = ps.map(p => ({ tipo: "pieza", id: p.id, a: destinoPlan("pieza", p) }));
+      refs = [];
     }
     return { zona: s.zona, titulo: s.nombre, total, filas, refs };
   }).filter(g => seccion || g.filas.length);
@@ -1648,7 +1669,7 @@ function reporteMovimientos(){
 }
 function pintaReportes(){
   $("#listaReportes").innerHTML =
-    '<div class="ajuste"><h4>Muebles y piezas</h4><p>Seccionado igual que la app: Zona de muebles (una tabla por etapa) y Zona de piezas (una tabla por sección). Cada renglón trae el botón <b>Descontar</b>: baja del inventario ahora y queda pendiente en el Plan del día hasta que se marque listo.</p><div class="acciones"><button class="btn vino" data-rep="muebles">Todo</button><select id="repSeccion" class="btn"><option value="">Solo una sección…</option>' +
+    '<div class="ajuste"><h4>Muebles y piezas</h4><p>Seccionado igual que la app: Zona de muebles (una tabla por etapa) y Zona de piezas (una tabla por sección).</p><div class="acciones"><button class="btn vino" data-rep="muebles">Todo</button><select id="repSeccion" class="btn"><option value="">Solo una sección…</option>' +
       ["Zona de muebles", "Zona de piezas"].map(z => '<optgroup label="' + z + '">' + SECCIONES_REP().filter(s => s.zona === z).map(s => '<option value="' + s.k + '">' + esc(s.nombre) + '</option>').join("") + '</optgroup>').join("") + '</select></div></div>' +
     '<div class="ajuste"><h4>Pintura y material</h4><p>Cubetas, tambos en el almacén y tambos abiertos en cabina.</p><div class="acciones"><button class="btn vino" data-rep="pintura">Ver</button></div></div>' +
     '<div class="ajuste"><h4>Pedidos</h4><p>Por cliente: lo que falta por entregar y qué hay en el taller para cubrirlo.</p><div class="acciones"><button class="btn vino" data-rep="pedidos">Ver</button></div></div>' +
@@ -1662,7 +1683,7 @@ function abreReporte(cual, seccion){
   const r = cual === "muebles" ? reporteMuebles(seccion) : cual === "pintura" ? reportePintura() : cual === "semana" ? reporteMovimientos() : cual === "kpi" ? reporteKpi(seccion) : reportePedidos();
   if (cual === "muebles") r.numCols = [2];
   if (cual === "semana") r.numCols = [];
-  const conAccion = cual === "muebles";
+  const conAccion = false;
   const tabla = (filas, refs) => filas.length ? '<table class="rep"><thead><tr>' + r.columnas.map((c, i) => '<th' + (esNum(r, i) ? ' class="n"' : "") + '>' + esc(c) + '</th>').join("") + (conAccion ? '<th class="acc"></th>' : "") + '</tr></thead><tbody>' +
     filas.map((f, j) => '<tr>' + f.map((v, i) => '<td' + (esNum(r, i) ? ' class="n"' : "") + '>' + esc(v) + '</td>').join("") + (conAccion ? '<td class="acc">' + (refs && refs[j] && refs[j].a ? '<button class="btn chico" data-desc="' + esc(refs[j].tipo + "|" + refs[j].id) + '">Descontar</button>' : "") + '</td>' : "") + '</tr>').join("") + '</tbody></table>' : '<p class="rep-nada">Nada en esta sección.</p>';
   let zona = "";
@@ -1670,7 +1691,6 @@ function abreReporte(cual, seccion){
   $("#listaReportes").innerHTML = '<div class="rep-cab"><button class="btn" id="repVolver">← Reportes</button><div class="der">' + (esEscritorio() ? '<button class="btn vino" id="repImprimir">Imprimir</button>' : '<button class="btn vino" id="repPdf">Descargar PDF</button>') + '</div></div>' +
     '<div class="rep-hoja" id="repHoja"><h1>' + esc(r.titulo) + '</h1><p class="rep-fecha">' + esc((window.CONFIG || {}).TALLER || "") + ' · ' + esc(fechaHoy()) + '</p>' + cuerpo + '</div>';
   $("#repVolver").onclick = () => { E.reporteAbierto = null; pintaReportes(); };
-  $("#listaReportes").querySelectorAll("[data-desc]").forEach(b => b.onclick = () => { const [tipo, id] = b.dataset.desc.split("|"); hojaDescontar(tipo, id, () => abreReporte(cual, seccion)); });
   const bi = $("#repImprimir"); if (bi) bi.onclick = () => { $("#impresion").innerHTML = $("#repHoja").innerHTML; $("#impresion").hidden = false; window.print(); setTimeout(() => { $("#impresion").hidden = true; }, 500); };
   const bp = $("#repPdf"); if (bp) bp.onclick = () => descargaPdf(r);
 }
@@ -1950,108 +1970,13 @@ function reporteKpi(cual){
   return { titulo: "KPI · " + rg.titulo, columnas: ["Qué", "Cuánto", "Detalle"], grupos, numericas: 0, numCols: [1], archivo: "kpi-" + rg.de };
 }
 
-/* ═══════════════ PLAN DEL DÍA ═══════════════ */
-const nombrePlan = a => NOMBRE_PLAN[a] || ((R.ETAPAS[a] || R.PIEZAS[a] || {}).nombre || a);
-const unidadPlan = p => p.tipo === "lote" ? "muebles" : (R.PIEZAS[p.de] || {}).unidad || "piezas";
-function pintaPlan(){
-  const caja = $("#listaPlan");
-  let l = E.plan.slice().sort((a,b) => (nombrePlan(a.a) + a.creado) < (nombrePlan(b.a) + b.creado) ? -1 : 1);
-  $("#resumenPlan").textContent = l.length ? plural(l.length, "pendiente", "pendientes") + " · " + fechaHoy() : fechaHoy();
-  if (q("plan")) l = Busca.busca(q("plan"), l, p => p.modelo + " " + p.color + " " + nombrePlan(p.a));
-  const aviso = Almacen.sinPermiso.includes("plan") ? '<div class="aviso" style="margin-bottom:10px"><b>Falta una regla en Firebase</b><p>El plan del día no se puede compartir todavía. En Firestore → Rules agrega: <code>match /plan/{id} { allow read, write: if delTaller(); }</code> y publica.</p></div>' : "";
-  if (!l.length){ caja.innerHTML = aviso + (q("plan") ? sinHallar("plan", "eso en el plan") : '<div class="vacio"><b>Nada pendiente para hoy</b><p>El plan se arma desde <b>Reportes → Muebles y piezas</b>: cada renglón tiene el botón «Descontar». Lo que se descuenta baja del inventario al momento y se queda aquí hasta que alguien lo marque listo.</p></div>'); return; }
-  const grupos = {}; l.forEach(p => (grupos[p.a] = grupos[p.a] || []).push(p));
-  caja.innerHTML = Object.keys(grupos).map(a => '<div class="bloque-h">' + esc(nombrePlan(a)) + '<span class="n">' + grupos[a].reduce((s,p) => s + p.cantidad, 0) + '</span></div>' + grupos[a].map(p => {
-    const m = modeloDe(p.modelo_id); const por = p.tipo === "pieza" ? R.piezasPorMueble(m, p.de) : null;
-    const eq = por > 0 ? " = " + plural(Math.floor(p.cantidad / por), "juego", "juegos") + (p.cantidad % por ? " y " + (p.cantidad % por) : "") : "";
-    return '<div class="fila plan-fila">' +
-      '<div class="nombre"><b>' + esc(p.modelo) + '</b><small>de ' + esc((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) + (p.autorizo ? ' · ' + esc(p.autorizo) : "") + '</small></div>' +
-      '<div class="sub">' + chipColor(p.color) + '</div><div class="apodos">' + chipColor(p.color) + '</div>' +
-      '<div class="cifra"><b>' + p.cantidad + '</b><small>' + esc(unidadPlan(p)) + esc(eq) + '</small></div>' +
-      '<div class="ultimo"><span>' + esc(p.de_quien || "?") + ' · ' + esc(cuando(p.creado)) + '</span></div>' +
-      '<div class="stepper"><button class="btn vino chico" data-listo="' + esc(p.id) + '">Listo</button><button class="tecla" data-edita="' + esc(p.id) + '" title="Cambiar cantidad">✎</button><button class="tecla" data-quita="' + esc(p.id) + '" title="Quitar: regresa al inventario">✕</button></div></div>';
-  }).join("")).join("");
-  caja.querySelectorAll("[data-listo]").forEach(b => b.onclick = () => hojaPlanListo(E.plan.find(x => x.id === b.dataset.listo)));
-  caja.querySelectorAll("[data-edita]").forEach(b => b.onclick = () => hojaPlanCambia(E.plan.find(x => x.id === b.dataset.edita)));
-  caja.querySelectorAll("[data-quita]").forEach(b => b.onclick = async () => { const p = E.plan.find(x => x.id === b.dataset.quita); if (!p || !exigeYo()) return; if (!confirm("¿Quitar del plan? Los " + p.cantidad + " " + unidadPlan(p) + " regresan a " + ((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) + ".")) return; await Almacen.planQuita(p.id, E.yo, origen()); grita("Regresó al inventario"); pintaTodo(); });
+/* (El Plan del día se quitó en la 3.6: no se usaba. Los pendientes que hubiera quedado en la nube se
+   regresan al inventario una sola vez al abrir, ver `regresaPlanViejo`.) */
+async function regresaPlanViejo(){
+  const pend = (E.plan || []).slice(); if (!pend.length) return;
+  let n = 0; for (const p of pend){ try { await Almacen.planQuita(p.id, E.yo || "sistema", "automático"); n++; } catch(e){} }
+  if (n){ grita(plural(n, "renglón del plan del día regresó", "renglones del plan del día regresaron") + " al inventario (el plan se quitó)"); pintaTodo(); }
 }
-function hojaPlanListo(p){
-  if (!p || !exigeYo()) return;
-  const regla = R.responsables(p.a); let quien = [];
-  const rec = E.ultimoQuien[p.a]; if (rec && Date.now() - rec.t < 15*60*1000 && regla) quien = rec.nombres.filter(n => regla.opciones.includes(n));
-  const pinta = sePintaEn(p.a);
-  abreHoja('<h3>' + esc(nombrePlan(p.a)) + '</h3><p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(nombreColor(p.color)) + ' · se descontaron <b>' + p.cantidad + '</b> ' + esc(unidadPlan(p)) + '. ¿Cuántos quedaron hechos? Lo que no, regresa a ' + esc((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) + '.</p>' +
-    '<div class="lote"><div class="quien">Se hicieron</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="0" max="' + p.cantidad + '" value="' + p.cantidad + '"><button class="tecla" data-mas>＋</button></div></div><p class="guia" id="pResto"></p>' +
-    (pinta ? '<div class="grupo-h">De qué color se pintaron</div>' + campoColor(p.color, true, "pColor") : "") +
-    (regla ? '<div class="grupo-h">' + esc(regla.pregunta) + (regla.max > 1 ? " · hasta " + regla.max : "") + '</div><div class="cats" id="pQuien">' + regla.opciones.map(n => '<button class="cat' + (quien.includes(n) ? " on" : "") + '" data-n="' + esc(n) + '">' + esc(n) + '</button>').join("") + '</div>' : "") +
-    '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" style="margin-top:12px">Confirmar</button>',
-    h => {
-      const inp = h.querySelector("#pCant");
-      const revisa = () => { const v = Number(inp.value) || 0; const mal = v < 0 || v > p.cantidad; inp.classList.toggle("mal", mal); h.querySelector("#pResto").textContent = v < p.cantidad ? (p.cantidad - v) + " regresan a " + ((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) : ""; const colorOk = !pinta || !!h.querySelector("#pColor").value || v === 0; h.querySelector("#pOk").disabled = mal || (v > 0 && regla && !quien.length) || !colorOk; };
-      h.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(0, (Number(inp.value) || 0) - 1); revisa(); };
-      h.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(p.cantidad, (Number(inp.value) || 0) + 1); revisa(); };
-      inp.oninput = revisa; const pc = h.querySelector("#pColor"); if (pc) pc.onchange = revisa;
-      h.querySelectorAll("#pQuien [data-n]").forEach(b => b.onclick = () => { const n = b.dataset.n; if (quien.includes(n)) quien = quien.filter(x => x !== n); else if (regla.max === 1) quien = [n]; else if (quien.length < regla.max) quien.push(n); else return grita("Máximo " + regla.max); h.querySelectorAll("#pQuien [data-n]").forEach(x => x.classList.toggle("on", quien.includes(x.dataset.n))); revisa(); });
-      revisa();
-      h.querySelector("#pOk").onclick = async () => {
-        const v = Number(inp.value) || 0; const extra = {};
-        if (pinta && v > 0) extra.color = h.querySelector("#pColor").value;
-        if (regla && v > 0){ E.ultimoQuien[p.a] = { nombres: quien.slice(), t: Date.now() }; if (regla.campo === "armo") extra.armo = quien[0]; else if (regla.campo === "pinto") extra.pinto = quien.slice(); else if (regla.campo === "preparo") extra.preparo = quien[0]; else extra.hecho_por = quien.join(" y "); }
-        try { const r = await Almacen.planListo(p.id, v, extra, E.yo, origen()); if (p.a === "armado" && extra.armo && r.hechas) anotaTrabajo("armado", extra.armo, modeloDe(p.modelo_id) || { nombre: p.modelo, familia: p.modelo.split(" ")[0] }, p.color, r.hechas); cierraHoja(); grita(r.hechas ? r.hechas + " " + unidadPlan(p) + " → " + ((R.ETAPAS[p.a] || R.PIEZAS[p.a] || {}).nombre || p.a).toLowerCase() + (r.sobran ? " · " + r.sobran + " regresaron" : "") : "Todo regresó al inventario"); pintaTodo(); }
-        catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; }
-      };
-    });
-}
-function hojaPlanCambia(p){
-  if (!p || !exigeYo()) return;
-  const o = (p.tipo === "lote" ? E.lotes : E.piezas).find(x => x.id === p.origen_id); const disponible = o ? Number(o.cantidad || 0) : 0;
-  abreHoja('<h3>Cambiar cantidad</h3><p class="guia"><b>' + esc(p.modelo) + '</b> · ' + esc(nombreColor(p.color)) + ' · ahora hay <b>' + p.cantidad + '</b> en el plan y quedan ' + disponible + ' en ' + esc((R.ETAPAS[p.de] || R.PIEZAS[p.de] || {}).nombre || p.de) + '.</p>' +
-    '<label class="campo"><span>Cantidad en el plan</span><input id="cCant" type="number" inputmode="numeric" min="1" max="' + (p.cantidad + disponible) + '" value="' + p.cantidad + '"></label>' +
-    '<p class="sin-hallar" id="cError" hidden></p><button class="btn vino grande" id="cOk">Guardar</button>',
-    h => {
-      h.querySelector("#cCant").focus(); h.querySelector("#cCant").select();
-      h.querySelector("#cOk").onclick = async () => {
-        try { await Almacen.planCambia(p.id, Number(h.querySelector("#cCant").value), E.yo, origen()); cierraHoja(); grita("Cambiado"); pintaTodo(); }
-        catch(e){ const err = h.querySelector("#cError"); err.hidden = false; err.textContent = e.message; }
-      };
-    });
-}
-/* Desde Reportes: descontar del inventario al Plan del día */
-function hojaDescontar(tipo, id, despues){
-  if (!exigeYo()) return;
-  const x = (tipo === "lote" ? E.lotes : E.piezas).find(y => y.id === id); if (!x) return grita("Eso ya no está");
-  const a = destinoPlan(tipo, x); if (!a) return;
-  const n = tipo === "lote" ? Number(x.cantidad || 0) : vivoPieza(x);
-  const de = tipo === "lote" ? x.etapa : x.categoria;
-  const m = modeloDe(x.modelo_id); const por = tipo === "pieza" ? (R.piezasPorMueble(m, de) || 0) : 0;
-  let enJuegos = tipo === "pieza" && E.porJuego && por > 1 && n >= por;
-  const tope = () => enJuegos ? Math.floor(n / por) : n;
-  const sinBisagras = de === "puertas_lijadas";
-  abreHoja('<h3>Descontar al plan del día</h3>' +
-    '<div class="paso-a"><span class="de">' + esc((R.ETAPAS[de] || R.PIEZAS[de] || {}).nombre || de) + '</span> → <span class="a">' + esc(nombrePlan(a)) + '</span></div>' +
-    '<p class="guia"><b>' + esc(x.modelo) + '</b> · ' + esc(nombreColor(x.color)) + (tipo === "lote" ? " · " + esc(R.firmaDe(x)) : "") + ' · hay <b>' + n + '</b>. Baja del inventario ahora y queda pendiente en Plan del día hasta que se marque listo.</p>' +
-    (por > 1 ? '<div class="cats" id="pUnidad" style="margin-bottom:8px"><button class="cat' + (enJuegos ? "" : " on") + '" data-u="piezas">Por pieza</button><button class="cat' + (enJuegos ? " on" : "") + '" data-u="juegos"' + (n < por ? " disabled" : "") + '>Por juego (' + por + ')</button></div>' : "") +
-    '<div class="lote"><div class="quien" id="pCuantas">' + (enJuegos ? "Cuántos juegos" : "Cuántas") + '</div><div class="toma"><button class="tecla" data-menos>−</button><input id="pCant" type="number" inputmode="numeric" min="1" max="' + tope() + '" value="' + tope() + '"><button class="tecla" data-mas>＋</button></div></div><p class="guia" id="pEq"></p>' +
-    (sinBisagras ? '<div class="candado" style="margin:8px 0"><span>Estas puertas <b>no tienen bisagras</b>. ¿Autorizas que se pinten así?</span></div><label class="interruptor" style="margin-bottom:8px"><input type="checkbox" id="pAut"><span>Sí, autorizo pintarlas sin bisagras</span></label>' : "") +
-    '<p class="sin-hallar" id="pError" hidden></p><button class="btn vino grande" id="pOk" style="margin-top:12px">Descontar</button>',
-    h => {
-      const inp = h.querySelector("#pCant");
-      const piezasDe = () => (Number(inp.value) || 0) * (enJuegos ? por : 1);
-      const revisa = () => { const v = Number(inp.value) || 0, t = tope(); inp.classList.toggle("mal", v > t || v < 1); h.querySelector("#pEq").textContent = enJuegos ? "= " + piezasDe() + " " + R.PIEZAS[de].unidad : (por > 1 && v > 0 ? "= " + R.textoEquivalencia(v, de, m).replace(/ · \d+ \S+(?= ·|$)/, "") : ""); const aut = !sinBisagras || h.querySelector("#pAut").checked; h.querySelector("#pOk").disabled = v > t || v < 1 || !aut; };
-      h.querySelectorAll("#pUnidad [data-u]").forEach(b => b.onclick = () => { enJuegos = b.dataset.u === "juegos"; h.querySelectorAll("#pUnidad [data-u]").forEach(y => y.classList.toggle("on", y === b)); h.querySelector("#pCuantas").textContent = enJuegos ? "Cuántos juegos" : "Cuántas"; inp.max = tope(); inp.value = Math.min(Number(inp.value) || 1, tope()) || 1; revisa(); });
-      h.querySelector("[data-menos]").onclick = () => { inp.value = Math.max(1, (Number(inp.value) || 0) - 1); revisa(); };
-      h.querySelector("[data-mas]").onclick = () => { inp.value = Math.min(tope(), (Number(inp.value) || 0) + 1); revisa(); };
-      inp.oninput = revisa; const au = h.querySelector("#pAut"); if (au) au.onchange = revisa;
-      revisa();
-      h.querySelector("#pOk").onclick = async () => {
-        try {
-          await Almacen.alPlan({ tipo, origen_id: id, cantidad: piezasDe(), a, juegos: enJuegos ? Number(inp.value) : null, autorizo: sinBisagras ? "sin bisagras, autorizó " + E.yo : "" }, E.yo, origen());
-          cierraHoja(); grita(piezasDe() + " al plan del día: " + nombrePlan(a).toLowerCase()); pintaTodo();
-        } catch(e){ const err = h.querySelector("#pError"); err.hidden = false; err.textContent = e.message; }
-      };
-    });
-}
-
 /* ═══════════════ REVISAR NOMBRES (migración) ═══════════════ */
 function limpiaNombre(n){ return String(n || "").replace(/\(\?\)|\(genérico\)|\(generico\)/gi, "").replace(/\b(de\s+)?\d+\s+cajones\b/gi, "").replace(/\s+/g, " ").trim(); }
 function sugiereModelo(nombre, lista){
@@ -2245,7 +2170,7 @@ $("#telon").addEventListener("click", e => { if (e.target.id === "telon") cierra
 document.addEventListener("keydown", e => { if (e.key === "Escape" && $("#telon").classList.contains("on")) cierraDesdeAfuera(); });
 
 /* ═══════════════ navegación ═══════════════ */
-const VISTAS = ["plan","muebles","piezas","listos","pedidos","material","reportes","kpi","recados","bitacora","catalogo","apodos","ajustes"];
+const VISTAS = ["muebles","piezas","listos","pedidos","material","reportes","kpi","recados","bitacora","catalogo","apodos","ajustes"];
 const EN_MAS = ["listos","reportes","kpi","recados","bitacora","catalogo","apodos","ajustes"];
 function irA(v){
   if (v === "mas"){ hojaMas(); return; }
@@ -2257,7 +2182,7 @@ function irA(v){
   pintaVista(v); if (esEscritorio()) pintaDetalle();
 }
 function pintaVista(v){
-  if (v === "plan") pintaPlan(); else if (v === "muebles") pintaMuebles(); else if (v === "piezas") pintaPiezas(); else if (v === "listos") pintaListos(); else if (v === "pedidos") pintaPedidos();
+  if (v === "muebles") pintaMuebles(); else if (v === "piezas") pintaPiezas(); else if (v === "listos") pintaListos(); else if (v === "pedidos") pintaPedidos();
   else if (v === "material") pintaMaterial(); else if (v === "recados") pintaRecados(); else if (v === "bitacora") pintaBitacora(); else if (v === "kpi") pintaKpi();
   else if (v === "catalogo") pintaCatalogo(); else if (v === "apodos") pintaCatMaterial(); else if (v === "ajustes") pintaAjustes(); else if (v === "reportes") (E.reporteAbierto ? abreReporte(E.reporteAbierto.cual, E.reporteAbierto.seccion) : pintaReportes());
 }
@@ -2299,7 +2224,6 @@ function pintaTodo(){
   const pend = E.pedidos.filter(p => p.estado !== "entregado").length; $("#nPed").hidden = !pend; $("#nPed").textContent = pend;
   const bajos = materiales().filter(p => estado(p)).length; $("#nMat").hidden = !bajos; $("#nMat").textContent = bajos;
   const rec = E.recados.filter(r => !r.hecho).length; $("#nRec").hidden = !rec; $("#nRec").textContent = rec;
-  $("#nPlan").hidden = !E.plan.length; $("#nPlan").textContent = E.plan.length;
   if (esEscritorio()) pintaDetalle();
 }
 
@@ -2336,14 +2260,15 @@ Almacen.mira("recado", l => { E.recados = l; if (E.vista === "recados") pintaRec
 Almacen.mira("persona", l => { E.personas = l; });
 Almacen.mira("meta", () => { if (E.vista === "ajustes") pintaAjustes(); });
 Almacen.mira("pedido", l => { E.pedidos = l; if (E.vista === "pedidos") pintaPedidos(); const n = l.filter(p => p.estado !== "entregado").length; $("#nPed").hidden = !n; $("#nPed").textContent = n; });
-Almacen.mira("plan", l => { E.plan = l; if (E.vista === "plan") pintaPlan(); $("#nPlan").hidden = !l.length; $("#nPlan").textContent = l.length; });
+Almacen.mira("plan", l => { E.plan = l; });
 Almacen.mira("kpi", l => { E.kpi = l; if (E.vista === "kpi") pintaKpi(); });
 Almacen.onEstado(pintaPulso);
 (async () => {
   await Almacen.arranca();
   pintaPulso();
-  const h = (location.hash || "#plan").slice(1);
-  irA(VISTAS.includes(h) ? h : "plan");
+  const h = (location.hash || "#muebles").slice(1);
+  irA(VISTAS.includes(h) ? h : "muebles");
+  Almacen.esperaNube().then(() => regresaPlanViejo()).catch(() => {});
   Almacen.limpiaSemana().then(n => { if (n) console.log("limpieza semanal:", n); }).catch(() => {});
   Almacen.limpiaPreparados(E.yo).then(n => { if (n){ grita(plural(n, "renglón de preparados", "renglones de preparados") + " con más de una semana salieron del almacén (ver Bitácora)"); pintaTodo(); } }).catch(() => {});
   Almacen.kpiArranque().then(n => { if (n) console.log("kpi arranque:", n); }).catch(() => {});
